@@ -181,4 +181,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: iDescriptor-AppImage
-          path: build/iDescriptor-
+          path: build/iDescriptor-*.AppImage
