@@ -54,6 +54,7 @@ jobs:
             mingw-w64-x86_64-curl
             mingw-w64-x86_64-openssl
             mingw-w64-x86_64-libzip
+            mingw-w64-x86_64-go
             p7zip
 
       - name: Download and Extract Bonjour SDK (Windows)
@@ -111,7 +112,7 @@ jobs:
           modules: 'qtmultimedia qtlocation qtpositioning qtserialport'
 
       - name: Set up Go (Linux)
-        if: runner.os == 'Linux' || runner.os == 'Windows'
+        if: runner.os == 'Linux'
         uses: actions/setup-go@v6
         with:
           go-version: '^1.23.0'
