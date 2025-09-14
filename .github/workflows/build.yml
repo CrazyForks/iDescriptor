@@ -54,6 +54,7 @@ jobs:
             mingw-w64-x86_64-curl
             mingw-w64-x86_64-openssl
             mingw-w64-x86_64-libzip
+            p7zip
 
       - name: Download and Install Bonjour SDK (Windows)
         if: runner.os == 'Windows'
