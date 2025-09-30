@@ -34,6 +34,7 @@ private:
     AirPlayServerThread *m_serverThread;
     bool m_serverRunning;
 
+#ifdef Q_OS_LINUX
     // V4L2 members
     int m_v4l2_fd;
     int m_v4l2_width;
@@ -45,6 +46,7 @@ private:
     void closeV4L2();
     void writeFrameToV4L2(uint8_t *data, int width, int height);
     void testV4L2Device();
+#endif
 };
 
 class AirPlayServerThread : public QThread

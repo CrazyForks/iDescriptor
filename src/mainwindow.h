@@ -20,6 +20,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
+    static MainWindow *sharedInstance();
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
     void onRecoveryDeviceAdded(QObject *recoveryDeviceInfoObj);

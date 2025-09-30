@@ -4,6 +4,7 @@
         <file>icons/video-x-generic.png</file>
         <file>icons/MdiLightningBolt.png</file>
         <file>icons/MingcuteSettings7Line.png</file>
+        <file>icons/ClarityHardDiskSolidAlerted.png</file>
         <file>qml/MapView.qml</file>
         <file>resources/dump.js</file>
         <file>resources/iphone.png</file>

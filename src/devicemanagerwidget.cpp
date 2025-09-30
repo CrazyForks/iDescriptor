@@ -85,6 +85,8 @@ void DeviceManagerWidget::addDevice(iDescriptorDevice *device)
              << QString::fromStdString(device->udid);
 
     DeviceMenuWidget *deviceWidget = new DeviceMenuWidget(device, this);
+    deviceWidget->setContentsMargins(35, 15, 35, 15);
+
     QString tabTitle = QString::fromStdString(device->deviceInfo.productType);
 
     m_stackedWidget->addWidget(deviceWidget);

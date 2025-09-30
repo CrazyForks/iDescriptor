@@ -2,6 +2,10 @@
 #include <QGraphicsView>
 #include <QMainWindow>
 
+#define COLOR_GREEN QColor(0, 180, 0)    // Green
+#define COLOR_ORANGE QColor(255, 140, 0) // Orange
+#define COLOR_RED QColor(255, 0, 0)      // Red
+
 // A custom QGraphicsView that keeps the content fitted with aspect ratio on
 // resize
 class ResponsiveGraphicsView : public QGraphicsView

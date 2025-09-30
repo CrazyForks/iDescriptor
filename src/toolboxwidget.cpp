@@ -3,6 +3,8 @@
 #include "appcontext.h"
 #include "devdiskimageswidget.h"
 #include "iDescriptor.h"
+#include "ifusewidget.h"
+#include "pcfileexplorerwidget.h"
 #include "querymobilegestaltwidget.h"
 #include "realtimescreen.h"
 #include "virtual_location.h"
@@ -138,6 +140,14 @@ void ToolboxWidget::setupUI()
         createToolbox("Developer Disk Images", "Manage developer disk images",
                       "SP_DialogOkButton", false);
 
+    QWidget *wirelessImport = createToolbox(
+        "Wireless File Import", "Import files wirelessly to your iDevice",
+        "SP_DialogOkButton", false);
+
+    QWidget *mount_iPhone = createToolbox(
+        "Mount iPhone", "Mount your iPhone's filesystem on your PC",
+        "SP_DialogOkButton", false);
+
     // Add toolboxes to grid (3 columns)
     m_gridLayout->addWidget(airplayerBox, 0, 0);
     m_gridLayout->addWidget(virtualLocationBox, 0, 1);
@@ -151,7 +161,8 @@ void ToolboxWidget::setupUI()
     m_gridLayout->addWidget(enterRecoveryMode, 3, 0);
     m_gridLayout->addWidget(unmountDevImage, 3, 1);
     m_gridLayout->addWidget(devDiskImages, 3, 2);
-
+    m_gridLayout->addWidget(wirelessImport, 4, 0);
+    m_gridLayout->addWidget(mount_iPhone, 4, 1);
     m_gridLayout->setRowStretch(3, 1);
 
     m_scrollArea->setWidget(m_contentWidget);
@@ -402,15 +413,19 @@ void ToolboxWidget::onToolboxClicked(const QString &toolName)
             m_devDiskImagesWidget->raise();
             m_devDiskImagesWidget->activateWindow();
         }
-    } else if (toolName == "Touch ID Test") {
-        // Handle Touch ID test
-        QMessageBox::information(
-            this, "Touch ID Test",
-            "Touch ID test functionality not implemented.");
-    } else if (toolName == "Face ID Test") {
-        // Handle Face ID test
-        QMessageBox::information(this, "Face ID Test",
-                                 "Face ID test functionality not implemented.");
+    } else if (toolName == "Wireless File Import") {
+        // Handle wireless file import
+        PCFileExplorerWidget *fileExplorer = new PCFileExplorerWidget();
+        fileExplorer->setAttribute(Qt::WA_DeleteOnClose);
+        fileExplorer->setWindowFlag(Qt::Window);
+        fileExplorer->resize(800, 600);
+        fileExplorer->show();
+    } else if (toolName == "Mount iPhone") {
+        iFuseWidget *ifuseWidget = new iFuseWidget(m_currentDevice);
+        ifuseWidget->setAttribute(Qt::WA_DeleteOnClose);
+        ifuseWidget->setWindowFlag(Qt::Window);
+        ifuseWidget->resize(600, 400);
+        ifuseWidget->show();
     }
     // Implement specific tool functionality here
 }

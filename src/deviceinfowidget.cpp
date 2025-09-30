@@ -4,6 +4,7 @@
 #include "fileexplorerwidget.h"
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
+#include <QApplication>
 #include <QDebug>
 #include <QGraphicsDropShadowEffect>
 #include <QGraphicsPixmapItem>
@@ -53,7 +54,6 @@ DeviceInfoWidget::DeviceInfoWidget(iDescriptorDevice *device, QWidget *parent)
     infoContainer->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
 
     QVBoxLayout *infoLayout = new QVBoxLayout(infoContainer);
-    // infoLayout->setContentsMargins(15, 15, 15, 15);
     // infoLayout->setSpacing(10);
 
     // Header
@@ -77,17 +77,20 @@ DeviceInfoWidget::DeviceInfoWidget(iDescriptorDevice *device, QWidget *parent)
                         (1000 * 1000 * 1000)) +
         " GB");
 
+    diskCapacityLabel->setSizePolicy(QSizePolicy::Maximum,
+                                     QSizePolicy::Preferred);
     diskCapacityLabel->setAttribute(Qt::WA_StyledBackground, true);
-    diskCapacityLabel->setStyleSheet("background-color: rgba(0, 255, 30, 0.12);"
+    diskCapacityLabel->setStyleSheet("background-color: rgba(0, 255, 30, 0.5);"
                                      "padding: 4px;"
-                                     "border-radius: 4px;");
+                                     "border-radius: 13px;");
 
     m_chargingStatusLabel =
         new QLabel(device->deviceInfo.batteryInfo.isCharging ? "Charging"
                                                              : "Not Charging");
     m_chargingStatusLabel->setStyleSheet(
-        device->deviceInfo.batteryInfo.isCharging ? "color: green;"
-                                                  : "color: white;");
+        device->deviceInfo.batteryInfo.isCharging
+            ? QString("color: %1;").arg(COLOR_GREEN.name())
+            : "color: white;");
 
     // Create the layout without a parent widget
     QHBoxLayout *chargingLayout = new QHBoxLayout();
@@ -97,7 +100,7 @@ DeviceInfoWidget::DeviceInfoWidget(iDescriptorDevice *device, QWidget *parent)
     // Create icon label
     m_lightningIconLabel = new QLabel();
     QPixmap lightningIcon(":/icons/MdiLightningBolt.png");
-    QPixmap scaledIcon = lightningIcon.scaled(16, 16, Qt::KeepAspectRatio,
+    QPixmap scaledIcon = lightningIcon.scaled(26, 26, Qt::KeepAspectRatio,
                                               Qt::SmoothTransformation);
     m_lightningIconLabel->setPixmap(scaledIcon);
     m_batteryWidget =
@@ -118,6 +121,7 @@ DeviceInfoWidget::DeviceInfoWidget(iDescriptorDevice *device, QWidget *parent)
 
     headerLayout->addWidget(devProductType);
     headerLayout->addWidget(diskCapacityLabel);
+    headerLayout->addStretch(); // Push items to the left
     headerLayout->addLayout(chargingLayout);
     headerLayout->addWidget(m_chargingWattsWithCableTypeLabel);
 
@@ -149,12 +153,16 @@ DeviceInfoWidget::DeviceInfoWidget(iDescriptorDevice *device, QWidget *parent)
     // 3. Create the grid widget (the main content)
     QWidget *gridWidget = new QWidget();
     gridWidget->setObjectName("infoGrid");
-    // Set a background color that matches the main window, with rounded corners
-    gridWidget->setStyleSheet(
-        "QWidget#infoGrid {"
-        "    background-color: #2e2e2e;" // Match your window background
-        "    border-radius: 8px;"
-        "}");
+
+    QPalette palette = qApp->palette();
+    QColor background = palette.color(QPalette::Window);
+
+    gridWidget->setStyleSheet("QWidget#infoGrid {"
+                              "    background-color: " +
+                              background.name() +
+                              ";"
+                              "    border-radius: 8px;"
+                              "}");
 
     // 4. Create the light (top-left) shadow and apply to the grid widget
     QGraphicsDropShadowEffect *lightShadow = new QGraphicsDropShadowEffect();
@@ -195,17 +203,17 @@ DeviceInfoWidget::DeviceInfoWidget(iDescriptorDevice *device, QWidget *parent)
     switch (device->deviceInfo.activationState) {
     case DeviceInfo::ActivationState::Activated:
         stateText = "Activated";
-        color = QColor(0, 180, 0); // Green
+        color = COLOR_GREEN;
         tooltipText = "Device is activated and ready for use.";
         break;
     case DeviceInfo::ActivationState::FactoryActivated:
         stateText = "Factory Activated";
-        color = QColor(255, 140, 0); // Orange
+        color = COLOR_ORANGE;
         tooltipText = "Activation is most likely bypassed.";
         break;
     default:
         stateText = "Unactivated";
-        color = QColor(220, 0, 0); // Red
+        color = COLOR_RED;
         tooltipText = "Device is not activated and requires setup.";
         break;
     }
@@ -380,12 +388,13 @@ void DeviceInfoWidget::updateChargingStatusIcon()
 {
     if (m_device->deviceInfo.batteryInfo.isCharging) {
         m_chargingStatusLabel->setText("Charging");
-        m_chargingStatusLabel->setStyleSheet("color: green;");
+        m_chargingStatusLabel->setStyleSheet(
+            QString("color: %1;").arg(COLOR_GREEN.name()));
         m_lightningIconLabel->show();
 
     } else {
         m_chargingStatusLabel->setText("Not Charging");
-        m_chargingStatusLabel->setStyleSheet("color: white;");
+        m_chargingStatusLabel->setStyleSheet("");
         m_lightningIconLabel->hide();
     }
 }

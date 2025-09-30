@@ -1,5 +1,6 @@
 #include "diskusagewidget.h"
 #include "iDescriptor.h"
+#include <QApplication>
 #include <QDebug>
 #include <QFutureWatcher>
 #include <QPainter>
@@ -26,24 +27,25 @@ void DiskUsageWidget::paintEvent(QPaintEvent *event)
     Q_UNUSED(event);
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
+    QColor textColor = qApp->palette().text().color();
 
     if (m_state == Loading) {
-        painter.setPen(Qt::black);
+        painter.setPen(textColor);
         painter.drawText(rect(), Qt::AlignCenter, "Loading disk usage...");
         return;
     }
 
     if (m_state == Error) {
-        painter.setPen(Qt::black);
+        painter.setPen(textColor);
         painter.drawText(rect(), Qt::AlignCenter, "Error: " + m_errorMessage);
         return;
     }
 
     // Title
-    painter.setPen(Qt::black);
     QFont titleFont = font();
     titleFont.setBold(true);
     painter.setFont(titleFont);
+    painter.setPen(textColor);
     QRectF titleRect(0, 5, width(), 20);
     painter.drawText(titleRect, Qt::AlignHCenter | Qt::AlignTop, "Disk Usage");
     painter.setFont(font()); // Reset font
@@ -91,7 +93,7 @@ void DiskUsageWidget::paintEvent(QPaintEvent *event)
     drawSegment(m_freeSpace, freeColor);
 
     // Legend
-    painter.setPen(Qt::black);
+    painter.setPen(textColor);
     qreal legendY = barRect.bottom() + 15;
     const int legendBoxSize = 10;
     const int legendSpacing = 5;
@@ -102,6 +104,7 @@ void DiskUsageWidget::paintEvent(QPaintEvent *event)
             QRectF(currentLegendX, legendY, legendBoxSize, legendBoxSize),
             color);
         currentLegendX += legendBoxSize + legendSpacing;
+        painter.setPen(textColor);
 
         QFontMetrics fm(font());
         QRect textRect = fm.boundingRect(text);

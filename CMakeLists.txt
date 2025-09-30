@@ -137,16 +137,22 @@ pkg_check_modules(PLIST REQUIRED IMPORTED_TARGET libplist-2.0)
 # )
 
 file(GLOB PROJECT_SOURCES
-    src/*.cpp
-    src/core/helpers/*.cpp
-    src/core/services/*.cpp
-    src/platform/*.cpp
-    src/platform/*.mm
-    src/platform/*.m
-    src/*.h
-    src/*.ui
-    resources.qrc
+src/*.cpp
+src/core/helpers/*.cpp
+src/core/services/*.cpp
+src/*.h
+src/*.ui
+resources.qrc
 )
+
+if(MACOS)
+    list(APPEND PROJECT_SOURCES
+        src/platform/macos/*.mm
+        src/platform/macos/*.h
+    )
+endif()
+
+
 
 add_subdirectory(lib/airplay)
 add_subdirectory(lib/ipatool-go)

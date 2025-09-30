@@ -9,6 +9,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+#ifdef Q_OS_LINUX
 // V4L2 includes
 #include <cstring>
 #include <errno.h>
@@ -16,6 +17,7 @@
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#endif
 
 // Include the rpiplay server functions
 extern "C" {
@@ -28,17 +30,22 @@ std::function<void(uint8_t *, int, int)> qt_video_callback;
 
 AirPlayWindow::AirPlayWindow(QWidget *parent)
     : QMainWindow(parent), m_videoLabel(nullptr), m_statusLabel(nullptr),
-      m_serverThread(nullptr), m_serverRunning(false), m_v4l2_fd(-1),
-      m_v4l2_width(0), m_v4l2_height(0), m_v4l2_enabled(false)
+      m_serverThread(nullptr), m_serverRunning(false)
+#ifdef Q_OS_LINUX
+      ,
+      m_v4l2_fd(-1), m_v4l2_width(0), m_v4l2_height(0), m_v4l2_enabled(false)
+#endif
 {
     setupUI();
 
     // Setup video callback
     qt_video_callback = [this](uint8_t *data, int width, int height) {
+#ifdef Q_OS_LINUX
         // V4L2 output if enabled
         if (m_v4l2_enabled) {
             writeFrameToV4L2(data, width, height);
         }
+#endif
 
         QByteArray frameData((const char *)data, width * height * 3);
         QMetaObject::invokeMethod(this, "updateVideoFrame",
@@ -51,7 +58,9 @@ AirPlayWindow::AirPlayWindow(QWidget *parent)
 AirPlayWindow::~AirPlayWindow()
 {
     stopAirPlayServer();
+#ifdef Q_OS_LINUX
     closeV4L2();
+#endif
     qt_video_callback = nullptr;
 }
 
@@ -82,6 +91,7 @@ void AirPlayWindow::setupUI()
     statusLayout->addWidget(m_statusLabel);
     statusLayout->addStretch();
 
+#ifdef Q_OS_LINUX
     // V4L2 controls
     QCheckBox *v4l2CheckBox = new QCheckBox("Enable V4L2 Output");
     connect(v4l2CheckBox, &QCheckBox::toggled, this, [this](bool enabled) {
@@ -99,6 +109,7 @@ void AirPlayWindow::setupUI()
 
     statusLayout->addWidget(v4l2CheckBox);
     statusLayout->addWidget(testV4L2Btn);
+#endif
     statusLayout->addWidget(startBtn);
     statusLayout->addWidget(stopBtn);
 
@@ -190,6 +201,7 @@ void AirPlayServerThread::run()
     emit statusChanged(false);
 }
 
+#ifdef Q_OS_LINUX
 // V4L2 Implementation
 void AirPlayWindow::initV4L2(int width, int height, const char *device)
 {
@@ -308,3 +320,4 @@ void AirPlayWindow::testV4L2Device()
                 "• Record with: ffmpeg -f v4l2 -i %1 output.mp4")
             .arg(device));
 }
+#endif

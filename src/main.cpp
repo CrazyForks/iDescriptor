@@ -1,5 +1,4 @@
 #include "mainwindow.h"
-
 #include <QApplication>
 
 int main(int argc, char *argv[])
@@ -10,7 +9,7 @@ int main(int argc, char *argv[])
     // QCoreApplication::setOrganizationDomain("iDescriptor.com");
     QCoreApplication::setApplicationName("iDescriptor");
 
-    MainWindow w;
-    w.show();
+    MainWindow *w = MainWindow::sharedInstance();
+    w->show();
     return a.exec();
 }

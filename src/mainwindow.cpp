@@ -2,6 +2,8 @@
 #include "./ui_mainwindow.h"
 #include "customtabwidget.h"
 #include "detailwindow.h"
+#include "ifusediskunmountbutton.h"
+#include "ifusemanager.h"
 #include "settingswidget.h"
 #include <QDialog>
 #include <QGraphicsScene>
@@ -120,11 +122,16 @@ void handleCallbackRecovery(const irecv_device_event_t *event, void *userData)
 }
 irecv_device_event_context_t context;
 
+MainWindow *MainWindow::sharedInstance()
+{
+    static MainWindow instance;
+    return &instance;
+}
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-
     // Create custom tab widget
     m_customTabWidget = new CustomTabWidget(this);
     m_customTabWidget->setAttribute(Qt::WA_ContentsMarginsRespectsSafeArea,
@@ -217,6 +224,27 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->statusbar->addPermanentWidget(settingsButton);
 
+#ifdef Q_OS_LINUX
+    QList<QString> mounted_iFusePaths = iFuseManager::getMountPoints();
+
+    for (const QString &path : mounted_iFusePaths) {
+        auto *p = new iFuseDiskUnmountButton(path);
+
+        ui->statusbar->addPermanentWidget(p);
+        connect(p, &iFuseDiskUnmountButton::clicked, this, [this, p, path]() {
+            bool ok = iFuseManager::linuxUnmount(path);
+            if (!ok) {
+                QMessageBox::warning(nullptr, "Unmount Failed",
+                                     "Failed to unmount iFuse at " + path +
+                                         ". Please try again.");
+                return;
+            }
+            ui->statusbar->removeWidget(p);
+            p->deleteLater();
+        });
+    }
+#endif
+
     irecv_error_t res_recovery =
         irecv_device_event_subscribe(&context, handleCallbackRecovery, nullptr);
 
@@ -233,6 +261,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::createMenus()
 {
+#ifdef Q_OS_MAC
     QMenu *actionsMenu = menuBar()->addMenu("&Actions");
 
     // Add a custom "About" action for your app
@@ -243,6 +272,7 @@ void MainWindow::createMenus()
                            "A modern device management tool.");
     });
     actionsMenu->addAction(aboutAct);
+#endif
 }
 
 void MainWindow::updateNoDevicesConnected()
