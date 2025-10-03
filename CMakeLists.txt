@@ -32,6 +32,12 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Svg SvgWidgets Mu
 # Add QTermWidget
 pkg_check_modules(QTERMWIDGET REQUIRED IMPORTED_TARGET qtermwidget6)
 
+# Add Avahi for network device discovery
+pkg_check_modules(AVAHI_CLIENT REQUIRED IMPORTED_TARGET avahi-client)
+
+# pkg_check_modules(AVAHI_CLIENT REQUIRED IMPORTED_TARGET avahi-client)
+# pkg_check_modules(AVAHI_COMMON REQUIRED IMPORTED_TARGET avahi-common)
+
 # Link directly to libraries in /usr/local/lib instead of using pkg-config
 # Force NO_DEFAULT_PATH to only search in /usr/local/lib
 find_library(IMOBILEDEVICE_LIBRARY 
@@ -174,6 +180,7 @@ find_package(Qt6 REQUIRED COMPONENTS QuickWidgets)
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 find_package(Qt6 REQUIRED COMPONENTS Multimedia)
 find_package(Qt6 REQUIRED COMPONENTS MultimediaWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 
 qt_add_executable(iDescriptor
@@ -211,6 +218,7 @@ target_link_libraries(iDescriptor PRIVATE
     PkgConfig::PLIST
     PkgConfig::QRENCODE
     PkgConfig::QTERMWIDGET
+    PkgConfig::AVAHI_CLIENT
     airplay
     ipatool-go
 )
@@ -221,6 +229,7 @@ if(APPLE)
         ${SECURITY_FRAMEWORK}
         ${COREFOUNDATION_FRAMEWORK}
     )
+target_link_libraries(iDescriptor PRIVATE Qt6::Widgets)
 endif()
 
 # Add compile definition for source directory

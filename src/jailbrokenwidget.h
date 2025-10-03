@@ -1,50 +1,87 @@
 #ifndef JAILBROKENWIDGET_H
 #define JAILBROKENWIDGET_H
 
+#include "core/services/avahi_service.h"
 #include "iDescriptor.h"
+#include <QAbstractButton>
+#include <QButtonGroup>
+#include <QGroupBox>
 #include <QLabel>
 #include <QProcess>
 #include <QPushButton>
 #include <QTimer>
+#include <QVBoxLayout>
 #include <QWidget>
 #include <libssh/libssh.h>
-#include <qtermwidget6/qtermwidget.h>
+
+class QTermWidget;
+
+enum class DeviceType { None, Wired, Wireless };
 
 class JailbrokenWidget : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit JailbrokenWidget(QWidget *parent = nullptr);
+    JailbrokenWidget(QWidget *parent = nullptr);
     ~JailbrokenWidget();
-    void initWidget();
 
 private slots:
-    void deviceConnected(iDescriptorDevice *device);
     void onConnectSSH();
-    void startSSH();
     void checkSshData();
+    void onWiredDeviceAdded(iDescriptorDevice *device);
+    void onWiredDeviceRemoved(const std::string &udid);
+    void onWirelessDeviceAdded(const NetworkDevice &device);
+    void onWirelessDeviceRemoved(const QString &deviceName);
+    void onDeviceSelected(QAbstractButton *button);
 
 private:
     void setupTerminal();
-    void connectLibsshToTerminal();
+    void setupDeviceSelectionUI(QVBoxLayout *layout);
+    void updateDeviceList();
+    void clearDeviceButtons();
+    void addWiredDevice(iDescriptorDevice *device);
+    void addWirelessDevice(const NetworkDevice &device);
+    void resetSelection();
+
+    void initWiredDevice();
+    void initWirelessDevice();
+    void startSSH(const QString &host, uint16_t port);
     void disconnectSSH();
+    void connectLibsshToTerminal();
+    void deviceConnected(iDescriptorDevice *device);
 
+    QTermWidget *m_terminal;
     QLabel *m_infoLabel;
-    iDescriptorDevice *m_device = nullptr;
-    QProcess *iproxyProcess = nullptr;
+    QPushButton *m_connectButton;
 
-    // SSH session variables
+    // Device selection UI
+    QVBoxLayout *m_deviceLayout;
+    QGroupBox *m_wiredDevicesGroup;
+    QGroupBox *m_wirelessDevicesGroup;
+    QVBoxLayout *m_wiredDevicesLayout;
+    QVBoxLayout *m_wirelessDevicesLayout;
+    QButtonGroup *m_deviceButtonGroup;
+
+    // Avahi service for network discovery
+    AvahiService *m_avahiService;
+
+    // Selected device tracking
+    DeviceType m_selectedDeviceType = DeviceType::None;
+    iDescriptorDevice *m_selectedWiredDevice = nullptr;
+    NetworkDevice m_selectedNetworkDevice;
+
+    // Legacy device pointer (kept for compatibility)
+    iDescriptorDevice *m_device = nullptr;
+
+    // SSH components
     ssh_session m_sshSession;
     ssh_channel m_sshChannel;
     QTimer *m_sshTimer;
+    QProcess *iproxyProcess = nullptr;
 
-    // Terminal widgets
-    QTermWidget *m_terminal;
-    QPushButton *m_connectButton;
-
-    bool m_isInitialized = false;
     bool m_sshConnected = false;
+    bool m_isInitialized = false;
 };
 
 #endif // JAILBROKENWIDGET_H
