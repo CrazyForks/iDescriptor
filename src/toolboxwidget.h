@@ -1,10 +1,13 @@
 #ifndef TOOLBOXWIDGET_H
 #define TOOLBOXWIDGET_H
 
+#include "airplaywindow.h"
 #include "devdiskimageswidget.h"
+#include "devicesidebarwidget.h"
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include "networkdeviceswidget.h"
+#include "wirelessphotoimportwidget.h"
 #include <QComboBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -25,6 +28,7 @@ public:
 private slots:
     void onDeviceSelectionChanged();
     void onToolboxClicked(iDescriptorTool tool);
+    void onCurrentDeviceChanged(const DeviceSelection &selection);
 
 private:
     void setupUI();
@@ -45,6 +49,8 @@ private:
     std::string m_uuid;
     DevDiskImagesWidget *m_devDiskImagesWidget = nullptr;
     NetworkDevicesWidget *m_networkDevicesWidget = nullptr;
+    AirPlayWindow *m_airplayWindow = nullptr;
+    WirelessPhotoImportWidget *m_wirelessPhotoImportWidget = nullptr;
 
 signals:
 };

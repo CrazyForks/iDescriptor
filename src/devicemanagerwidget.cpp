@@ -64,6 +64,8 @@ DeviceManagerWidget::DeviceManagerWidget(QWidget *parent)
                 removePendingDevice(udid);
                 emit updateNoDevicesConnected();
             });
+    onDeviceSelectionChanged(
+        AppContext::sharedInstance()->getCurrentDeviceSelection());
 }
 
 void DeviceManagerWidget::setupUI()
@@ -83,7 +85,8 @@ void DeviceManagerWidget::setupUI()
     m_mainLayout->addWidget(m_stackedWidget);
 
     // Connect signals
-    connect(m_sidebar, &DeviceSidebarWidget::deviceSelectionChanged, this,
+    connect(AppContext::sharedInstance(),
+            &AppContext::currentDeviceSelectionChanged, this,
             &DeviceManagerWidget::onDeviceSelectionChanged);
 }
 
@@ -269,10 +272,9 @@ void DeviceManagerWidget::setCurrentDevice(const std::string &uuid)
     QWidget *widget = m_deviceWidgets[uuid].first;
     m_stackedWidget->setCurrentWidget(widget);
 
-    // Update sidebar selection
-    m_sidebar->setCurrentSelection(DeviceSelection(uuid));
-
-    emit deviceChanged(uuid);
+    // Update sidebar selection through the AppContext to keep state consistent
+    AppContext::sharedInstance()->setCurrentDeviceSelection(
+        DeviceSelection(uuid));
 }
 
 std::string DeviceManagerWidget::getCurrentDevice() const

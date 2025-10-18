@@ -1,6 +1,7 @@
 #ifndef APPCONTEXT_H
 #define APPCONTEXT_H
 
+#include "devicesidebarwidget.h"
 #include "iDescriptor.h"
 #include <QDBusConnection>
 #include <QDBusMessage>
@@ -21,10 +22,14 @@ public:
     ~AppContext();
     int getConnectedDeviceCount() const;
 
+    void setCurrentDeviceSelection(const DeviceSelection &selection);
+    const DeviceSelection &getCurrentDeviceSelection() const;
+
 private:
     QMap<std::string, iDescriptorDevice *> m_devices;
     QMap<uint64_t, iDescriptorRecoveryDevice *> m_recoveryDevices;
     QStringList m_pendingDevices;
+    DeviceSelection m_currentSelection = DeviceSelection("");
 signals:
     void deviceAdded(iDescriptorDevice *device);
     void deviceRemoved(const std::string &udid);
@@ -44,6 +49,7 @@ signals:
         do anything you want
     */
     void deviceChange();
+    void currentDeviceSelectionChanged(const DeviceSelection &selection);
 public slots:
     void removeDevice(QString udid);
     void addDevice(QString udid, idevice_connection_type connType,

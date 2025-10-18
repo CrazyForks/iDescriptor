@@ -1,5 +1,5 @@
 #include "ifusewidget.h"
-#include "clickablelabel.h"
+#include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include "ifusediskunmountbutton.h"
 #include "ifusemanager.h"
@@ -72,7 +72,7 @@ void iFuseWidget::setupUI()
     QHBoxLayout *pathLayout = new QHBoxLayout(pathWidget);
     pathLayout->setContentsMargins(0, 0, 0, 0);
 
-    m_mountPathLabel = new ClickableLabel();
+    m_mountPathLabel = new ZLabel(this);
     m_mountPathLabel->setText("Mount directory will be shown here");
     m_mountPathLabel->setStyleSheet("QLabel { "
                                     "border: 1px solid #ccc; "
@@ -93,24 +93,10 @@ void iFuseWidget::setupUI()
     pathLayout->addWidget(m_folderPickerButton);
     m_mainLayout->addWidget(pathWidget);
 
-    // Delete on unmount checkbox
-
     // Mount button
     m_mountButton = new QPushButton("Mount Device");
     m_mountButton->setMinimumHeight(40);
-    m_mountButton->setStyleSheet("QPushButton { "
-                                 "background-color: #007aff; "
-                                 "color: white; "
-                                 "border: none; "
-                                 "border-radius: 6px; "
-                                 "font-weight: bold; "
-                                 "}"
-                                 "QPushButton:hover { "
-                                 "background-color: #0056cc; "
-                                 "}"
-                                 "QPushButton:disabled { "
-                                 "background-color: #cccccc; "
-                                 "}");
+    m_mountButton->setDefault(true);
     m_mainLayout->addWidget(m_mountButton);
 
     // Add stretch to push everything to the top
@@ -119,7 +105,7 @@ void iFuseWidget::setupUI()
     // Connect signals
     connect(m_folderPickerButton, &QPushButton::clicked, this,
             &iFuseWidget::onFolderPickerClicked);
-    connect(m_mountPathLabel, &ClickableLabel::clicked, this,
+    connect(m_mountPathLabel, &ZLabel::clicked, this,
             &iFuseWidget::onMountPathClicked);
     connect(m_mountButton, &QPushButton::clicked, this,
             &iFuseWidget::onMountClicked);

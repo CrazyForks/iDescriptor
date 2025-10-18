@@ -19,7 +19,7 @@ public:
     void start(const QStringList &files);
     void stop();
     int getPort() const;
-
+    QString getJsonFileName() const { return jsonFileName; }
 signals:
     void serverStarted();
     void serverError(const QString &error);

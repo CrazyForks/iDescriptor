@@ -233,15 +233,14 @@ DeviceInfoWidget::DeviceInfoWidget(iDescriptorDevice *device, QWidget *parent)
     infoItems.append(
         {"Hardware Model:", createValueLabel(QString::fromStdString(
                                 device->deviceInfo.hardwareModel))});
+    infoItems.append({"Region:", createValueLabel(QString::fromStdString(
+                                     device->deviceInfo.region))});
     infoItems.append(
         {"Hardware Platform:", createValueLabel(QString::fromStdString(
                                    device->deviceInfo.hardwarePlatform))});
     infoItems.append(
-        {"Ethernet Address:", createValueLabel(QString::fromStdString(
-                                  device->deviceInfo.ethernetAddress))});
-    infoItems.append(
-        {"Bluetooth Address:", createValueLabel(QString::fromStdString(
-                                   device->deviceInfo.bluetoothAddress))});
+        {"Battery Cycle:", createValueLabel(QString::number(
+                               m_device->deviceInfo.batteryInfo.cycleCount))});
     infoItems.append(
         {"Firmware Version:", createValueLabel(QString::fromStdString(
                                   device->deviceInfo.firmwareVersion))});

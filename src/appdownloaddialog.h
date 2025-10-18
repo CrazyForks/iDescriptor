@@ -2,7 +2,7 @@
 #define APPDOWNLOADDIALOG_H
 
 #include "appdownloadbasedialog.h"
-#include "clickablelabel.h"
+#include "iDescriptor-ui.h"
 #include <QDialog>
 #include <QLabel>
 #include <QPushButton>
@@ -21,7 +21,7 @@ private slots:
 private:
     QString m_outputDir;
     QPushButton *m_dirButton;
-    ClickableLabel *m_dirLabel;
+    ZLabel *m_dirLabel;
     QString m_bundleId;
 };
 

@@ -6,13 +6,13 @@
 #include "devdiskmanager.h"
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
-#ifdef __APPLE__
+#ifndef __APPLE__
 #include "ifusewidget.h"
 #endif
-#include "pcfileexplorerwidget.h"
 #include "querymobilegestaltwidget.h"
 #include "realtimescreenwidget.h"
 #include "virtuallocationwidget.h"
+#include "wirelessphotoimportwidget.h"
 #include <QApplication>
 #include <QDebug>
 #include <QMessageBox>
@@ -68,6 +68,9 @@ ToolboxWidget::ToolboxWidget(QWidget *parent) : QWidget{parent}
 
     connect(AppContext::sharedInstance(), &AppContext::deviceChange, this,
             &ToolboxWidget::updateUI);
+    connect(AppContext::sharedInstance(),
+            &AppContext::currentDeviceSelectionChanged, this,
+            &ToolboxWidget::onCurrentDeviceChanged);
 }
 
 void ToolboxWidget::setupUI()
@@ -127,10 +130,11 @@ void ToolboxWidget::setupUI()
                             "Query device hardware information", true, ""});
     mainToolWidgets.append({iDescriptorTool::DeveloperDiskImages,
                             "Manage developer disk images", false, ""});
-    mainToolWidgets.append({iDescriptorTool::WirelessFileImport,
-                            "Import files wirelessly to your iDevice", false,
-                            ""});
-#ifdef __APPLE__
+    mainToolWidgets.append(
+        {iDescriptorTool::WirelessPhotoImport,
+         "Import photos wirelessly to your iDevice (requires Shortcut app)",
+         false, ""});
+#ifndef __APPLE__
     mainToolWidgets.append({iDescriptorTool::iFuse,
                             "Mount your iPhone's filesystem on your PC", true,
                             ""});
@@ -239,8 +243,8 @@ ClickableWidget *ToolboxWidget::createToolbox(iDescriptorTool tool,
     case iDescriptorTool::DeveloperDiskImages:
         title = "Dev Disk Images";
         break;
-    case iDescriptorTool::WirelessFileImport:
-        title = "Wireless File Import";
+    case iDescriptorTool::WirelessPhotoImport:
+        title = "Wireless Photo Import";
         break;
     case iDescriptorTool::iFuse:
         title = "iFuse Mount";
@@ -346,6 +350,9 @@ void ToolboxWidget::onDeviceSelectionChanged()
         if (QString::fromStdString(device->udid) == selectedUdid) {
             m_uuid = device->udid;
             m_currentDevice = device;
+            // Also update the AppContext to keep everything in sync
+            AppContext::sharedInstance()->setCurrentDeviceSelection(
+                DeviceSelection(m_uuid));
             return;
         }
     }
@@ -353,16 +360,50 @@ void ToolboxWidget::onDeviceSelectionChanged()
     m_currentDevice = nullptr;
 }
 
+void ToolboxWidget::onCurrentDeviceChanged(const DeviceSelection &selection)
+{
+    if (selection.type == DeviceSelection::Normal) {
+        int index =
+            m_deviceCombo->findData(QString::fromStdString(selection.uuid));
+        if (index != -1) {
+            // Block signals to prevent recursive calls
+            m_deviceCombo->blockSignals(true);
+            m_deviceCombo->setCurrentIndex(index);
+            m_deviceCombo->blockSignals(false);
+
+            // Update internal state
+            m_uuid = selection.uuid;
+            QList<iDescriptorDevice *> devices =
+                AppContext::sharedInstance()->getAllDevices();
+            for (iDescriptorDevice *device : devices) {
+                if (device->udid == selection.uuid) {
+                    m_currentDevice = device;
+                    break;
+                }
+            }
+        }
+    } else {
+        // TODO: recovery and no device selection
+    }
+}
+
 void ToolboxWidget::onToolboxClicked(iDescriptorTool tool)
 {
 
     switch (tool) {
     case iDescriptorTool::Airplayer: {
-        AirPlayWindow *airplayWindow = new AirPlayWindow();
-        airplayWindow->setAttribute(Qt::WA_DeleteOnClose);
-        airplayWindow->setWindowFlag(Qt::Window);
-        airplayWindow->resize(400, 300);
-        airplayWindow->show();
+        if (!m_airplayWindow) {
+            m_airplayWindow = new AirPlayWindow();
+            connect(m_airplayWindow, &QObject::destroyed, this,
+                    [this]() { m_airplayWindow = nullptr; });
+            m_airplayWindow->setAttribute(Qt::WA_DeleteOnClose);
+            m_airplayWindow->setWindowFlag(Qt::Window);
+            m_airplayWindow->resize(400, 300);
+            m_airplayWindow->show();
+        } else {
+            m_airplayWindow->raise();
+            m_airplayWindow->activateWindow();
+        }
     } break;
 
     case iDescriptorTool::RealtimeScreen: {
@@ -447,14 +488,19 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool)
             m_devDiskImagesWidget->activateWindow();
         }
     } break;
-    case iDescriptorTool::WirelessFileImport: {
-        PCFileExplorerWidget *fileExplorer = new PCFileExplorerWidget();
-        fileExplorer->setAttribute(Qt::WA_DeleteOnClose);
-        fileExplorer->setWindowFlag(Qt::Window);
-        fileExplorer->resize(800, 600);
-        fileExplorer->show();
+    case iDescriptorTool::WirelessPhotoImport: {
+        if (!m_wirelessPhotoImportWidget) {
+            m_wirelessPhotoImportWidget = new WirelessPhotoImportWidget();
+            m_wirelessPhotoImportWidget->setAttribute(Qt::WA_DeleteOnClose);
+            m_wirelessPhotoImportWidget->setWindowFlag(Qt::Window);
+            // m_wirelessPhotoImportWidget->resize(800, 600);
+            m_wirelessPhotoImportWidget->show();
+        } else {
+            m_wirelessPhotoImportWidget->show();
+            m_wirelessPhotoImportWidget->show();
+        }
     } break;
-#ifdef __APPLE__
+#ifndef __APPLE__
     case iDescriptorTool::iFuse: {
         iFuseWidget *ifuseWidget = new iFuseWidget(m_currentDevice);
         ifuseWidget->setAttribute(Qt::WA_DeleteOnClose);

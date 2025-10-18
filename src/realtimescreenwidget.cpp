@@ -20,7 +20,6 @@ RealtimeScreenWidget::RealtimeScreenWidget(iDescriptorDevice *device,
 {
     setWindowTitle("Real-time Screen - iDescriptor");
 
-    // Check iOS version first
     unsigned int device_version = idevice_get_device_version(m_device->device);
     unsigned int deviceMajorVersion = (device_version >> 16) & 0xFF;
 
@@ -99,7 +98,7 @@ RealtimeScreenWidget::RealtimeScreenWidget(iDescriptorDevice *device,
             if (success) {
                 // for some reason it does not work immediately, so delay a bit
                 QTimer::singleShot(
-                    100, this,
+                    1000, this,
                     &RealtimeScreenWidget::initializeScreenshotService);
             } else {
                 m_statusLabel->setText("Failed to mount developer disk image");

@@ -136,6 +136,8 @@ struct DeviceInfo {
     bool is_iPhone;
     bool oldDevice;
     std::string marketingName;
+    std::string regionRaw;
+    std::string region;
 };
 
 struct iDescriptorDevice {

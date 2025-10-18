@@ -21,6 +21,7 @@ public:
     static const DeviceDatabaseInfo *
     findByIdentifier(const std::string &identifier);
     static const DeviceDatabaseInfo *findByHwModel(const std::string &hwModel);
+    static std::string parseRegionInfo(const std::string &code);
 
 private:
     static const DeviceDatabaseInfo m_devices[];

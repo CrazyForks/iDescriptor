@@ -1,4 +1,5 @@
 #include "devicesidebarwidget.h"
+#include "appcontext.h"
 #include "iDescriptor-ui.h"
 #include "loadingspinnerwidget.h"
 #include "qprocessindicator.h"
@@ -270,6 +271,11 @@ DeviceSidebarWidget::DeviceSidebarWidget(QWidget *parent)
     // Set minimum width
     setMinimumWidth(200);
     setMaximumWidth(250);
+
+    // Listen to AppContext selection changes
+    connect(AppContext::sharedInstance(),
+            &AppContext::currentDeviceSelectionChanged, this,
+            &DeviceSidebarWidget::setCurrentSelection);
 }
 
 DeviceSidebarItem *DeviceSidebarWidget::addDevice(const QString &deviceName,
@@ -353,8 +359,7 @@ void DeviceSidebarWidget::setCurrentSelection(const DeviceSelection &selection)
 
 void DeviceSidebarWidget::onItemSelected(const DeviceSelection &selection)
 {
-    setCurrentSelection(selection);
-    emit deviceSelectionChanged(selection);
+    AppContext::sharedInstance()->setCurrentDeviceSelection(selection);
 }
 
 void DeviceSidebarWidget::updateSelection()

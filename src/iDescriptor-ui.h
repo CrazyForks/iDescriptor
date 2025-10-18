@@ -1,6 +1,7 @@
 #pragma once
 #include <QApplication>
 #include <QGraphicsView>
+#include <QLabel>
 #include <QMainWindow>
 #include <QMouseEvent>
 #include <QPainter>
@@ -205,7 +206,7 @@ enum class iDescriptorTool {
     RecoveryMode,
     QueryMobileGestalt,
     DeveloperDiskImages,
-    WirelessFileImport,
+    WirelessPhotoImport,
     CableInfoWidget,
     /*
         TODO: to be implemented
@@ -306,5 +307,25 @@ protected:
     QSplitterHandle *createHandle() override
     {
         return new ModernSplitterHandle(orientation(), this);
+    }
+};
+
+class ZLabel : public QLabel
+{
+    Q_OBJECT
+public:
+    using QLabel::QLabel;
+
+signals:
+    void clicked();
+
+protected:
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton &&
+            rect().contains(event->pos())) {
+            emit clicked();
+        }
+        QLabel::mouseReleaseEvent(event);
     }
 };

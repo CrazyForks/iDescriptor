@@ -1,13 +1,20 @@
 #include "airplaywindow.h"
 #include <QApplication>
 #include <QCheckBox>
+#include <QCloseEvent>
 #include <QDebug>
+#include <QFileInfo>
+#include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMediaPlayer>
 #include <QMessageBox>
+#include <QPalette>
 #include <QPixmap>
-#include <QPushButton>
+#include <QProcess>
+#include <QStackedWidget>
 #include <QVBoxLayout>
+#include <QVideoWidget>
 
 #ifdef Q_OS_LINUX
 // V4L2 includes
@@ -20,16 +27,18 @@
 #endif
 
 // Include the rpiplay server functions
+#include "../lib/airplay/renderers/video_renderer.h"
 extern "C" {
-int start_server_qt(const char *name);
+int start_server_qt(const char *name, void *callbacks);
 int stop_server_qt();
 }
 
-// Global callback for video renderer
-std::function<void(uint8_t *, int, int)> qt_video_callback;
-
 AirPlayWindow::AirPlayWindow(QWidget *parent)
-    : QMainWindow(parent), m_videoLabel(nullptr), m_statusLabel(nullptr),
+    : QMainWindow(parent), m_stackedWidget(nullptr), m_tutorialWidget(nullptr),
+      m_streamingWidget(nullptr), m_loadingIndicator(nullptr),
+      m_loadingLabel(nullptr), m_tutorialPlayer(nullptr),
+      m_tutorialVideoWidget(nullptr), m_videoLabel(nullptr),
+      m_tutorialLayout(nullptr), m_v4l2Checkbox(nullptr),
       m_serverThread(nullptr), m_serverRunning(false)
 #ifdef Q_OS_LINUX
       ,
@@ -38,21 +47,8 @@ AirPlayWindow::AirPlayWindow(QWidget *parent)
 {
     setupUI();
 
-    // Setup video callback
-    qt_video_callback = [this](uint8_t *data, int width, int height) {
-#ifdef Q_OS_LINUX
-        // V4L2 output if enabled
-        if (m_v4l2_enabled) {
-            writeFrameToV4L2(data, width, height);
-        }
-#endif
-
-        QByteArray frameData((const char *)data, width * height * 3);
-        QMetaObject::invokeMethod(this, "updateVideoFrame",
-                                  Qt::QueuedConnection,
-                                  Q_ARG(QByteArray, frameData),
-                                  Q_ARG(int, width), Q_ARG(int, height));
-    };
+    // Auto-start server after UI setup
+    QTimer::singleShot(500, this, &AirPlayWindow::startAirPlayServer);
 }
 
 AirPlayWindow::~AirPlayWindow()
@@ -61,71 +57,121 @@ AirPlayWindow::~AirPlayWindow()
 #ifdef Q_OS_LINUX
     closeV4L2();
 #endif
-    qt_video_callback = nullptr;
 }
 
 void AirPlayWindow::setupUI()
 {
-    setWindowTitle("AirPlay Receiver");
-    resize(800, 600);
+    setWindowTitle("AirPlay Receiver - iDescriptor");
+    setMinimumSize(800, 600);
+    resize(1000, 700);
 
-    QWidget *centralWidget = new QWidget(this);
-    setCentralWidget(centralWidget);
+    // Create stacked widget
+    m_stackedWidget = new QStackedWidget(this);
+    setCentralWidget(m_stackedWidget);
 
-    QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
+    m_tutorialWidget = new QWidget();
+    m_tutorialLayout = new QVBoxLayout(m_tutorialWidget);
+    m_tutorialLayout->setContentsMargins(40, 40, 40, 40);
+    m_tutorialLayout->setSpacing(20);
 
-    // Status area
-    QHBoxLayout *statusLayout = new QHBoxLayout();
-    m_statusLabel = new QLabel("Server: Stopped");
-    m_statusLabel->setStyleSheet("QLabel { padding: 5px; background-color: "
-                                 "#f0f0f0; border: 1px solid #ccc; }");
+    m_loadingIndicator = new QProcessIndicator();
+    m_loadingIndicator->setType(QProcessIndicator::line_rotate);
+    m_loadingIndicator->setFixedSize(64, 32);
+    m_loadingIndicator->start();
 
-    QPushButton *startBtn = new QPushButton("Start Server");
-    QPushButton *stopBtn = new QPushButton("Stop Server");
+    QHBoxLayout *loadingLayout = new QHBoxLayout();
+    loadingLayout->setSpacing(1);
+    m_loadingLabel = new QLabel("Starting AirPlay Server...");
+    m_loadingLabel->setAlignment(Qt::AlignCenter);
 
-    connect(startBtn, &QPushButton::clicked, this,
-            &AirPlayWindow::startAirPlayServer);
-    connect(stopBtn, &QPushButton::clicked, this,
-            &AirPlayWindow::stopAirPlayServer);
+    loadingLayout->addWidget(m_loadingLabel);
+    loadingLayout->addWidget(m_loadingIndicator);
 
-    statusLayout->addWidget(m_statusLabel);
-    statusLayout->addStretch();
+    m_tutorialLayout->addLayout(loadingLayout);
+    m_tutorialLayout->addSpacing(1);
+
+    QTimer::singleShot(100, this, &AirPlayWindow::setupTutorialVideo);
+
+    m_streamingWidget = new QWidget();
+    QVBoxLayout *streamingLayout = new QVBoxLayout(m_streamingWidget);
+    streamingLayout->setContentsMargins(10, 10, 10, 10);
+    streamingLayout->setSpacing(10);
 
 #ifdef Q_OS_LINUX
-    // V4L2 controls
-    QCheckBox *v4l2CheckBox = new QCheckBox("Enable V4L2 Output");
-    connect(v4l2CheckBox, &QCheckBox::toggled, this, [this](bool enabled) {
-        m_v4l2_enabled = enabled;
-        if (!enabled) {
-            closeV4L2();
-        }
-        qDebug() << "V4L2 output" << (enabled ? "enabled" : "disabled");
-    });
-
-    QPushButton *testV4L2Btn = new QPushButton("Test V4L2");
-    testV4L2Btn->setToolTip("Test V4L2 loopback device availability");
-    connect(testV4L2Btn, &QPushButton::clicked, this,
-            [this]() { testV4L2Device(); });
-
-    statusLayout->addWidget(v4l2CheckBox);
-    statusLayout->addWidget(testV4L2Btn);
+    // Add V4L2 checkbox at the top of streaming view
+    setupV4L2Checkbox();
+    if (m_v4l2Checkbox) {
+        streamingLayout->addWidget(m_v4l2Checkbox);
+    }
 #endif
-    statusLayout->addWidget(startBtn);
-    statusLayout->addWidget(stopBtn);
 
-    // Video display area
-    m_videoLabel = new QLabel("Waiting for AirPlay connection...");
+    // Video display
+    m_videoLabel = new QLabel();
     m_videoLabel->setMinimumSize(640, 480);
-    m_videoLabel->setStyleSheet(
-        "QLabel { background-color: black; color: white; }");
     m_videoLabel->setAlignment(Qt::AlignCenter);
-    m_videoLabel->setScaledContents(true);
+    m_videoLabel->setScaledContents(false);
+    streamingLayout->addWidget(m_videoLabel, 1);
 
-    mainLayout->addLayout(statusLayout);
-    mainLayout->addWidget(m_videoLabel, 1);
+    // Add all widgets to stacked widget
+    m_stackedWidget->addWidget(m_tutorialWidget);
+    m_stackedWidget->addWidget(m_streamingWidget);
 
-    // Auto-start server
-    startAirPlayServer();
+    // Start with tutorial widget
+    m_stackedWidget->setCurrentWidget(m_tutorialWidget);
+
+#ifdef Q_OS_LINUX
+    m_v4l2_enabled = false; // Disable V4L2 by default
+#endif
+}
+
+void AirPlayWindow::setupTutorialVideo()
+{
+    m_tutorialPlayer = new QMediaPlayer(this);
+    m_tutorialVideoWidget = new QVideoWidget();
+    m_tutorialVideoWidget->setSizePolicy(QSizePolicy::Expanding,
+                                         QSizePolicy::Expanding);
+
+    m_tutorialPlayer->setVideoOutput(m_tutorialVideoWidget);
+    m_tutorialPlayer->setSource(QUrl("qrc:/resources/airplayer-tutorial.mp4"));
+    m_tutorialVideoWidget->setAspectRatioMode(
+        Qt::AspectRatioMode::KeepAspectRatioByExpanding);
+    m_tutorialVideoWidget->setStyleSheet(
+        "QVideoWidget { background-color: transparent; }");
+    // Loop the tutorial video
+    connect(m_tutorialPlayer, &QMediaPlayer::mediaStatusChanged, this,
+            [this](QMediaPlayer::MediaStatus status) {
+                if (status == QMediaPlayer::EndOfMedia) {
+                    m_tutorialPlayer->setPosition(0);
+                    m_tutorialPlayer->play();
+                }
+            });
+
+    // Auto-play when ready
+    connect(m_tutorialPlayer, &QMediaPlayer::mediaStatusChanged, this,
+            [this](QMediaPlayer::MediaStatus status) {
+                if (status == QMediaPlayer::LoadedMedia) {
+                    m_tutorialPlayer->play();
+                }
+            });
+    m_tutorialVideoWidget->setVisible(false);
+    m_tutorialLayout->addWidget(m_tutorialVideoWidget, 1);
+}
+
+void AirPlayWindow::showTutorialView()
+{
+    m_stackedWidget->setCurrentWidget(m_tutorialWidget);
+    if (m_tutorialPlayer) {
+        m_tutorialPlayer->play();
+    }
+}
+
+void AirPlayWindow::showStreamingView()
+{
+    m_loadingIndicator->stop();
+    m_stackedWidget->setCurrentWidget(m_streamingWidget);
+    if (m_tutorialPlayer) {
+        m_tutorialPlayer->pause();
+    }
 }
 
 void AirPlayWindow::startAirPlayServer()
@@ -138,6 +184,8 @@ void AirPlayWindow::startAirPlayServer()
             &AirPlayWindow::onServerStatusChanged);
     connect(m_serverThread, &AirPlayServerThread::videoFrameReady, this,
             &AirPlayWindow::updateVideoFrame);
+    connect(m_serverThread, &AirPlayServerThread::clientConnectionChanged, this,
+            &AirPlayWindow::onClientConnectionChanged);
 
     m_serverThread->start();
 }
@@ -151,7 +199,6 @@ void AirPlayWindow::stopAirPlayServer()
         m_serverThread = nullptr;
     }
     m_serverRunning = false;
-    m_statusLabel->setText("Server: Stopped");
 }
 
 void AirPlayWindow::updateVideoFrame(QByteArray frameData, int width,
@@ -160,16 +207,108 @@ void AirPlayWindow::updateVideoFrame(QByteArray frameData, int width,
     if (frameData.size() != width * height * 3)
         return;
 
+#ifdef Q_OS_LINUX
+    // V4L2 output if enabled
+    if (m_v4l2_enabled) {
+        writeFrameToV4L2((uint8_t *)frameData.data(), width, height);
+        // Show message instead of rendering video when V4L2 is active
+        m_videoLabel->setText("Currently being shared via virtual camera");
+        return;
+    }
+#endif
+
     QImage image((const uchar *)frameData.data(), width, height,
                  QImage::Format_RGB888);
     QPixmap pixmap = QPixmap::fromImage(image);
-    m_videoLabel->setPixmap(pixmap);
+
+    // Scale pixmap to fit label while maintaining aspect ratio
+    QSize labelSize = m_videoLabel->size();
+    QPixmap scaledPixmap =
+        pixmap.scaled(labelSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    m_videoLabel->setPixmap(scaledPixmap);
 }
 
 void AirPlayWindow::onServerStatusChanged(bool running)
 {
     m_serverRunning = running;
-    m_statusLabel->setText(running ? "Server: Running" : "Server: Stopped");
+
+    if (running) {
+        // Server started successfully, hide loading indicator and show tutorial
+        // video
+        m_loadingLabel->setText("Waiting for device connection...");
+
+        // Show tutorial video and instructions
+        m_tutorialVideoWidget->setVisible(true);
+        QLabel *instructionLabel = m_tutorialWidget->findChild<QLabel *>();
+        if (instructionLabel && !instructionLabel->text().contains("Follow")) {
+            // Find the instruction label (not title or loading label)
+            QList<QLabel *> labels = m_tutorialWidget->findChildren<QLabel *>();
+            for (QLabel *label : labels) {
+                if (label->text().contains("Follow")) {
+                    label->setVisible(true);
+                    break;
+                }
+            }
+        }
+
+        if (m_tutorialPlayer) {
+            m_tutorialPlayer->play();
+        }
+    }
+}
+
+void AirPlayWindow::onClientConnectionChanged(bool connected)
+{
+    m_clientConnected = connected;
+    if (connected) {
+        m_loadingLabel->setText("Device connected - receiving stream...");
+
+        showStreamingView();
+    } else {
+        m_loadingLabel->setText("Waiting for device connection...");
+        showTutorialView();
+    }
+}
+
+void AirPlayWindow::onV4L2CheckboxToggled(bool enabled)
+{
+    if (enabled) {
+        // Check if V4L2 loopback exists
+        if (!checkV4L2LoopbackExists()) {
+            // Show message and ask to create V4L2 loopback
+            QMessageBox::StandardButton reply = QMessageBox::question(
+                this, "V4L2 Loopback Required",
+                "Virtual camera device is required for V4L2 output.\n\n"
+                "This will create a virtual camera that other applications can "
+                "use "
+                "to receive the AirPlay stream. The operation requires "
+                "administrator privileges.\n\n"
+                "Do you want to create the virtual camera device?",
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+
+            if (reply == QMessageBox::Yes) {
+                if (createV4L2Loopback()) {
+                    m_v4l2_enabled = true;
+
+                } else {
+                    m_v4l2Checkbox->setChecked(false);
+                    m_v4l2_enabled = false;
+                    QMessageBox::warning(
+                        this, "Error",
+                        "Failed to create virtual camera device. Please ensure "
+                        "you have the necessary permissions.");
+                }
+            } else {
+                m_v4l2Checkbox->setChecked(false);
+                m_v4l2_enabled = false;
+            }
+        } else {
+            m_v4l2_enabled = true;
+        }
+    } else {
+        m_v4l2_enabled = false;
+        closeV4L2();
+    }
 }
 
 // AirPlayServerThread implementation
@@ -184,20 +323,52 @@ AirPlayServerThread::~AirPlayServerThread()
     wait();
 }
 
-void AirPlayServerThread::stopServer() { m_shouldStop = true; }
+void AirPlayServerThread::stopServer()
+{
+    QMutexLocker locker(&m_mutex);
+    m_shouldStop = true;
+    m_waitCondition.wakeAll();
+}
+
+// Global pointer to current server thread for callbacks
+static AirPlayServerThread *g_currentServerThread = nullptr;
+
+// Static callback wrappers for C interface
+extern "C" void qt_video_callback(uint8_t *data, int width, int height)
+{
+    if (g_currentServerThread) {
+        QByteArray frameData((const char *)data, width * height * 3);
+        emit g_currentServerThread->videoFrameReady(frameData, width, height);
+    }
+}
+
+extern "C" void qt_connection_callback(bool connected)
+{
+    if (g_currentServerThread) {
+        emit g_currentServerThread->clientConnectionChanged(connected);
+    }
+}
 
 void AirPlayServerThread::run()
 {
+    g_currentServerThread = this;
     emit statusChanged(true);
 
-    // Start the server (you'll need to adapt the rpiplay server code)
-    start_server_qt("iDescriptor");
+    // Create callbacks structure
+    video_renderer_qt_callbacks_t callbacks;
+    callbacks.video_callback = qt_video_callback;
+    callbacks.connection_callback = qt_connection_callback;
 
+    start_server_qt("iDescriptor", &callbacks);
+
+    // Wait efficiently until stopServer() is called
+    QMutexLocker locker(&m_mutex);
     while (!m_shouldStop) {
-        msleep(100);
+        m_waitCondition.wait(&m_mutex);
     }
 
     stop_server_qt();
+    g_currentServerThread = nullptr;
     emit statusChanged(false);
 }
 
@@ -210,12 +381,6 @@ void AirPlayWindow::initV4L2(int width, int height, const char *device)
     m_v4l2_fd = open(device, O_WRONLY);
     if (m_v4l2_fd < 0) {
         qWarning("Failed to open V4L2 device %s: %s", device, strerror(errno));
-        QMessageBox::warning(
-            this, "V4L2 Error",
-            QString("Failed to open V4L2 device %1.\n"
-                    "Make sure v4l2loopback module is loaded:\n"
-                    "sudo modprobe v4l2loopback")
-                .arg(device));
         return;
     }
 
@@ -233,9 +398,6 @@ void AirPlayWindow::initV4L2(int width, int height, const char *device)
         qWarning("Failed to set V4L2 format: %s", strerror(errno));
         ::close(m_v4l2_fd);
         m_v4l2_fd = -1;
-        QMessageBox::warning(
-            this, "V4L2 Error",
-            "Failed to set V4L2 video format. Device may not support RGB24.");
         return;
     }
 
@@ -249,7 +411,6 @@ void AirPlayWindow::closeV4L2()
     if (m_v4l2_fd >= 0) {
         ::close(m_v4l2_fd);
         m_v4l2_fd = -1;
-        qDebug("V4L2 device closed.");
     }
 }
 
@@ -272,52 +433,74 @@ void AirPlayWindow::writeFrameToV4L2(uint8_t *data, int width, int height)
     }
 }
 
-void AirPlayWindow::testV4L2Device()
+bool AirPlayWindow::checkV4L2LoopbackExists()
 {
-    const char *device = "/dev/video0";
-    int fd = open(device, O_WRONLY);
-
-    if (fd < 0) {
-        QMessageBox::critical(this, "V4L2 Test",
-                              QString("Failed to open V4L2 device %1.\n"
-                                      "Error: %2\n\n"
-                                      "To fix this, run:\n"
-                                      "sudo modprobe v4l2loopback video_nr=0")
-                                  .arg(device)
-                                  .arg(strerror(errno)));
-        return;
+    try {
+        QFileInfo videoDevice("/dev/video0");
+        return videoDevice.exists();
+    } catch (...) {
+        qWarning("Exception occurred while checking for V4L2 loopback device");
+        return false;
     }
+}
 
-    // Test if device supports V4L2_PIX_FMT_RGB24
-    struct v4l2_format fmt;
-    memset(&fmt, 0, sizeof(fmt));
-    fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-    fmt.fmt.pix.width = 1280;
-    fmt.fmt.pix.height = 720;
-    fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB24;
-    fmt.fmt.pix.field = V4L2_FIELD_NONE;
-    fmt.fmt.pix.bytesperline = 1280 * 3;
-    fmt.fmt.pix.sizeimage = 1280 * 720 * 3;
+bool AirPlayWindow::createV4L2Loopback()
+{
+    try {
+        QProcess process;
 
-    if (ioctl(fd, VIDIOC_S_FMT, &fmt) < 0) {
-        ::close(fd);
-        QMessageBox::warning(
-            this, "V4L2 Test",
-            QString("V4L2 device %1 exists but doesn't support RGB24 format.\n"
-                    "Error: %2")
-                .arg(device)
-                .arg(strerror(errno)));
-        return;
+        // Use pkexec to run modprobe with administrator privileges
+        QStringList arguments;
+        arguments << "modprobe" << "v4l2loopback" << "devices=1"
+                  << "video_nr=0" << "card_label=\"iDescriptor Virtual Camera\""
+                  << "exclusive_caps=1";
+
+        process.start("pkexec", arguments);
+
+        if (!process.waitForStarted(5000)) {
+            qWarning("Failed to start pkexec process");
+            return false;
+        }
+
+        if (!process.waitForFinished(10000)) {
+            qWarning("Timeout waiting for modprobe to complete");
+            process.kill();
+            return false;
+        }
+
+        int exitCode = process.exitCode();
+        if (exitCode != 0) {
+            QString errorOutput = process.readAllStandardError();
+            qWarning("modprobe failed with exit code %d: %s", exitCode,
+                     errorOutput.toUtf8().constData());
+            return false;
+        }
+
+        // Wait a bit for the device to be created
+        QThread::msleep(500);
+
+        // Verify the device was created
+        return checkV4L2LoopbackExists();
+
+    } catch (...) {
+        qWarning("Exception occurred while creating V4L2 loopback device");
+        return false;
     }
+}
 
-    ::close(fd);
-    QMessageBox::information(
-        this, "V4L2 Test",
-        QString("✓ V4L2 device %1 is working correctly!\n\n"
-                "You can now:\n"
-                "• View output with: ffplay %1\n"
-                "• Use in OBS as Video Capture Device\n"
-                "• Record with: ffmpeg -f v4l2 -i %1 output.mp4")
-            .arg(device));
+void AirPlayWindow::setupV4L2Checkbox()
+{
+    try {
+        m_v4l2Checkbox = new QCheckBox("Enable V4L2 Virtual Camera Output");
+        m_v4l2Checkbox->setToolTip("Enable output to virtual camera device "
+                                   "that other applications can use");
+        m_v4l2Checkbox->setChecked(false);
+
+        connect(m_v4l2Checkbox, &QCheckBox::toggled, this,
+                &AirPlayWindow::onV4L2CheckboxToggled);
+
+    } catch (...) {
+        qWarning("Exception occurred while setting up V4L2 checkbox");
+    }
 }
 #endif

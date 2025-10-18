@@ -1,5 +1,5 @@
 #include "appdownloaddialog.h"
-#include "clickablelabel.h"
+#include "iDescriptor-ui.h"
 #include "libipatool-go.h"
 #include <QDesktopServices>
 #include <QFileDialog>
@@ -35,10 +35,10 @@ AppDownloadDialog::AppDownloadDialog(const QString &appName,
     dirTextLabel->setStyleSheet("font-size: 14px;");
     dirLayout->addWidget(dirTextLabel);
 
-    m_dirLabel = new ClickableLabel(this);
+    m_dirLabel = new ZLabel(this);
     m_dirLabel->setText(m_outputDir);
     m_dirLabel->setStyleSheet("font-size: 14px; color: #007AFF;");
-    connect(m_dirLabel, &ClickableLabel::clicked, this, [this]() {
+    connect(m_dirLabel, &ZLabel::clicked, this, [this]() {
         QDesktopServices::openUrl(QUrl::fromLocalFile(m_outputDir));
     });
     m_dirLabel->setCursor(Qt::PointingHandCursor);

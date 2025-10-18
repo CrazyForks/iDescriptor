@@ -99,6 +99,8 @@ void parseDeviceBattery(PlistNavigator &ioreg, DeviceInfo &d)
 
     d.batteryInfo.fullyCharged = ioreg["FullyCharged"].getBool();
 
+    qDebug() << "Stalebatteryinfo:"
+             << ioreg["BatteryData"]["StateOfCharge"].getUInt();
     /* data is stale here so we need to calculate */
     // d.batteryInfo.currentBatteryLevel =
     //     ioreg["BatteryData"]["StateOfCharge"].getUInt();
@@ -231,7 +233,9 @@ DeviceInfo fullDeviceInfo(const pugi::xml_document &doc,
         d.activationState =
             DeviceInfo::ActivationState::Unactivated; // Default value
     }
-    // TODO:RegionInfo: LL/A
+    std::string regionInfo = safeGet("RegionInfo");
+    d.regionRaw = regionInfo;
+    d.region = DeviceDatabase::parseRegionInfo(regionInfo);
     std::string rawProductType = safeGet("ProductType");
     const DeviceDatabaseInfo *info =
         DeviceDatabase::findByIdentifier(rawProductType);

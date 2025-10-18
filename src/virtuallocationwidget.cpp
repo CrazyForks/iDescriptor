@@ -125,19 +125,19 @@ VirtualLocation::VirtualLocation(iDescriptorDevice *device, QWidget *parent)
 
     DevDiskManager::sharedInstance()->downloadCompatibleImage(m_device);
 
-    QTimer::singleShot(0, this, [this]() {
-        unsigned int device_version =
-            idevice_get_device_version(m_device->device);
-        unsigned int deviceMajorVersion = (device_version >> 16) & 0xFF;
+    unsigned int device_version = idevice_get_device_version(m_device->device);
+    unsigned int deviceMajorVersion = (device_version >> 16) & 0xFF;
 
-        if (deviceMajorVersion > 16) {
-            QMessageBox::information(this, "Info",
-                                     "Virtual Location feature requires iOS "
-                                     "16 or earlier. Support for iOS " +
-                                         QString::number(deviceMajorVersion) +
-                                         " is still under development.");
-        }
-    });
+    if (deviceMajorVersion > 16) {
+        QMessageBox::warning(
+            this, "Unsupported iOS Version",
+            "Real-time Screen feature requires iOS 16 or earlier.\n"
+            "Your device is running iOS " +
+                QString::number(deviceMajorVersion) +
+                ", which is not yet supported.");
+        QTimer::singleShot(0, this, &QWidget::close);
+        return;
+    }
 }
 
 void VirtualLocation::onQuickWidgetStatusChanged(QQuickWidget::Status status)

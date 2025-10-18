@@ -440,3 +440,116 @@ DeviceDatabase::findByHwModel(const std::string &hwModel)
     }
     return nullptr;
 }
+
+std::string DeviceDatabase::parseRegionInfo(const std::string &code)
+{
+    // North America
+    if (code == "LL/A")
+        return "United States, Canada";
+    if (code == "LL")
+        return "United States, Canada";
+
+    // Latin America
+    if (code == "LA/A")
+        return "Latin America";
+    if (code == "BR/A" || code == "BZ/A")
+        return "Brazil";
+    if (code == "CL/A")
+        return "Chile";
+    if (code == "CO/A")
+        return "Colombia";
+    if (code == "MX/A")
+        return "Mexico";
+    if (code == "AR/A")
+        return "Argentina";
+
+    // Asia Pacific
+    if (code == "J/A")
+        return "Japan";
+    if (code == "KH/A")
+        return "Thailand, Cambodia";
+    if (code == "MY/A")
+        return "Malaysia";
+    if (code == "ZP/A")
+        return "Hong Kong, Macau";
+    if (code == "CH/A")
+        return "China";
+    if (code == "TA/A")
+        return "Taiwan";
+    if (code == "KR/A")
+        return "Korea";
+    if (code == "SG/A")
+        return "Singapore";
+    if (code == "IN/A")
+        return "India";
+    if (code == "TH/A")
+        return "Thailand";
+    if (code == "VN/A")
+        return "Vietnam";
+    if (code == "ID/A")
+        return "Indonesia";
+    if (code == "PH/A")
+        return "Philippines";
+    if (code == "NZ/A")
+        return "New Zealand";
+    if (code == "AU/A" || code == "X/A")
+        return "Australia";
+
+    // Europe
+    if (code == "ZA/A")
+        return "South Africa";
+    if (code == "AB/A")
+        return "Egypt, Jordan, Saudi Arabia, UAE";
+    if (code == "AE/A")
+        return "United Arab Emirates";
+    if (code == "B/A")
+        return "United Kingdom, Ireland";
+    if (code == "FB/A")
+        return "France, Luxembourg";
+    if (code == "FD/A")
+        return "Austria, Liechtenstein, Switzerland";
+    if (code == "GR/A")
+        return "Greece";
+    if (code == "HN/A")
+        return "India";
+    if (code == "IP/A")
+        return "Italy";
+    if (code == "KN/A")
+        return "Denmark, Norway";
+    if (code == "KS/A")
+        return "Finland, Sweden";
+    if (code == "LZ/A")
+        return "Paraguay, Uruguay";
+    if (code == "MG/A")
+        return "Hungary";
+    if (code == "PO/A")
+        return "Poland";
+    if (code == "PP/A")
+        return "Philippines";
+    if (code == "RO/A")
+        return "Romania";
+    if (code == "RS/A")
+        return "Russia";
+    if (code == "SL/A")
+        return "Slovakia";
+    if (code == "SO/A")
+        return "South Africa";
+    if (code == "T/A")
+        return "Italy";
+    if (code == "TU/A")
+        return "Turkey";
+    if (code == "Y/A")
+        return "Spain";
+    if (code == "ZD/A")
+        return "Germany, Luxembourg";
+
+    // Middle East
+    if (code == "HB/A")
+        return "Israel";
+
+    // Canada
+    if (code == "C/A")
+        return "Canada (English, French)";
+
+    return "Unknown Region (" + code + ")";
+}

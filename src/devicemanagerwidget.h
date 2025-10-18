@@ -22,7 +22,6 @@ public:
     std::string getCurrentDevice() const;
 
 signals:
-    void deviceChanged(std::string deviceUuid);
     void updateNoDevicesConnected();
 
 private slots:

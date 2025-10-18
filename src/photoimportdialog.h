@@ -22,7 +22,7 @@ public:
     ~PhotoImportDialog();
 
 private slots:
-    void onConfirmImport();
+    void init();
     void onServerStarted();
     void onServerError(const QString &error);
     void onDownloadProgress(const QString &fileName, int bytesDownloaded,
@@ -36,12 +36,11 @@ private:
     QLabel *warningLabel;
     QLabel *qrCodeLabel;
     QLabel *instructionLabel;
-    QPushButton *confirmButton;
-    QPushButton *cancelButton;
+    QPushButton *m_cancelButton;
     QProgressBar *progressBar;
     QLabel *progressLabel;
 
-    SimpleHttpServer *httpServer;
+    SimpleHttpServer *m_httpServer;
 
     void setupUI();
     void generateQRCode(const QString &url);

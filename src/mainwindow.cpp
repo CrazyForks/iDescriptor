@@ -13,6 +13,7 @@
 #include "jailbrokenwidget.h"
 #include "libirecovery.h"
 #include "toolboxwidget.h"
+#include "welcomewidget.h"
 #include <QHBoxLayout>
 #include <QStack>
 #include <QStackedWidget>
@@ -128,22 +129,12 @@ MainWindow::MainWindow(QWidget *parent)
     // Create device manager and stacked widget for main tab
     m_mainStackedWidget = new QStackedWidget();
 
-    // No devices page
-    QWidget *noDevicesPage = new QWidget();
-    QVBoxLayout *noDeviceLayout = new QVBoxLayout(noDevicesPage);
-    noDeviceLayout->addStretch();
-    QHBoxLayout *labelLayout = new QHBoxLayout();
-    labelLayout->addStretch();
-    QLabel *noDeviceLabel = new QLabel("No devices detected");
-    noDeviceLabel->setAlignment(Qt::AlignCenter);
-    labelLayout->addWidget(noDeviceLabel);
-    labelLayout->addStretch();
-    noDeviceLayout->addLayout(labelLayout);
-    noDeviceLayout->addStretch();
+    // Welcome page (shown when no devices are connected)
+    WelcomeWidget *welcomePage = new WelcomeWidget(this);
 
     m_deviceManager = new DeviceManagerWidget(this);
 
-    m_mainStackedWidget->addWidget(noDevicesPage);
+    m_mainStackedWidget->addWidget(welcomePage);
     m_mainStackedWidget->addWidget(m_deviceManager);
 
     connect(m_deviceManager, &DeviceManagerWidget::updateNoDevicesConnected,
@@ -245,8 +236,7 @@ void MainWindow::updateNoDevicesConnected()
     if (AppContext::sharedInstance()->noDevicesConnected()) {
 
         m_connectedDeviceCountLabel->setText("iDescriptor: no devices");
-        return m_mainStackedWidget->setCurrentIndex(
-            0); // Show "No Devices Connected" page
+        return m_mainStackedWidget->setCurrentIndex(0); // Show Welcome page
     }
     int deviceCount = AppContext::sharedInstance()->getConnectedDeviceCount();
     m_connectedDeviceCountLabel->setText(

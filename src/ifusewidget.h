@@ -2,7 +2,7 @@
 #define IFUSEWIDGET_H
 
 #include "appcontext.h"
-#include "clickablelabel.h"
+#include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -46,7 +46,7 @@ private:
     QLabel *m_descriptionLabel;
     QLabel *m_statusLabel;
     QComboBox *m_deviceComboBox;
-    ClickableLabel *m_mountPathLabel;
+    ZLabel *m_mountPathLabel;
     QPushButton *m_folderPickerButton;
     QLabel *m_folderNameLabel;
     QPushButton *m_mountButton;

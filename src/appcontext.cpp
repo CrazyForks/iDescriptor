@@ -245,3 +245,19 @@ AppContext::~AppContext()
         delete recoveryDevice;
     }
 }
+
+void AppContext::setCurrentDeviceSelection(const DeviceSelection &selection)
+{
+    if (m_currentSelection.uuid == selection.uuid &&
+        m_currentSelection.ecid == selection.ecid &&
+        m_currentSelection.section == selection.section) {
+        return; // No change
+    }
+    m_currentSelection = selection;
+    emit currentDeviceSelectionChanged(m_currentSelection);
+}
+
+const DeviceSelection &AppContext::getCurrentDeviceSelection() const
+{
+    return m_currentSelection;
+}
