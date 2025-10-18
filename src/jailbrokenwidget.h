@@ -56,9 +56,7 @@ private:
 
 #ifdef __linux__
     AvahiService *m_wirelessProvider = nullptr;
-#endif
-
-#ifdef __APPLE__
+#else
     DnssdService *m_wirelessProvider = nullptr;
 #endif
 

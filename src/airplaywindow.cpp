@@ -119,7 +119,7 @@ void AirPlayWindow::setupUI()
     // Start with tutorial widget
     m_stackedWidget->setCurrentWidget(m_tutorialWidget);
 
-#ifdef Q_OS_LINUX
+#ifdef __linux__
     m_v4l2_enabled = false; // Disable V4L2 by default
 #endif
 }
@@ -207,7 +207,7 @@ void AirPlayWindow::updateVideoFrame(QByteArray frameData, int width,
     if (frameData.size() != width * height * 3)
         return;
 
-#ifdef Q_OS_LINUX
+#ifdef __linux__
     // V4L2 output if enabled
     if (m_v4l2_enabled) {
         writeFrameToV4L2((uint8_t *)frameData.data(), width, height);
@@ -269,6 +269,7 @@ void AirPlayWindow::onClientConnectionChanged(bool connected)
         showTutorialView();
     }
 }
+#ifdef __linux__
 
 void AirPlayWindow::onV4L2CheckboxToggled(bool enabled)
 {
@@ -310,6 +311,7 @@ void AirPlayWindow::onV4L2CheckboxToggled(bool enabled)
         closeV4L2();
     }
 }
+#endif
 
 // AirPlayServerThread implementation
 AirPlayServerThread::AirPlayServerThread(QObject *parent)
@@ -372,7 +374,7 @@ void AirPlayServerThread::run()
     emit statusChanged(false);
 }
 
-#ifdef Q_OS_LINUX
+#ifdef __linux__
 // V4L2 Implementation
 void AirPlayWindow::initV4L2(int width, int height, const char *device)
 {

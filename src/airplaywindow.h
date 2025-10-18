@@ -53,8 +53,9 @@ public slots:
 
 private slots:
     void onServerStatusChanged(bool running);
+#ifdef __linux__
     void onV4L2CheckboxToggled(bool enabled);
-
+#endif
 private:
     void setupUI();
     void startAirPlayServer();
@@ -80,7 +81,7 @@ private:
     bool m_serverRunning;
     bool m_clientConnected = false;
 
-#ifdef Q_OS_LINUX
+#ifdef __linux__
 public:
     // V4L2 members - public for C callback access
     int m_v4l2_fd;
