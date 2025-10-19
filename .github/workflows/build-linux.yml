@@ -48,13 +48,23 @@ jobs:
             libunwind-dev \
             libxcb-cursor0 \
             libxkbcommon-x11-0 \
-            libheif-dev \
-            libqtermwidget6-2-dev \
-            libplist-dev \
-            libtatsu-dev \
-            libimobiledevice-dev \
-            libimobiledevice-glue-dev \
-            libirecovery-1.0-dev
+            libheif-dev
+
+      - name: Compile additional dependencies
+        run: |
+          git clone https://github.com/lxqt/lxqt-build-tools.git
+          pushd lxqt-build-tools
+          mkdir build && cd build
+          cmake ..
+          sudo make install
+          popd
+
+          git clone https://github.com/uncor3/qtermwidget.git
+          pushd qtermwidget
+          mkdir build && cd build
+          cmake ..
+          sudo make install
+          popd
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
@@ -62,21 +72,21 @@ jobs:
           version: "6.7.2"
           modules: "qtmultimedia qtlocation qtpositioning qtserialport"
 
-      # - name: Build libimobiledevice suite
-      #   run: |
-      #     repos=("libplist" "libtatsu" "libimobiledevice-glue" "libimobiledevice" "libirecovery")
+      - name: Build libimobiledevice suite
+        run: |
+          repos=("libplist" "libtatsu" "libimobiledevice-glue" "libimobiledevice" "libirecovery")
 
-      #     for repo in "${repos[@]}"; do
-      #       echo "Building $repo..."
+          for repo in "${repos[@]}"; do
+            echo "Building $repo..."
 
-      #       git clone --depth=1 --recursive "https://github.com/libimobiledevice/$repo"
-      #       pushd "$repo"
-      #       ./autogen.sh
-      #       sudo make install
-      #       popd
+            git clone --depth=1 --recursive "https://github.com/libimobiledevice/$repo"
+            pushd "$repo"
+            ./autogen.sh
+            sudo make install
+            popd
 
-      #       echo "Built $repo successfully."
-      #     done
+            echo "Built $repo successfully."
+          done
 
       - name: Update linker cache
         run: sudo ldconfig
