@@ -48,7 +48,8 @@ jobs:
             libunwind-dev \
             libxcb-cursor0 \
             libxkbcommon-x11-0 \
-            libheif-dev
+            libheif-dev \
+            ibqtermwidget6-2-dev
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
