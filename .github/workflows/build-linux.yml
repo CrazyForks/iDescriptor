@@ -105,12 +105,112 @@ jobs:
         run: cmake --build build --config Release
 
       - name: Prepare for AppImage
-        if: runner.os == 'Linux'
         run: |
-          cp resources/icons/app-icon/icon.png build/iDescriptor.png
+          wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
+          chmod a+x linuxdeployqt-continuous-x86_64.AppImage
+          cp resources/icons/app-icon/icon.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/iDescriptor.png"
+
+          # Remove unused Qt SQL plugins to fix linuxdeployqt error
+          rm ${{ github.workspace }}/Qt/6.7.2/gcc_64/plugins/sqldrivers/libqsqlmimer.so || true
+
+          export GSTREAMER_VERSION=1.0
+
+          export APPDIR=$PWD/AppDir
+          mkdir -p "$APPDIR/usr/bin"
+
+          cp build/iDescriptor "$APPDIR/usr/bin/"
+
+          # Bundle GStreamer plugins + helpers
+
+          plugins_target_dir="$APPDIR"/usr/lib/gstreamer-"$GSTREAMER_VERSION"
+          helpers_target_dir="$APPDIR"/usr/lib/gstreamer"$GSTREAMER_VERSION"/gstreamer-"$GSTREAMER_VERSION"
+
+          if [ -d /usr/lib/"$(uname -m)"-linux-gnu/gstreamer-"$GSTREAMER_VERSION" ]; then
+              plugins_dir=/usr/lib/$(uname -m)-linux-gnu/gstreamer-"$GSTREAMER_VERSION"
+          else
+              plugins_dir=/usr/lib/gstreamer-"$GSTREAMER_VERSION"
+          fi
+
+          helpers_dir=/usr/lib/$(uname -m)-linux-gnu/gstreamer"$GSTREAMER_VERSION"/gstreamer-"$GSTREAMER_VERSION"
+
+          mkdir -p "$plugins_target_dir"
+
+
+          echo "Copying plugins into $plugins_target_dir"
+          for i in "$plugins_dir"/*; do
+              [ -d "$i" ] && continue
+              [ ! -f "$i" ] && echo "File does not exist: $i" && continue
+
+              echo "Copying plugin: $i"
+              cp "$i" "$plugins_target_dir"
+          done
+
+
+
+          for i in "$plugins_target_dir"/*; do
+              [ -d "$i" ] && continue
+              [ ! -f "$i" ] && echo "File does not exist: $i" && continue
+              (file "$i" | grep -v ELF --silent) && echo "Ignoring non ELF file: $i" && continue
+
+              echo "Manually setting rpath for $i"
+              patchelf --set-rpath '$ORIGIN/..:$ORIGIN' "$i"
+          done
+
+
+
+
+          mkdir -p "$helpers_target_dir"
+
+          echo "Copying helpers in $helpers_target_dir"
+          for i in "$helpers_dir"/*; do
+              [ -d "$i" ] && continue
+              [ ! -f "$i" ] && echo "File does not exist: $i" && continue
+
+              echo "Copying helper: $i"
+              cp "$i" "$helpers_target_dir"
+          done
+
+          for i in "$helpers_target_dir"/*; do
+              [ -d "$i" ] && continue
+              [ ! -f "$i" ] && echo "File does not exist: $i" && continue
+              (file "$i" | grep -v ELF --silent) && echo "Ignoring non ELF file: $i" && continue
+
+              echo "Manually setting rpath for $i"
+              patchelf --set-rpath '$ORIGIN/../..' "$i"
+          done
+
+
+
+          echo "Installing AppRun hook"
+          mkdir -p "$APPDIR"/apprun-hooks
+
+          if [ "$GSTREAMER_VERSION" == "1.0" ]; then
+              cat > "$APPDIR"/apprun-hooks/linuxdeploy-plugin-gstreamer.sh <<\EOF
+          #! /bin/bash
+
+          export GST_REGISTRY_REUSE_PLUGIN_SCANNER="no"
+          export GST_PLUGIN_SYSTEM_PATH_1_0="${APPDIR}/usr/lib/gstreamer-1.0"
+          export GST_PLUGIN_PATH_1_0="${APPDIR}/usr/lib/gstreamer-1.0"
+
+          export GST_PLUGIN_SCANNER_1_0="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
+          export GST_PTP_HELPER_1_0="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-ptp-helper"
+          EOF
+          elif [ "$GSTREAMER_VERSION" == "0.10" ]; then
+              cat > "$APPDIR"/apprun-hooks/linuxdeploy-plugin-gstreamer.sh <<\EOF
+          #! /bin/bash
+
+          export GST_REGISTRY_REUSE_PLUGIN_SCANNER="no"
+          export GST_PLUGIN_SYSTEM_PATH_0_10="${APPDIR}/usr/lib/gstreamer-1.0"
+
+          export GST_PLUGIN_SCANNER_0_10="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
+          export GST_PTP_HELPER_0_10="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-ptp-helper"
+          EOF
+          else
+              echo "Warning: unknown GStreamer version: $GSTREAMER_VERSION, cannot install AppRun hook"
+          fi
 
           # Create a .desktop file required for the AppImage
-          cat <<EOF > build/iDescriptor.desktop
+          cat <<EOF > $APPDIR/usr/share/applications/iDescriptor.desktop
           [Desktop Entry]
           Name=iDescriptor
           Exec=iDescriptor
@@ -119,33 +219,20 @@ jobs:
           Categories=Utility;
           EOF
 
-      - name: Install linuxdeployqt
-        if: runner.os == 'Linux'
-        run: |
-          wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
-          chmod a+x linuxdeployqt-continuous-x86_64.AppImage
-
-      - name: Remove unused Qt SQL plugins to fix linuxdeployqt error
-        if: runner.os == 'Linux'
-        run: |
-          rm ${{ github.workspace }}/Qt/6.7.2/gcc_64/plugins/sqldrivers/libqsqlmimer.so
-
       - name: Build AppImage
-        if: runner.os == 'Linux'
-        working-directory: ./build
         run: |
-          # Remove problematic system libraries that cause NVIDIA crashes
-            rm -f lib/libxcb-glx.so* lib/libXrandr.so* lib/libXext.so* lib/libXrender.so* lib/libXfixes.so* lib/libXau.so* lib/libXdmcp.so*
-            # Optional: remove bundled C++ runtime (use system's)
-            rm -f lib/libstdc++.so* lib/libgcc_s.so*
+          export VERSION=1.0.0
 
-            # Now run linuxdeployqt
-            export VERSION=1.0.0
-            ../linuxdeployqt-continuous-x86_64.AppImage iDescriptor \
-              -qmldir=../qml \
-              -appimage \
-              -no-strip \
-              -exclude-libs=libGL,libGLX,libEGL,libOpenGL,libdrm,libva,libvdpau,libxcb,libxcb-glx,libxcb-dri2,libxcb-dri3,libX11,libXext,libXrandr,libXrender,libXfixes,libXau,libXdmcp
+          # Clean up unneeded libs
+          rm -f lib/libxcb-glx.so* lib/libXrandr.so* lib/libXext.so* lib/libXrender.so* lib/libXfixes.so* lib/libXau.so* lib/libXdmcp.so*
+          rm -f lib/libstdc++.so* lib/libgcc_s.so* || true
+
+          # Build AppImage from the AppDir
+          ./linuxdeployqt-continuous-x86_64.AppImage AppDir/usr/share/applications/iDescriptor.desktop \
+            -appimage \
+            -no-strip \
+            -qmldir=../qml \
+            -exclude-libs=libGL,libGLX,libEGL,libOpenGL,libdrm,libva,libvdpau,libxcb,libxcb-glx,libxcb-dri2,libxcb-dri3,libX11,libXext,libXrandr,libXrender,libXfixes,libXau,libXdmcp
 
       - name: Upload Artifact (Linux)
         if: runner.os == 'Linux'
