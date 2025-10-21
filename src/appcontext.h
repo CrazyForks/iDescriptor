@@ -3,8 +3,6 @@
 
 #include "devicesidebarwidget.h"
 #include "iDescriptor.h"
-#include <QDBusConnection>
-#include <QDBusMessage>
 #include <QObject>
 
 class AppContext : public QObject

@@ -2,6 +2,14 @@ name: Build Linux
 
 on:
   workflow_dispatch:
+env:
+  QT_VERSION: "6.7.2"
+  GO_VERSION: "1.23.0"
+  LIBPLIST_VER: "2.7.0"
+  LIBTATSU_VER: "1.0.5"
+  LIBIMOBILEDEVICE_GLUE_VER: "1.3.2"
+  LIBIMOBILEDEVICE_VER: "1.4.0"
+  LIBIRECOVERY_VER: "1.3.1"
 
 jobs:
   build-linux:
@@ -17,7 +25,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "^1.23.0"
+          go-version: "^${{ env.GO_VERSION }}"
 
       - name: Install Linux dependencies
         run: |
@@ -47,6 +55,7 @@ jobs:
             gstreamer1.0-plugins-good \
             gstreamer1.0-plugins-bad \
             gstreamer1.0-plugins-ugly \
+            gstreamer1.0-libav \
             libfuse2 \
             libunwind-dev \
             libxcb-cursor0 \
@@ -58,8 +67,8 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
-          version: "6.7.2"
-          modules: "qtmultimedia qtlocation qtpositioning qtserialport"
+          version: ${{ env.QT_VERSION }}
+          modules: "qtmultimedia qtlocation qtpositioning"
           dir: ${{ github.workspace }}
 
       - name: Compile additional dependencies
@@ -78,21 +87,52 @@ jobs:
           sudo make install
           popd
 
-      - name: Build libimobiledevice suite
+      - name: Build libimobiledevice suite (versioned tarballs)
         run: |
-          repos=("libplist" "libtatsu" "libimobiledevice-glue" "libimobiledevice" "libirecovery")
+          set -euo pipefail
 
-          for repo in "${repos[@]}"; do
-            echo "Building $repo..."
+          workspace="$PWD"
+          tmp="$PWD/_tmp_libs"
+          mkdir -p "$tmp"
+          cd "$tmp"
 
-            git clone --depth=1 --recursive "https://github.com/libimobiledevice/$repo"
-            pushd "$repo"
-            ./autogen.sh
-            sudo make install
+          declare -A versions=(
+            ["libplist"]="$LIBPLIST_VER"
+            ["libtatsu"]="$LIBTATSU_VER"
+            ["libimobiledevice-glue"]="$LIBIMOBILEDEVICE_GLUE_VER"
+            ["libimobiledevice"]="$LIBIMOBILEDEVICE_VER"
+            ["libirecovery"]="$LIBIRECOVERY_VER"
+          )
+
+          base_url="https://github.com/libimobiledevice"
+
+          for name in "${!versions[@]}"; do
+            ver="${versions[$name]}"
+            archive="${name}-${ver}.tar.bz2"
+            url="${base_url}/${name}/releases/download/${ver}/${archive}"
+            echo "=== Processing $name $ver ==="
+            echo "URL: $url"
+            curl -L -o "$archive" "$url"
+
+            echo "Extracting $archive"
+            tar xjf "$archive"
+
+            srcdir="${name}-${ver}"
+
+
+            pushd "$srcdir"
+
+            ./configure
+
+
+            make -j"$(nproc)" && sudo make install
             popd
-
-            echo "Built $repo successfully."
+            echo "Installed $name $ver"
           done
+
+          # cleanup
+          cd "$workspace"
+          rm -rf "$tmp"
 
       - name: Update linker cache
         run: sudo ldconfig
@@ -104,141 +144,12 @@ jobs:
       - name: Build with CMake
         run: cmake --build build --config Release
 
-      - name: Prepare for AppImage
-        run: |
-          export APPDIR=$PWD/AppDir
-
-          wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
-          chmod a+x linuxdeployqt-continuous-x86_64.AppImage
-
-          mkdir -p "$APPDIR/usr/bin"
-          mkdir -p "$APPDIR/usr/share/applications"
-          mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
-
-          cp build/iDescriptor "$APPDIR/usr/bin/"
-          cp resources/icons/app-icon/icon.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/iDescriptor.png"
-          export APPDIR=$PWD/AppDir
-
-          # Remove unused Qt SQL plugins to fix linuxdeployqt error
-          rm ${{ github.workspace }}/Qt/6.7.2/gcc_64/plugins/sqldrivers/libqsqlmimer.so || true
-
-          export GSTREAMER_VERSION=1.0
-
-          cp build/iDescriptor "$APPDIR/usr/bin/"
-
-          # Bundle GStreamer plugins + helpers
-
-          plugins_target_dir="$APPDIR"/usr/lib/gstreamer-"$GSTREAMER_VERSION"
-          helpers_target_dir="$APPDIR"/usr/lib/gstreamer"$GSTREAMER_VERSION"/gstreamer-"$GSTREAMER_VERSION"
-
-          if [ -d /usr/lib/"$(uname -m)"-linux-gnu/gstreamer-"$GSTREAMER_VERSION" ]; then
-              plugins_dir=/usr/lib/$(uname -m)-linux-gnu/gstreamer-"$GSTREAMER_VERSION"
-          else
-              plugins_dir=/usr/lib/gstreamer-"$GSTREAMER_VERSION"
-          fi
-
-          helpers_dir=/usr/lib/$(uname -m)-linux-gnu/gstreamer"$GSTREAMER_VERSION"/gstreamer-"$GSTREAMER_VERSION"
-
-          mkdir -p "$plugins_target_dir"
-
-
-          echo "Copying plugins into $plugins_target_dir"
-          for i in "$plugins_dir"/*; do
-              [ -d "$i" ] && continue
-              [ ! -f "$i" ] && echo "File does not exist: $i" && continue
-
-              echo "Copying plugin: $i"
-              cp "$i" "$plugins_target_dir"
-          done
-
-
-
-          for i in "$plugins_target_dir"/*; do
-              [ -d "$i" ] && continue
-              [ ! -f "$i" ] && echo "File does not exist: $i" && continue
-              (file "$i" | grep -v ELF --silent) && echo "Ignoring non ELF file: $i" && continue
-
-              echo "Manually setting rpath for $i"
-              patchelf --set-rpath '$ORIGIN/..:$ORIGIN' "$i"
-          done
-
-
-
-
-          mkdir -p "$helpers_target_dir"
-
-          echo "Copying helpers in $helpers_target_dir"
-          for i in "$helpers_dir"/*; do
-              [ -d "$i" ] && continue
-              [ ! -f "$i" ] && echo "File does not exist: $i" && continue
-
-              echo "Copying helper: $i"
-              cp "$i" "$helpers_target_dir"
-          done
-
-          for i in "$helpers_target_dir"/*; do
-              [ -d "$i" ] && continue
-              [ ! -f "$i" ] && echo "File does not exist: $i" && continue
-              (file "$i" | grep -v ELF --silent) && echo "Ignoring non ELF file: $i" && continue
-
-              echo "Manually setting rpath for $i"
-              patchelf --set-rpath '$ORIGIN/../..' "$i"
-          done
-
-
-
-          echo "Installing AppRun hook"
-          mkdir -p "$APPDIR"/apprun-hooks
-
-          if [ "$GSTREAMER_VERSION" == "1.0" ]; then
-              cat > "$APPDIR"/apprun-hooks/linuxdeploy-plugin-gstreamer.sh <<\EOF
-          #! /bin/bash
-
-          export GST_REGISTRY_REUSE_PLUGIN_SCANNER="no"
-          export GST_PLUGIN_SYSTEM_PATH_1_0="${APPDIR}/usr/lib/gstreamer-1.0"
-          export GST_PLUGIN_PATH_1_0="${APPDIR}/usr/lib/gstreamer-1.0"
-
-          export GST_PLUGIN_SCANNER_1_0="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
-          export GST_PTP_HELPER_1_0="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-ptp-helper"
-          EOF
-          elif [ "$GSTREAMER_VERSION" == "0.10" ]; then
-              cat > "$APPDIR"/apprun-hooks/linuxdeploy-plugin-gstreamer.sh <<\EOF
-          #! /bin/bash
-
-          export GST_REGISTRY_REUSE_PLUGIN_SCANNER="no"
-          export GST_PLUGIN_SYSTEM_PATH_0_10="${APPDIR}/usr/lib/gstreamer-1.0"
-
-          export GST_PLUGIN_SCANNER_0_10="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
-          export GST_PTP_HELPER_0_10="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-ptp-helper"
-          EOF
-          else
-              echo "Warning: unknown GStreamer version: $GSTREAMER_VERSION, cannot install AppRun hook"
-          fi
-
-          # Create a .desktop file required for the AppImage
-          cat <<EOF > $APPDIR/usr/share/applications/iDescriptor.desktop
-          [Desktop Entry]
-          Name=iDescriptor
-          Exec=iDescriptor
-          Icon=iDescriptor
-          Type=Application
-          Categories=Utility;
-          EOF
-
       - name: Build AppImage
         run: |
           export VERSION=1.0.0
-
-          # Clean up unneeded libs
-          rm -f lib/libxcb-glx.so* lib/libXrandr.so* lib/libXext.so* lib/libXrender.so* lib/libXfixes.so* lib/libXau.so* lib/libXdmcp.so*
-          rm -f lib/libstdc++.so* lib/libgcc_s.so* || true
-
-          # Build AppImage from the AppDir
-          ./linuxdeployqt-continuous-x86_64.AppImage AppDir/usr/share/applications/iDescriptor.desktop \
-            -appimage \
-            -no-strip \
-            -qmldir=./qml \
-            -exclude-libs=libGL,libGLX,libEGL,libOpenGL,libdrm,libva,libvdpau,libxcb,libxcb-glx,libxcb-dri2,libxcb-dri3,libX11,libXext,libXrandr,libXrender,libXfixes,libXau,libXdmcp
+          # linuxdeployqt tries to bundle SQL drivers which we don't need
+          rm -rf ${{ github.workspace }}/Qt/{${{ env.QT_VERSION }}/gcc_64/plugins/sqldrivers/**
+          ./scripts/deploy-appimage.sh $VERSION
 
       - name: Upload Artifact (Linux)
         if: runner.os == 'Linux'

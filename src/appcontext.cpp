@@ -2,8 +2,6 @@
 #include "iDescriptor.h"
 #include "mainwindow.h"
 #include "settingsmanager.h"
-#include <QDBusConnection>
-#include <QDBusMessage>
 #include <QDebug>
 #include <QMessageBox>
 #include <QTimer>

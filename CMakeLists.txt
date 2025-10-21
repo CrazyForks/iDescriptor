@@ -26,8 +26,8 @@ endif()
 include_directories(${CUSTOM_INCLUDE_PATH})
 
 find_package(PkgConfig REQUIRED)
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Svg SvgWidgets Multimedia Network QuickControls2)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Svg SvgWidgets Multimedia Network QuickControls2)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Multimedia Network QuickControls2)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Multimedia Network QuickControls2)
 
 # Add QTermWidget
 pkg_check_modules(QTERMWIDGET REQUIRED IMPORTED_TARGET qtermwidget6)
@@ -193,7 +193,6 @@ add_subdirectory(lib/ipatool-go)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 find_package(Qt6 REQUIRED COMPONENTS Core)
-find_package(Qt6 REQUIRED COMPONENTS DBus)
 find_package(Qt6 REQUIRED COMPONENTS Quick)
 find_package(Qt6 REQUIRED COMPONENTS Location)
 find_package(Qt6 REQUIRED COMPONENTS Positioning)
@@ -231,12 +230,9 @@ endif()
 
 target_link_libraries(iDescriptor PRIVATE 
     Qt${QT_VERSION_MAJOR}::Widgets 
-    Qt${QT_VERSION_MAJOR}::Svg 
-    Qt${QT_VERSION_MAJOR}::SvgWidgets 
     Qt${QT_VERSION_MAJOR}::Multimedia
     Qt${QT_VERSION_MAJOR}::MultimediaWidgets
     Qt${QT_VERSION_MAJOR}::Network
-    Qt${QT_VERSION_MAJOR}::DBus
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Quick
     Qt${QT_VERSION_MAJOR}::Location
