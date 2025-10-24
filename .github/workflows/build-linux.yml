@@ -42,9 +42,7 @@ jobs:
             libpugixml-dev \
             libusb-1.0-0-dev \
             libqrencode-dev \
-            libirecovery-1.0-dev \
             libcurl4-openssl-dev \
-            libusbmuxd-dev \
             libssl-dev \
             libtool-bin \
             libreadline-dev \
@@ -100,7 +98,7 @@ jobs:
 
           base_url="https://github.com/libimobiledevice"
 
-          libs=( "libplist" "libtatsu" "libimobiledevice-glue" "libimobiledevice" "libirecovery"  "ifuse" "libusbmuxd" )
+          libs=( "libplist" "libtatsu" "libimobiledevice-glue" "libusbmuxd" "libimobiledevice" "libirecovery"  "ifuse" )
 
           for name in "${libs[@]}"; do
             ver_var=$(echo "${name^^}_VER" | sed 's/-/_/g')   # e.g. LIBPLIST_VER
