@@ -109,6 +109,9 @@ void iFuseWidget::setupUI()
 
 void iFuseWidget::updateDeviceComboBox()
 {
+    QList<iDescriptorDevice *> devices =
+        AppContext::sharedInstance()->getAllDevices();
+
     m_deviceComboBox->clear();
     m_deviceComboBox->setEnabled(true);
     m_mountButton->setEnabled(true);
@@ -330,21 +333,22 @@ void iFuseWidget::onProcessFinished(int exitCode,
         auto *b = new iFuseDiskUnmountButton(m_currentMountPath);
         MainWindow::sharedInstance()->statusBar()->addPermanentWidget(b);
         QProcess *processToKill = m_ifuseProcess;
+        QString currentMountPath = m_currentMountPath;
         connect(b, &iFuseDiskUnmountButton::clicked, this,
-                [b, processToKill]() {
-                    qDebug() << "Unmounting" << m_currentMountPath;
-                    bool ok = iFuseManager::linuxUnmount(m_currentMountPath);
+                [b, processToKill, currentMountPath]() {
+                    qDebug() << "Unmounting" << currentMountPath;
+                    bool ok = iFuseManager::linuxUnmount(currentMountPath);
                     if (!ok) {
                         QMessageBox::warning(nullptr, "Unmount Failed",
                                              "Failed to unmount iFuse at " +
-                                                 m_currentMountPath +
+                                                 currentMountPath +
                                                  ". Please try again.");
                         return;
                     }
                     MainWindow::sharedInstance()->statusBar()->removeWidget(b);
                     b->deleteLater();
                 });
-        QDesktopServices::openUrl(QUrl::fromLocalFile(m_currentMountPath));
+        QDesktopServices::openUrl(QUrl::fromLocalFile(currentMountPath));
     } else {
         QString errorOutput = m_ifuseProcess->readAllStandardError();
         setStatusMessage("Mount failed: " + errorOutput, true);

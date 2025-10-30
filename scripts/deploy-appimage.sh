@@ -100,7 +100,6 @@ done
 
 mkdir -p "$APPDIR/apprun-hooks"
 
-export QML_MODULES_PATHS="./qml"
 cat <<'EOF' > "$APPDIR/apprun-hooks/linuxdeploy-plugin-env.sh"
 #!/bin/bash
 
@@ -111,8 +110,8 @@ export GST_PLUGIN_PATH_1_0="${APPDIR}/usr/lib/gstreamer-1.0"
 export GST_PLUGIN_SCANNER_1_0="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
 export GST_PTP_HELPER_1_0="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-ptp-helper"
 
-export IPROXY_APPIMAGE="${APPDIR}/usr/bin/iproxy"
-export IFUSE_APPIMAGE="${APPDIR}/usr/bin/ifuse"
+export IPROXY_BIN_APPIMAGE="${APPDIR}/usr/bin/iproxy"
+export IFUSE_BIN_APPIMAGE="${APPDIR}/usr/bin/ifuse"
 EOF
 
 chmod +x "$APPDIR/apprun-hooks/linuxdeploy-plugin-env.sh"
@@ -121,11 +120,13 @@ chmod +x "$APPDIR/apprun-hooks/linuxdeploy-plugin-env.sh"
 cp iDescriptor.desktop "$APPDIR/usr/share/applications/"
 
 export LD_LIBRARY_PATH="$APPDIR/usr/local/lib:$LD_LIBRARY_PATH"
+export LINUXDEPLOY_EXCLUDED_LIBRARIES="*sql*"
+export QML_SOURCES_PATHS="./qml"
+
 
  ./linuxdeploy-x86_64.AppImage \
             --appdir ./AppDir \
             --desktop-file AppDir/usr/share/applications/iDescriptor.desktop \
-	    --plugin qt \
+	        --plugin qt \
             --exclude-library libGL,libGLX,libEGL,libOpenGL,libdrm,libva,libvdpau,libxcb,libxcb-glx,libxcb-dri2,libxcb-dri3,libX11,libXext,libXrandr,libXrender,libXfixes,libXau,libXdmcp,libqsqlmimer,libmysqlclient,libmysqlclient \
             --output appimage \
-            --deploy-deps-only AppDir/usr/bin/ifuse

@@ -124,14 +124,13 @@ VirtualLocation::VirtualLocation(iDescriptorDevice *device, QWidget *parent)
             });
 
     DevDiskManager::sharedInstance()->downloadCompatibleImage(m_device);
-
-    unsigned int device_version = idevice_get_device_version(m_device->device);
+    unsigned int device_version = get_device_version(m_device->device);
     unsigned int deviceMajorVersion = (device_version >> 16) & 0xFF;
 
     if (deviceMajorVersion > 16) {
         QMessageBox::warning(
             this, "Unsupported iOS Version",
-            "Real-time Screen feature requires iOS 16 or earlier.\n"
+            "Virtual Location feature requires iOS 16 or earlier.\n"
             "Your device is running iOS " +
                 QString::number(deviceMajorVersion) +
                 ", which is not yet supported.");

@@ -29,7 +29,7 @@ private:
     QString m_bundleId;
     QLabel *m_statusLabel;
     QFutureWatcher<int> *m_installWatcher;
-    QTemporaryDir *m_tempDir;
+    QTemporaryDir *m_tempDir = nullptr;
     void updateDeviceList();
     void performInstallation(const QString &ipaPath, const QString &deviceUdid);
 };

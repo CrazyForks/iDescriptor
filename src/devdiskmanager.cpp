@@ -294,7 +294,7 @@ bool DevDiskManager::isImageDownloaded(const QString &version,
 bool DevDiskManager::downloadCompatibleImageInternal(iDescriptorDevice *device)
 {
 
-    unsigned int device_version = idevice_get_device_version(device->device);
+    unsigned int device_version = get_device_version(device->device);
     unsigned int deviceMajorVersion = (device_version >> 16) & 0xFF;
     unsigned int deviceMinorVersion = (device_version >> 8) & 0xFF;
     qDebug() << "Device version:" << deviceMajorVersion << "."
@@ -381,7 +381,7 @@ bool DevDiskManager::downloadCompatibleImage(iDescriptorDevice *device)
 
 bool DevDiskManager::mountCompatibleImageInternal(iDescriptorDevice *device)
 {
-    unsigned int device_version = idevice_get_device_version(device->device);
+    unsigned int device_version = get_device_version(device->device);
     unsigned int deviceMajorVersion = (device_version >> 16) & 0xFF;
     unsigned int deviceMinorVersion = (device_version >> 8) & 0xFF;
 

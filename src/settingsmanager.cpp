@@ -45,7 +45,15 @@ QString SettingsManager::devdiskimgpath() const
 // Settings implementation
 QString SettingsManager::downloadPath() const
 {
-    return m_settings->value("downloadPath", DEFAULT_DEVDISKIMGPATH).toString();
+    return m_settings
+        ->value("downloadPath", SettingsManager::docsPath() + "/devdiskimages")
+        .toString();
+}
+
+QString SettingsManager::docsPath()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) +
+           "/.idescriptor";
 }
 
 void SettingsManager::setDownloadPath(const QString &path)

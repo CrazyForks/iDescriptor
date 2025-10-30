@@ -112,7 +112,7 @@ void DevDiskImageHelper::onMountButtonClicked()
     m_isMounting = true;
 
     // Check if we need to download first
-    unsigned int device_version = idevice_get_device_version(m_device->device);
+    unsigned int device_version = get_device_version(m_device->device);
     unsigned int deviceMajorVersion = (device_version >> 16) & 0xFF;
     unsigned int deviceMinorVersion = (device_version >> 8) & 0xFF;
 

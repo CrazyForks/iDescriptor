@@ -136,7 +136,7 @@ QString DeviceImageWidget::getMockupNameFromDisplayName(
 
 int DeviceImageWidget::getIosVersionFromDevice() const
 {
-    unsigned int version = idevice_get_device_version(m_device->device);
+    unsigned int version = get_device_version(m_device->device);
 
     if (version > 0) {
         int majorVersion = (version >> 16) & 0xFF;

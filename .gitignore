@@ -4,3 +4,10 @@ CMakeLists.txt.user
 AppDir
 *.AppImage
 build-dir
+.flatpak-builder
+*.o
+*.obj
+*.so
+*.exe
+*.dll
+devdiskimgs

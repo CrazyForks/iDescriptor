@@ -26,7 +26,7 @@ public:
         Theme,
         ConnectionTimeout
     };
-
+    static QString docsPath();
     // Existing methods
     QString devdiskimgpath() const;
     void clearKeys(const QString &keyPrefix);

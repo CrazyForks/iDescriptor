@@ -403,3 +403,26 @@ bool isDarkMode();
 
 instproxy_error_t install_IPA(idevice_t device, afc_client_t afc,
                               const char *filePath);
+
+typedef struct _idevice_private {
+    char *udid;
+    uint32_t mux_id;
+    enum idevice_connection_type conn_type;
+    void *conn_data;
+    int version;
+    int device_class;
+};
+
+/*
+    we need this because idevice_get_device_version
+    is not always available in libimobiledevice
+    which could cause issues when installed from package managers
+*/
+inline unsigned int get_device_version(idevice_t _device)
+{
+    _idevice_private *idevice = reinterpret_cast<_idevice_private *>(_device);
+    if (!idevice) {
+        return 0;
+    }
+    return static_cast<unsigned int>(idevice->version);
+}

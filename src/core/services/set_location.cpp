@@ -71,7 +71,7 @@ bool set_location(idevice_t device, char *lat, char *lon)
         lerr = lockdownd_start_service(lockdown, DT_SIMULATELOCATION_SERVICE,
                                        &svc);
         if (lerr != LOCKDOWN_E_SUCCESS) {
-            unsigned int device_version = idevice_get_device_version(device);
+            unsigned int device_version = get_device_version(device);
             lockdownd_client_free(lockdown);
             idevice_free(device);
 

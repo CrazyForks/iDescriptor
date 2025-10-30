@@ -102,7 +102,7 @@ mobile_image_mounter_error_t mount_dev_image(const char *udid,
         goto leave;
     }
 
-    device_version = idevice_get_device_version(device);
+    device_version = get_device_version(device);
     if (LOCKDOWN_E_SUCCESS != (ldret = lockdownd_client_new_with_handshake(
                                    device, &lckd, TOOL_NAME))) {
         qDebug() << "ERROR: Could not connect to lockdownd service!";
