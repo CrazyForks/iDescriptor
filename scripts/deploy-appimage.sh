@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# if you get errors try
+# QMAKE=/usr/lib/qt6/bin/qmake  NO_STRIP=1 ./scripts/deploy-appimage.sh 1.0.0
 set -e
 VERSION=$1
 if [ -z "$VERSION" ]; then
@@ -46,7 +47,6 @@ cp /usr/local/bin/iproxy "$APPDIR/usr/bin"
 
 # Bundle GStreamer plugins and helpers
 plugins_target_dir="$APPDIR/usr/lib/gstreamer-$GSTREAMER_VERSION"
-helpers_target_dir="$APPDIR/usr/lib/gstreamer1.0/gstreamer-$GSTREAMER_VERSION"
 
 # Detect plugin dirs based on architecture
 if [ -d /usr/lib/$(uname -m)-linux-gnu/gstreamer-$GSTREAMER_VERSION ]; then
@@ -55,48 +55,51 @@ else
     plugins_dir="/usr/lib/gstreamer-$GSTREAMER_VERSION"
 fi
 
-helpers_dir="/usr/lib/$(uname -m)-linux-gnu/gstreamer1.0/gstreamer-1.0"
-
 mkdir -p "$plugins_target_dir"
-mkdir -p "$helpers_target_dir"
 
-echo "Copying plugins into $plugins_target_dir"
-for i in "$plugins_dir"/*; do
-    [ -d "$i" ] && continue
-    [ ! -f "$i" ] && echo "File does not exist: $i" && continue
+plugins=(
+    "libgstalsa.so"
+    "libgstpulse.so"
+    "libgstpipewire.so"
+    "libgstjack.so"
+    "libgstaudioconvert.so"
+    "libgstaudioresample.so"
+    "libgstvolume.so"
+    "libgstlevel.so"
+    "libgstcoreelements.so"
+    "libgstdecodebin.so"
+    "libgstplayback.so"
+    "libgstwavparse.so"
+    "libgstmpg123.so"
+    "libgstvorbis.so"
+    "libgstogg.so"
+    "libgstopus.so"
+    "libgstflac.so"
+    "libgstfaad.so"
+    "libgstfdkaac.so"
+    "libgstmatroska.so" 
+    "libgstlibav.so"
+    "libgstapp.so"
+    "libgstautodetect.so"
+    "libgstaudioresample.so"
+)
 
-    echo "Copying plugin: $i"
-    cp "$i" "$plugins_target_dir"
+for i in "${plugins[@]}"; do
+    plugin_target_path="$plugins_target_dir/$i"
+    plugin_path="$plugins_dir/$i"
+    if [ -f "$plugin_path" ]; then
+        echo "Copying plugin: $i"
+        cp "$plugin_path" "$plugins_target_dir"
+        echo "Manually setting RPATH for $plugin_target_path"
+        patchelf --set-rpath '$ORIGIN/..:$ORIGIN' "$plugin_target_path"
+    else
+        echo "Warning: Plugin $i not found in $plugins_dir"
+    fi
 done
 
-# Set RPATH on plugins
-for i in "$plugins_target_dir"/*; do
-    [ -d "$i" ] && continue
-    [ ! -f "$i" ] && echo "File does not exist: $i" && continue
-    (file "$i" | grep -qv ELF) && echo "Ignoring non-ELF file: $i" && continue
-
-    echo "Manually setting RPATH for $i"
-    patchelf --set-rpath '$ORIGIN/..:$ORIGIN' "$i"
-done
-
-echo "Copying helpers into $helpers_target_dir"
-for i in "$helpers_dir"/*; do
-    [ -d "$i" ] && continue
-    [ ! -f "$i" ] && echo "File does not exist: $i" && continue
-
-    echo "Copying helper: $i"
-    cp "$i" "$helpers_target_dir"
-done
-
-# Set RPATH on helper tools
-for i in "$helpers_target_dir"/*; do
-    [ -d "$i" ] && continue
-    [ ! -f "$i" ] && echo "File does not exist: $i" && continue
-    (file "$i" | grep -qv ELF) && echo "Ignoring non-ELF file: $i" && continue
-
-    echo "Manually setting RPATH for $i"
-    patchelf --set-rpath '$ORIGIN/../..' "$i"
-done
+# Copy gst-plugin-scanner and gst-ptp-helper
+cp "/usr/lib/gstreamer-$GSTREAMER_VERSION/gst-plugin-scanner" "$plugins_target_dir/"
+cp "/usr/lib/gstreamer-$GSTREAMER_VERSION/gst-ptp-helper" "$plugins_target_dir/"
 
 mkdir -p "$APPDIR/apprun-hooks"
 
@@ -107,8 +110,8 @@ export GST_REGISTRY_REUSE_PLUGIN_SCANNER="no"
 export GST_PLUGIN_SYSTEM_PATH_1_0="${APPDIR}/usr/lib/gstreamer-1.0"
 export GST_PLUGIN_PATH_1_0="${APPDIR}/usr/lib/gstreamer-1.0"
 
-export GST_PLUGIN_SCANNER_1_0="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
-export GST_PTP_HELPER_1_0="${APPDIR}/usr/lib/gstreamer1.0/gstreamer-1.0/gst-ptp-helper"
+export GST_PLUGIN_SCANNER_1_0="${APPDIR}/usr/lib/gstreamer-1.0/gst-plugin-scanner"
+export GST_PTP_HELPER_1_0="${APPDIR}/usr/lib/gstreamer-1.0/gst-ptp-helper"
 
 export IPROXY_BIN_APPIMAGE="${APPDIR}/usr/bin/iproxy"
 export IFUSE_BIN_APPIMAGE="${APPDIR}/usr/bin/ifuse"
