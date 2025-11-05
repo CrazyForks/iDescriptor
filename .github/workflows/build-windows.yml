@@ -99,7 +99,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PATH = "$($env:USERPROFILE)\.dotnet\tools;" + $env:PATH
-          wix extension add WixToolset.UI.wixext/4.0.5
+          wix extension add --global WixToolset.UI.wixext/4.0.5
           wix extension list
 
       - name: Download and Extract Bonjour SDK
