@@ -58,6 +58,14 @@ jobs:
             mingw-w64-x86_64-gst-plugins-ugly
             mingw-w64-x86_64-gst-libav
 
+      - name: Verify CMake and CPack in PowerShell
+        shell: pwsh
+        run: |
+          Get-Command cmake
+          cmake --version
+          Get-Command cpack
+          cpack --version
+
       - name: Set PKG_CONFIG environment variable
         run: echo "PKG_CONFIG_EXECUTABLE=C:/msys64/mingw64/bin/pkg-config.exe" >> $GITHUB_ENV
 
@@ -197,7 +205,7 @@ jobs:
 
       - name: Install & CPack
         working-directory: build
-        shell: bash
+        shell: pwsh
         run: |
           cmake --install .
           cpack .
