@@ -3,6 +3,7 @@ project(iDescriptor VERSION 0.1.0 LANGUAGES CXX)
 
 # Feature options
 option(ENABLE_RECOVERY_DEVICE_SUPPORT "Enable recovery device support (requires libirecovery)" ON)
+set(PACKAGE_MANAGER_HINT "" CACHE STRING "Name of package manager(s) used to manage this build (e.g. paru, yay, pamac)")
 option(PACKAGE_MANAGER_MANAGED "Build as package manager managed version (auto updates will be handled by the package manager)" OFF)
 
 set(CMAKE_AUTOUIC ON)
@@ -327,10 +328,17 @@ if(ENABLE_RECOVERY_DEVICE_SUPPORT)
     target_compile_definitions(iDescriptor PRIVATE ENABLE_RECOVERY_DEVICE_SUPPORT)
 endif()
 
-if (PACKAGE_MANAGER_MANAGED)
+if(PACKAGE_MANAGER_MANAGED)
     target_compile_definitions(iDescriptor PRIVATE PACKAGE_MANAGER_MANAGED)
     message(STATUS "Building as package manager managed version, updates will be handled by the package manager")
+    if(PACKAGE_MANAGER_HINT)
+        message(STATUS "Configured package manager hint: ${PACKAGE_MANAGER_HINT}")
+        target_compile_definitions(iDescriptor PRIVATE PACKAGE_MANAGER_HINT=\"${PACKAGE_MANAGER_HINT}\")
+    else()
+        target_compile_definitions(iDescriptor PRIVATE PACKAGE_MANAGER_HINT="your package manager")
+    endif()
 endif()
+
 
 target_compile_definitions(iDescriptor PRIVATE 
     APP_VERSION="${PROJECT_VERSION}"
@@ -443,6 +451,7 @@ if(WIN32)
     string(UUID CPACK_WIX_PRODUCT_GUID NAMESPACE "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d" NAME "${PROJECT_NAME}" TYPE MD5)
     string(UUID CPACK_WIX_UPGRADE_GUID NAMESPACE "d6c5b4a3-f2e1-d0c9-b8a7-f6e5d4c3b2a1" NAME "${PROJECT_NAME}" TYPE MD5)
     set(CPACK_WIX_UI_REF "WixUI_InstallDir")
+    
     set(CPACK_WIX_INSTALL_SCOPE "perMachine")
     set(CPACK_WIX_PROGRAM_MENU_FOLDER "${PROJECT_NAME}")
     set(CPACK_PACKAGE_EXECUTABLES "iDescriptor" "iDescriptor")

@@ -14,7 +14,7 @@ env:
 
 jobs:
   build-windows:
-    runs-on: windows-2022
+    runs-on: windows-latest
     defaults:
       run:
         shell: msys2 {0}
@@ -58,28 +58,15 @@ jobs:
             mingw-w64-x86_64-gst-plugins-ugly
             mingw-w64-x86_64-gst-libav
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "8.x"
+          dotnet-version: "8.0.x"
 
       - name: Install WiX Toolset and Extensions
         shell: pwsh
         run: |
-          $wixToolDir = Join-Path $env:GITHUB_WORKSPACE "wix-tool"
-          dotnet tool install wix --version 4.0.5 --tool-path $wixToolDir
-
-          # Add the tool directory to the PATH for this step and subsequent steps
-          $env:PATH = "$wixToolDir;$env:PATH"
-          "PATH=$wixToolDir;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-          # Add the UI extension globally so CPack can find it in the default location.
+          dotnet tool install --global wix --version 4.0.5
           wix extension add --global WixToolset.UI.wixext/4.0.5
-          wix extension list
-
-          # Set environment variables for CPack
-          "WIX=$(Join-Path $wixToolDir 'wix.exe')" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "WIX_EXTENSIONS=$env:USERPROFILE" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Set PKG_CONFIG environment variable
         run: echo "PKG_CONFIG_EXECUTABLE=C:/msys64/mingw64/bin/pkg-config.exe" >> $GITHUB_ENV
