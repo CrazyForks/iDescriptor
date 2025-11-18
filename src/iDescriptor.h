@@ -30,7 +30,9 @@
 #include <libimobiledevice/lockdown.h>
 #include <libimobiledevice/mobile_image_mounter.h>
 #include <libimobiledevice/screenshotr.h>
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
 #include <libirecovery.h>
+#endif
 #include <mutex>
 #include <pugixml.hpp>
 #include <string>
@@ -187,7 +189,7 @@ struct iDescriptorInitDeviceResult {
     afc_client_t afcClient;
     afc_client_t afc2Client;
 };
-
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
 struct iDescriptorRecoveryDevice {
     uint64_t ecid;
     irecv_mode mode;
@@ -196,12 +198,14 @@ struct iDescriptorRecoveryDevice {
     std::string displayName;
     std::recursive_mutex *mutex;
 };
+#endif
 
 struct TakeScreenshotResult {
     bool success = false;
     QImage img;
 };
 
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
 struct iDescriptorInitDeviceResultRecovery {
     irecv_client_t client = nullptr;
     irecv_device_info deviceInfo;
@@ -210,6 +214,8 @@ struct iDescriptorInitDeviceResultRecovery {
     irecv_mode mode = IRECV_K_RECOVERY_MODE_1;
     const char *displayName = nullptr;
 };
+
+#endif
 
 void warn(const QString &message, const QString &title = "Warning",
           QWidget *parent = nullptr);
@@ -288,7 +294,9 @@ afc_error_t safe_afc_read_directory(afc_client_t afcClient, idevice_t device,
 
 std::string parse_product_type(const std::string &productType);
 
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
 std::string parse_recovery_mode(irecv_mode productType);
+#endif
 
 struct MediaEntry {
     std::string name;
@@ -311,9 +319,10 @@ void get_device_info_xml(const char *udid, lockdownd_client_t client,
 
 iDescriptorInitDeviceResult init_idescriptor_device(const char *udid);
 
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
 iDescriptorInitDeviceResultRecovery
 init_idescriptor_recovery_device(uint64_t ecid);
-
+#endif
 bool set_location(idevice_t device, char *lat, char *lon);
 
 bool shutdown(idevice_t device);
