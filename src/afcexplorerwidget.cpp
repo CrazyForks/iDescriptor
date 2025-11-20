@@ -221,9 +221,15 @@ void AfcExplorerWidget::loadPath(const QString &path)
         QListWidgetItem *item =
             new QListWidgetItem(QString::fromStdString(entry.name));
         item->setData(Qt::UserRole, entry.isDir);
-        if (entry.isDir)
-            item->setIcon(QIcon::fromTheme("folder"));
-        else {
+        if (entry.isDir) {
+            QIcon folderIcon = QIcon::fromTheme("folder");
+            if (folderIcon.isNull()) {
+                item->setIcon(
+                    QIcon(":/resources/icons/MaterialSymbolsFolder.png"));
+            } else {
+                item->setIcon(folderIcon);
+            }
+        } else {
             QIcon fileIcon = QIcon::fromTheme("text-x-generic");
             if (fileIcon.isNull()) {
                 item->setIcon(
