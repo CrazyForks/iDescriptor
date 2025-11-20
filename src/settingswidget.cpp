@@ -71,6 +71,7 @@ void SettingsWidget::setupUI()
     generalLayout->addLayout(downloadLayout);
 
     // Unmount iFuse drives on exit (not implemented on macOS)
+    // TODO: Implement
 #ifndef __APPLE__
     m_unmount_iFuseDrives = new QCheckBox("Unmount iFuse drives on exit");
     generalLayout->addWidget(m_unmount_iFuseDrives);
@@ -169,7 +170,7 @@ void SettingsWidget::loadSettings()
 {
     SettingsManager *sm = SettingsManager::sharedInstance();
 
-    m_downloadPathEdit->setText(sm->downloadPath());
+    m_downloadPathEdit->setText(sm->devdiskimgpath());
     m_autoUpdateCheck->setChecked(sm->autoCheckUpdates());
     m_autoRaiseWindow->setChecked(sm->autoRaiseWindow());
     m_switchToNewDevice->setChecked(sm->switchToNewDevice());
@@ -291,7 +292,7 @@ void SettingsWidget::saveSettings()
 {
     SettingsManager *sm = SettingsManager::sharedInstance();
 
-    sm->setDownloadPath(m_downloadPathEdit->text());
+    sm->setDevDiskImgPath(m_downloadPathEdit->text());
     sm->setAutoCheckUpdates(m_autoUpdateCheck->isChecked());
     sm->setAutoRaiseWindow(m_autoRaiseWindow->isChecked());
     sm->setSwitchToNewDevice(m_switchToNewDevice->isChecked());

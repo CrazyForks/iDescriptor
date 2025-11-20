@@ -37,7 +37,7 @@ public:
 
     // Settings keys
     enum class Setting {
-        DownloadPath,
+        DevDiskImgPath,
         AutoCheckUpdates,
         AutoRaiseWindow,
         SwitchToNewDevice,
@@ -46,8 +46,9 @@ public:
         ConnectionTimeout
     };
     static QString homePath();
-    // Existing methods
     QString devdiskimgpath() const;
+    void setDevDiskImgPath(const QString &path);
+    QString mkDevDiskImgPath() const;
     void clearKeys(const QString &keyPrefix);
 
     void saveFavoritePlace(const QString &path, const QString &alias,
@@ -62,11 +63,6 @@ public:
                             const QString &name = QString());
     QList<QVariantMap> getRecentLocations() const;
     void clearRecentLocations();
-
-    QString downloadPath() const;
-    void setDownloadPath(const QString &path);
-
-    QString mkDevDiskImgPath() const;
 
     bool autoCheckUpdates() const;
     void setAutoCheckUpdates(bool enabled);

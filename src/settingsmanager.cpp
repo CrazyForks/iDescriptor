@@ -57,7 +57,16 @@ SettingsManager::SettingsManager(QObject *parent) : QObject{parent}
 
 QString SettingsManager::devdiskimgpath() const
 {
-    return downloadPath(); // Use the new downloadPath method
+    return m_settings
+        ->value("devdiskimgpath",
+                SettingsManager::homePath() + "/devdiskimages")
+        .toString();
+}
+
+void SettingsManager::setDevDiskImgPath(const QString &path)
+{
+    m_settings->setValue("devdiskimgpath", path);
+    m_settings->sync();
 }
 
 QString SettingsManager::mkDevDiskImgPath() const
@@ -71,24 +80,10 @@ QString SettingsManager::mkDevDiskImgPath() const
     return path;
 }
 
-// Settings implementation
-QString SettingsManager::downloadPath() const
-{
-    return m_settings
-        ->value("downloadPath", SettingsManager::homePath() + "/devdiskimages")
-        .toString();
-}
-
 QString SettingsManager::homePath()
 {
     return QStandardPaths::writableLocation(QStandardPaths::HomeLocation) +
            "/.idescriptor";
-}
-
-void SettingsManager::setDownloadPath(const QString &path)
-{
-    m_settings->setValue("downloadPath", path);
-    m_settings->sync();
 }
 
 bool SettingsManager::autoCheckUpdates() const
@@ -127,7 +122,7 @@ void SettingsManager::setSwitchToNewDevice(bool enabled)
 #ifndef __APPLE__
 bool SettingsManager::unmountiFuseOnExit() const
 {
-    return m_settings->value("unmountiFuseOnExit", true).toBool();
+    return m_settings->value("unmountiFuseOnExit", false).toBool();
 }
 
 void SettingsManager::setUnmountiFuseOnExit(bool enabled)
@@ -213,7 +208,7 @@ void SettingsManager::doIfEnabled(Setting setting, std::function<void()> action)
 
 void SettingsManager::resetToDefaults()
 {
-    setDownloadPath(SettingsManager::homePath() + "/devdiskimages");
+    setDevDiskImgPath(SettingsManager::homePath() + "/devdiskimages");
     setAutoCheckUpdates(true);
     setAutoRaiseWindow(true);
     setSwitchToNewDevice(true);
