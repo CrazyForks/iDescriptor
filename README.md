@@ -60,15 +60,20 @@
 
 #### macOS
 
-- **Apple Silicon**: Download the `.dmg` file for M1/M2/M3 Macs.
+- **Apple Silicon**: Download the `.dmg` file for M1/M2/M3/MX Macs.
 - **Intel**: Download the `.dmg` file for Intel-based Macs.
 
-Open the `.dmg` and drag iDescriptor to Applications folder.
+Open the `.dmg` and drag iDescriptor to Applications.
 
 #### Linux
 
 - **AppImage**: Download, unzip, and run.
-- **Arch Linux**: Install from AUR: `yay -S idescriptor-git`
+- **Arch Linux**: Install from AUR:   
+```bash
+  sudo pacman -Syu
+  yay -S idescriptor-git
+```
+make sure to do "sudo pacman -Syu" otherwise it's not going to find libimobiledevice>=1.4.0
 
 <hr/>
 <br/>
