@@ -6,13 +6,13 @@
     Cross platform, open-source and free idevice management tool written in C++
   <br/>
   <br/>
-  <a href="https://github.com/iDescriptor/iDescriptor/blob/master/LICENSE">
+  <a href="https://github.com/iDescriptor/iDescriptor/blob/main/LICENSE">
     <img alt="GitHub" src="https://img.shields.io/github/license/iDescriptor/iDescriptor"/>
   </a>
   <a href="https://github.com/iDescriptor/iDescriptor/issues">
     <img src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat" alt="CodeFactor" />
   </a>
-  <a href="https://github.com/iDescriptor/iDescriptor/actions/workflows/build-and-test.yml" rel="nofollow">
+  <a href="https://github.com/iDescriptor/iDescriptor/actions/workflows/build.yml" rel="nofollow">
     <img src="https://img.shields.io/github/actions/workflow/status/iDescriptor/iDescriptor/build-linux.yml?branch=main&logo=Github" alt="Build" />
   </a>
   <a href="https://github.com/iDescriptor/iDescriptor/tags" rel="nofollow">
@@ -33,6 +33,45 @@
     <img src="https://img.shields.io/badge/OpenCollective-1F87FF?style=for-the-badge&logo=OpenCollective&logoColor=white" alt="AppImage"/>
   </a>
 </p>
+
+## Download
+
+<p align="center">
+  <a href="https://github.com/iDescriptor/iDescriptor/releases/latest">
+    <img src="https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"/>
+  </a>
+  <a href="https://github.com/iDescriptor/iDescriptor/releases/latest">
+    <img src="https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"/>
+  </a>
+  <a href="https://github.com/iDescriptor/iDescriptor/releases/latest">
+    <img src="https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Download for Linux"/>
+  </a>
+  <a href="https://aur.archlinux.org/packages/idescriptor-git">
+    <img src="https://img.shields.io/badge/Arch_AUR-1793D1?style=for-the-badge&logo=arch-linux&logoColor=white" alt="Install from AUR"/>
+  </a>
+</p>
+
+### Installation Instructions
+
+#### Windows
+
+- **Installer (.msi)**: Download and run the installer. Recommended for most users.
+- **Portable (.zip)**: Extract and run `iDescriptor.exe`. No installation required.
+
+#### macOS
+
+- **Apple Silicon**: Download the `.dmg` file for M1/M2/M3 Macs.
+- **Intel**: Download the `.dmg` file for Intel-based Macs.
+
+Open the `.dmg` and drag iDescriptor to Applications folder.
+
+#### Linux
+
+- **AppImage**: Download, unzip, and run.
+- **Arch Linux**: Install from AUR: `yay -S idescriptor-git`
+
+<hr/>
+<br/>
 
 <p align="center">
     <img src="./resources/repo/crossplatform.png"><br/>
@@ -180,8 +219,10 @@ If you like this project and want to support its development, consider becoming 
 
 ## Thanks
 
-- [libimobiledevice](https://libimobiledevice.org/) - Cross-platform software library that talks the protocols to support iPhone, iPad, iPod Touch devices.
-- [ipatool](https://github.com/majd/ipatool) - A command-line tool for managing iOS apps and devices.
+- [libimobiledevice](https://libimobiledevice.org/)
+- [ipatool](https://github.com/majd/ipatool) - We use a modified version [here](https://github.com/uncor3/libipatool-go)
+- [QSimpleUpdater](https://github.com/alex-spataru/QSimpleUpdater) - We use a modified version [here](https://github.com/uncor3/ZUpdater)
+- [airplay](https://github.com/rcarmo/RPiPlay) - We use a modified version [here](https://github.com/uncor3/airplay)
 
 ## Linux Udev Rules
 
@@ -201,3 +242,15 @@ Sun 6 Jul - 14:30  ~ 
 @uncore  sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
+
+# Contributing
+
+Contributions are welcome!
+
+You can check the source code in some places we have TODOs and FIXMEs that you can work on.
+
+For example
+
+- [Photos.sqlite](https://github.com/iDescriptor/iDescriptor/blob/main/src/gallerywidget.cpp)
+
+Or if you'd like to introduce new features, feel free to open an issue or a pull request!
