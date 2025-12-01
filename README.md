@@ -58,25 +58,44 @@
 - **Installer (.msi)**: Download and run the installer. Recommended for most users.
 - **Portable (.zip)**: Extract and run `iDescriptor.exe`. No installation required.
 - **Choco** :
+
 ```bash
  choco install idescriptor --version=0.1.0
- ```
+```
 
 #### macOS
 
 - **Apple Silicon**: Download the `.dmg` file for M1/M2/M3/MX Macs.
-- **Intel**: Download the `.dmg` file for Intel-based Macs.
+  <br/>
+  Open the `.dmg` and drag iDescriptor to Applications.
+  <br/>
 
-Open the `.dmg` and drag iDescriptor to Applications.
+Then run the code below after moving the app to Applications
+<br/>
+
+```shell
+xattr -c ~/Applications/iDescriptor.app
+```
+
+[Click here to learn more about why this is needed](#damaged-error-on-macos).
+
+- **Intel**: Download the `.dmg` file for Intel-based Macs.
+  <br/>
+  Open the `.dmg` and drag iDescriptor to Applications.
+  <br/>
+
+  You shouldn't run into any issues on Intel Macs but if you do, [check this out](#damaged-error-on-macos).
 
 #### Linux
 
 - **AppImage**: Download, unzip, and run.
-- **Arch Linux**: Install from AUR:   
+- **Arch Linux**: Install from AUR:
+
 ```bash
   sudo pacman -Syu
   yay -S idescriptor-git
 ```
+
 make sure to do "sudo pacman -Syu" otherwise it's not going to find libimobiledevice>=1.4.0
 
 <hr/>
@@ -224,9 +243,9 @@ You might get this pop-up on any platform this is because this app uses secure b
 
 ## Become a Sponsor
 
-Please support us at   <a href="https://opencollective.com/idescriptor">
-    <img src="https://img.shields.io/badge/OpenCollective-1F87FF?style=for-the-badge&logo=OpenCollective&logoColor=white" alt="AppImage"/>
-  </a>
+Please support us at <a href="https://opencollective.com/idescriptor">
+<img src="https://img.shields.io/badge/OpenCollective-1F87FF?style=for-the-badge&logo=OpenCollective&logoColor=white" alt="AppImage"/>
+</a>
 
 ## Thanks
 
@@ -265,6 +284,28 @@ For example
 - [Photos.sqlite](https://github.com/iDescriptor/iDescriptor/blob/main/src/gallerywidget.cpp)
 
 Or if you'd like to introduce new features, feel free to open an issue or a pull request!
+
+## Damaged Error on macOS
+
+<p align="center">
+    <img src="./resources/repo/damaged-error-macos.png" width="55%"><br/>
+</p>
+
+If you encounter a similar "damaged" error when trying to open the app on macOS, you can resolve this by running the following command in the terminal:
+
+```shell
+xattr -c ~/Applications/iDescriptor.app
+```
+
+You need to run this because macOS blocks apps that are not signed by an Apple Developer ID. By clearing the extended attributes, you can bypass this security feature.
+
+This not something specific to iDescriptor, for example [check this out](https://github.com/deskflow/deskflow/issues/7606).
+
+You can be more explicit and only remove the quarantine attribute like so:
+
+```shell
+xattr -dr com.apple.quarantine /Applications/iDescriptor.app
+```
 
 ## Star History
 
