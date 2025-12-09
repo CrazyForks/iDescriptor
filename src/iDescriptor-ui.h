@@ -21,11 +21,14 @@
 #include "settingsmanager.h"
 #include <QAbstractButton>
 #include <QApplication>
+// #include <QDesktopWidget>  // Qt6: removed, use QScreen
 #include <QGraphicsView>
+#include <QGuiApplication>
 #include <QLabel>
 #include <QMainWindow>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QScreen>
 #include <QSlider>
 #include <QSplitter>
 #include <QSplitterHandle>
@@ -42,6 +45,34 @@
 #define COLOR_RED QColor(255, 0, 0)      // Red
 #define COLOR_BLUE QColor("#2b5693")
 #define COLOR_ACCENT_BLUE QColor("#0b5ed7")
+
+class ScaledSize
+{
+public:
+    static QSize getScaledSize(const QSize &size)
+    {
+        return {static_cast<int>(size.width() * getXScaleFactor()),
+                static_cast<int>(size.height() * getYScaleFactor())};
+    }
+
+    static qreal getXScaleFactor()
+    {
+        QScreen *screen = QGuiApplication::primaryScreen();
+        if (!screen)
+            return 1.0;
+        return screen->logicalDotsPerInchX() / getReferenceDpiValue();
+    }
+    static qreal getYScaleFactor()
+    {
+        QScreen *screen = QGuiApplication::primaryScreen();
+        if (!screen)
+            return 1.0;
+        return screen->logicalDotsPerInchY() / getReferenceDpiValue();
+    }
+
+private:
+    static qreal getReferenceDpiValue() { return 96.0; }
+};
 
 // A custom QGraphicsView that keeps the content fitted with aspect ratio on
 // resize
@@ -157,7 +188,8 @@ public:
             SettingsManager::sharedInstance()->iconSizeBaseMultiplier();
         int intBaseSize = qRound(baseSize);
         m_iconSize = QSize(intBaseSize, intBaseSize);
-        setFixedSize(intBaseSize + 10, intBaseSize + 10);
+        setFixedSize(ScaledSize::getScaledSize(
+            QSize(intBaseSize + 10, intBaseSize + 10)));
 
         update();
         setCursor(Qt::PointingHandCursor);
@@ -209,7 +241,8 @@ private:
             SettingsManager::sharedInstance()->iconSizeBaseMultiplier();
         int intBaseSize = qRound(baseSize);
 
-        setFixedSize(intBaseSize + 10, intBaseSize + 10);
+        setFixedSize(ScaledSize::getScaledSize(
+            QSize(intBaseSize + 10, intBaseSize + 10)));
 
         m_iconSize = QSize(intBaseSize, intBaseSize);
         update();
@@ -221,7 +254,6 @@ private:
     qreal m_iconSizeMultiplier;
 };
 
-// Add this new class for display-only icons
 class ZIconLabel : public QLabel
 {
     Q_OBJECT
@@ -278,7 +310,9 @@ private:
             SettingsManager::sharedInstance()->iconSizeBaseMultiplier();
         int intBaseSize = qRound(baseSize);
 
-        setFixedSize(intBaseSize + 10, intBaseSize + 10);
+        // Make label DPI-aware too
+        setFixedSize(ScaledSize::getScaledSize(
+            QSize(intBaseSize + 10, intBaseSize + 10)));
 
         m_iconSize = QSize(intBaseSize, intBaseSize);
         update();
