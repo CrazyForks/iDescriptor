@@ -119,6 +119,8 @@ done
 
 macdeployqt "${APP_PATH}" -qmldir=qml -verbose=2
 
+codesign --force --deep -s - "${APP_PATH}"
+
 DMG_NAME="iDescriptor-${VERSION}-${PLATFORM_SUFFIX}.dmg"
 
 create-dmg \
