@@ -58,10 +58,11 @@ private slots:
     void onBackToAlbums();
 
 private:
+    void reload();
     void setupControlsLayout();
     void setupAlbumSelectionView();
     void setupPhotoGalleryView();
-    void loadAlbumList();
+    void loadAlbumList(const AFCFileTree &dcimTree);
     void setControlsEnabled(bool enabled);
     QString selectExportDirectory();
     QIcon loadAlbumThumbnail(const QString &albumPath);
@@ -80,7 +81,7 @@ private:
     ZLoadingWidget *m_loadingWidget;
     QWidget *m_errorWidget;
     QPushButton *m_retryButton;
-
+    QPushButton *m_importButton;
     // Album selection view
     QWidget *m_albumSelectionWidget;
     QListView *m_albumListView;

@@ -36,7 +36,7 @@ void QBalloonTip::hideBalloon()
     if (!theSolitaryBalloonTip)
         return;
     theSolitaryBalloonTip->hide();
-    delete theSolitaryBalloonTip;
+    // delete theSolitaryBalloonTip;
     theSolitaryBalloonTip = nullptr;
 }
 
@@ -52,12 +52,17 @@ bool QBalloonTip::isBalloonVisible() { return theSolitaryBalloonTip; }
 
 QBalloonTip::QBalloonTip(const QIcon &icon, const QString &title,
                          const QString &message, QWidget *widget)
-    : QWidget(nullptr, Qt::ToolTip), widget(widget), showArrow(true)
+    : QWidget(widget ? widget->window() : QApplication::activeWindow(),
+              Qt::ToolTip),
+      widget(widget), showArrow(true)
 {
-    setAttribute(Qt::WA_DeleteOnClose);
+    // setAttribute(Qt::WA_DeleteOnClose);
     setAttribute(Qt::WA_TranslucentBackground);
     if (widget) {
         connect(widget, &QWidget::destroyed, this, &QBalloonTip::close);
+    } else if (QApplication::activeWindow()) {
+        connect(QApplication::activeWindow(), &QWidget::destroyed, this,
+                &QBalloonTip::close);
     }
 
     // Add drop shadow effect
@@ -68,49 +73,50 @@ QBalloonTip::QBalloonTip(const QIcon &icon, const QString &title,
     shadowEffect->setOffset(0, 5);
     setGraphicsEffect(shadowEffect);
 
-    QLabel *titleLabel = new QLabel;
-    titleLabel->installEventFilter(this);
-    titleLabel->setText(title);
-    QFont f = titleLabel->font();
-    f.setBold(true);
-    titleLabel->setFont(f);
-    titleLabel->setTextFormat(Qt::PlainText); // to maintain compat with windows
+    // QLabel *titleLabel = new QLabel;
+    // titleLabel->installEventFilter(this);
+    // titleLabel->setText(title);
+    // QFont f = titleLabel->font();
+    // f.setBold(true);
+    // titleLabel->setFont(f);
+    // titleLabel->setTextFormat(Qt::PlainText); // to maintain compat with
+    // windows
 
-    const int iconSize = 18;
-    const int closeButtonSize = 15;
+    // const int iconSize = 18;
+    // const int closeButtonSize = 15;
 
-    QPushButton *closeButton = new QPushButton;
-    closeButton->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
-    closeButton->setIconSize(QSize(closeButtonSize, closeButtonSize));
-    closeButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    closeButton->setFixedSize(closeButtonSize, closeButtonSize);
-    QObject::connect(closeButton, SIGNAL(clicked()), this, SLOT(close()));
+    // QPushButton *closeButton = new QPushButton;
+    // closeButton->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+    // closeButton->setIconSize(QSize(closeButtonSize, closeButtonSize));
+    // closeButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    // closeButton->setFixedSize(closeButtonSize, closeButtonSize);
+    // QObject::connect(closeButton, SIGNAL(clicked()), this, SLOT(close()));
 
-    QLabel *msgLabel = new QLabel;
-    msgLabel->installEventFilter(this);
-    msgLabel->setText(message);
-    msgLabel->setTextFormat(Qt::PlainText);
-    msgLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    // QLabel *msgLabel = new QLabel;
+    // msgLabel->installEventFilter(this);
+    // msgLabel->setText(message);
+    // msgLabel->setTextFormat(Qt::PlainText);
+    // msgLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 
-    QGridLayout *layout = new QGridLayout;
-    if (!icon.isNull()) {
-        QLabel *iconLabel = new QLabel;
-        iconLabel->setPixmap(
-            icon.pixmap(QSize(iconSize, iconSize), devicePixelRatio()));
-        iconLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-        iconLabel->setMargin(2);
-        layout->addWidget(iconLabel, 0, 0);
-        layout->addWidget(titleLabel, 0, 1);
-    } else {
-        layout->addWidget(titleLabel, 0, 0, 1, 2);
-    }
+    // QGridLayout *layout = new QGridLayout;
+    // if (!icon.isNull()) {
+    //     QLabel *iconLabel = new QLabel;
+    //     iconLabel->setPixmap(
+    //         icon.pixmap(QSize(iconSize, iconSize), devicePixelRatio()));
+    //     iconLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    //     iconLabel->setMargin(2);
+    //     layout->addWidget(iconLabel, 0, 0);
+    //     layout->addWidget(titleLabel, 0, 1);
+    // } else {
+    //     layout->addWidget(titleLabel, 0, 0, 1, 2);
+    // }
 
-    layout->addWidget(closeButton, 0, 2);
+    // layout->addWidget(closeButton, 0, 2);
 
-    layout->addWidget(msgLabel, 1, 0, 1, 3);
-    layout->setSizeConstraint(QLayout::SetFixedSize);
-    layout->setContentsMargins(3, 3, 3, 3);
-    setLayout(layout);
+    // layout->addWidget(msgLabel, 1, 0, 1, 3);
+    // layout->setSizeConstraint(QLayout::SetFixedSize);
+    // layout->setContentsMargins(3, 3, 3, 3);
+    // setLayout(layout);
 }
 
 QBalloonTip::~QBalloonTip() { theSolitaryBalloonTip = nullptr; }

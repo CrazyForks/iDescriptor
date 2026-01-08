@@ -298,7 +298,8 @@ void ToolboxWidget::updateDeviceList()
                 QString::fromStdString(device->udid).left(8) + "...";
             m_deviceCombo->addItem(
                 QString::fromStdString(device->deviceInfo.productType) + " / " +
-                    shortUdid,
+                    shortUdid +
+                    (device->deviceInfo.isWireless ? " (Wi-Fi)" : ""),
                 QString::fromStdString(device->udid));
         }
     }

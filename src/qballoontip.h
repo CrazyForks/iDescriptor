@@ -10,24 +10,21 @@ class QBalloonTip : public QWidget
 {
     Q_OBJECT
 public:
-    static void showBalloon(const QIcon &icon, const QString &title,
-                            const QString &msg, QWidget *widget,
-                            const QPoint &pos, int timeout,
-                            bool showArrow = true);
-    static void hideBalloon();
-    static bool isBalloonVisible();
-    static void updateBalloonPosition(const QPoint &pos);
-
-private:
-    QBalloonTip(const QIcon &icon, const QString &title, const QString &msg,
-                QWidget *widget);
-    ~QBalloonTip();
+    explicit QBalloonTip(const QIcon &icon, const QString &title,
+                         const QString &msg, QWidget *widget);
+    void hideBalloon();
+    bool isBalloonVisible();
+    void updateBalloonPosition(const QPoint &pos);
+    void showBalloon(const QIcon &icon, const QString &title,
+                     const QString &msg, QWidget *widget, const QPoint &pos,
+                     int timeout, bool showArrow = true);
     void balloon(const QPoint &, int, bool);
 
 signals:
     void messageClicked();
 
 protected:
+    ~QBalloonTip();
     void paintEvent(QPaintEvent *) override;
     void resizeEvent(QResizeEvent *) override;
     void mousePressEvent(QMouseEvent *e) override;

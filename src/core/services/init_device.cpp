@@ -24,16 +24,15 @@
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
 #include "libirecovery.h"
 #endif
-#include <QDebug>
-#include <string.h>
-
 #include "../../heartbeat.h"
+#include <QDebug>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <sys/socket.h>
-
 #include <sstream>
+#include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
+
 std::string safeGetXML(const char *key, pugi::xml_node dict)
 {
     for (pugi::xml_node child = dict.first_child(); child;
@@ -365,15 +364,12 @@ DeviceInfo fullDeviceInfo(const pugi::xml_document &doc,
     }
 }
 
-// FIXME:spawn on a new thread?
-//  wireless connections sometimes take more than 10sec to connect
-//  and ofc it freezes the ui
-// TODO:idevice_start_session ?
 iDescriptorInitDeviceResult
-init_idescriptor_device(const QString &udid, WirelessInitArgs wirelessArgs)
+init_idescriptor_device(const QString &udid,
+                        const WirelessInitArgs &wirelessArgs)
 {
     const bool isWireless =
-        !wirelessArgs.ip.isEmpty() && wirelessArgs.pairing_file;
+        !wirelessArgs.ip.isEmpty() && !wirelessArgs.pairing_file.isEmpty();
     qDebug() << "Initializing iDescriptor device with UDID: " << udid
              << (isWireless ? "over wireless" : "over USB");
 
@@ -391,16 +387,13 @@ init_idescriptor_device(const QString &udid, WirelessInitArgs wirelessArgs)
     IdevicePairingFile *pairing_file = nullptr;
     IdeviceHandle *deviceHandle = nullptr;
     HeartbeatClientHandle *heartbeat = nullptr;
-    HeartBeatThread *heartbeatThread = nullptr;
+    HeartbeatThread *heartbeatThread = nullptr;
     ImageMounterHandle *image_mounter = nullptr;
     DiagnosticsRelayClientHandle *diagnostics_relay = nullptr;
     ScreenshotrClientHandle *screenshotr_client = nullptr;
     LocationSimulationHandle *location_simulation = nullptr;
-    // FIXME: remove debug
-    std::stringstream ss;
     plist_t val = nullptr;
 
-    // 1. Connect to usbmuxd
     IdeviceFfiError *err =
         idevice_usbmuxd_new_default_connection(0, &usbmuxd_conn);
     if (err) {
@@ -410,7 +403,6 @@ init_idescriptor_device(const QString &udid, WirelessInitArgs wirelessArgs)
         }
     }
 
-    // 2. Create default address handle
     err = idevice_usbmuxd_default_addr_new(&addr_handle);
     if (err) {
         qDebug() << "Failed to create address handle";
@@ -422,16 +414,20 @@ init_idescriptor_device(const QString &udid, WirelessInitArgs wirelessArgs)
         struct sockaddr_in addr_in;
         memset(&addr_in, 0, sizeof(addr_in));
         addr_in.sin_family = AF_INET;
-        addr_in.sin_port = htons(0); // Port doesn't matter for provider
+        addr_in.sin_port = htons(0);
         inet_pton(AF_INET, wirelessArgs.ip.toUtf8().constData(),
                   &addr_in.sin_addr);
-        // IdevicePairingFile *pairing_file = nullptr;
-        // idevice_pairing_file_read(
-        //     wirelessArgs.pairing_file.toUtf8().constData(), &pairing_file);
+        err = idevice_pairing_file_read(
+            wirelessArgs.pairing_file.toUtf8().constData(), &pairing_file);
+        if (err) {
+            qDebug() << "Failed to read pairing file";
+            goto cleanup;
+        }
+
         err = idevice_tcp_provider_new(
             (const idevice_sockaddr *)&addr_in,
-            const_cast<IdevicePairingFile *>(wirelessArgs.pairing_file),
-            APP_LABEL, &provider);
+            const_cast<IdevicePairingFile *>(pairing_file), APP_LABEL,
+            &provider);
         if (err) {
             qDebug() << "Failed to create wireless provider";
             goto cleanup;
@@ -441,7 +437,8 @@ init_idescriptor_device(const QString &udid, WirelessInitArgs wirelessArgs)
             qDebug() << "Failed to start Heartbeat service";
             goto cleanup;
         }
-        heartbeatThread = new HeartBeatThread(heartbeat);
+        // udid is mac address here for wireless
+        heartbeatThread = new HeartbeatThread(heartbeat, udid);
         heartbeatThread->start();
 
         while (!heartbeatThread->initialCompleted()) {
@@ -539,16 +536,7 @@ init_idescriptor_device(const QString &udid, WirelessInitArgs wirelessArgs)
     //     goto cleanup;
     // }
     get_device_info_xml(udid.toUtf8().constData(), lockdown, infoXml);
-    // infoXml.print(ss, "  "); // "  " for indentation
-    // qDebug().noquote() << "--- Full Device Info XML ---"
-    //                    << QString::fromStdString(ss.str());
 
-    //     Received plist: {
-    // Domain: "com.apple.mobile.wireless_lockdown",
-    // Key: "EnableWifiConnections",
-    // Request: "GetValue",
-    // Value: true
-    // }
     lockdownd_get_value(lockdown, "EnableWifiConnections",
                         "com.apple.mobile.wireless_lockdown", &val);
     if (val)
@@ -564,10 +552,14 @@ init_idescriptor_device(const QString &udid, WirelessInitArgs wirelessArgs)
     result.diagRelay = std::make_shared<DiagnosticsRelay>(
         DiagnosticsRelay::adopt(diagnostics_relay));
     result.locationSimulation = location_simulation;
-    AppContext::sharedInstance()->cachePairingFile(udid, pairing_file);
+    // TODO cache pairing file path
     result.deviceInfo.isWireless = isWireless;
     fullDeviceInfo(infoXml, afc_client, result.diagRelay.get(), result);
-
+    ::QObject::connect(heartbeatThread, &HeartbeatThread::heartbeatFailed,
+                       AppContext::sharedInstance(),
+                       &AppContext::heartbeatFailed);
+    ::QObject::connect(heartbeatThread, &HeartbeatThread::heartbeatThreadExited,
+                       AppContext::sharedInstance(), &AppContext::removeDevice);
 cleanup:
     // Cleanup on error
     // FIXME: implement proper cleanup

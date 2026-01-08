@@ -44,8 +44,10 @@
 #include "appcontext.h"
 #include "settingsmanager.h"
 // #include "devicemonitor.h"
+#include "Toast.h"
 #include "networkdevicemanager.h"
 #include "networkdeviceswidget.h"
+#include "statusballoon.h"
 #include <QApplication>
 #include <QDesktopServices>
 #include <QMenu>
@@ -205,6 +207,12 @@ MainWindow::MainWindow(QWidget *parent)
         "QLabel:hover { background-color : #13131319; }");
 
     ui->statusbar->addWidget(m_connectedDeviceCountLabel);
+    // TODO: implement downloads/uploads progress stuff
+
+    StatusBalloon *statusBalloon = StatusBalloon::sharedInstance();
+
+    ui->statusbar->addWidget(statusBalloon->getButton());
+
     ui->statusbar->setContentsMargins(0, 0, 0, 0);
     QLabel *appVersionLabel = new QLabel(QString("v%1").arg(APP_VERSION));
     appVersionLabel->setContentsMargins(5, 0, 5, 0);
@@ -410,33 +418,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(AppContext::sharedInstance(), &AppContext::deviceRemoved, this,
             [](const std::string &udid, const std::string &wifiMacAddress) {
-                const IdevicePairingFile *pairingFile =
-                    AppContext::sharedInstance()->getCachedPairingFile(
-                        QString::fromStdString(udid));
-
-                if (pairingFile) {
-                    // qDebug() << "Device removed, pairing file for UDID"
-                    //          << QString::fromStdString(udid) << "MAC"
-                    //          << QString::fromStdString(wifiMacAddress)
-                    //          << "exists in cache.";
-                    // try to upgrade device to wireless if possible
-                    qDebug()
-                        << "Upgrading device to wireless connection for UDID"
-                        << QString::fromStdString(udid);
-                    QMetaObject::invokeMethod(
-                        AppContext::sharedInstance(), "addDevice",
-                        Qt::QueuedConnection,
-                        Q_ARG(QString, QString::fromStdString(udid)),
-                        Q_ARG(DeviceMonitorThread::IdeviceConnectionType,
-                              DeviceMonitorThread::CONNECTION_NETWORK),
-                        Q_ARG(AddType, AddType::UpgradeToWireless),
-                        Q_ARG(QString, QString::fromStdString(wifiMacAddress)));
-
-                } else {
-                    qDebug()
-                        << "Device removed, no cached pairing file for UDID"
-                        << QString::fromStdString(udid);
-                }
+                qDebug() << "Upgrading device to wireless connection for UDID"
+                         << QString::fromStdString(udid);
+                QMetaObject::invokeMethod(
+                    AppContext::sharedInstance(), "addDevice",
+                    Qt::QueuedConnection,
+                    Q_ARG(QString, QString::fromStdString(udid)),
+                    Q_ARG(DeviceMonitorThread::IdeviceConnectionType,
+                          DeviceMonitorThread::CONNECTION_NETWORK),
+                    Q_ARG(AddType, AddType::UpgradeToWireless),
+                    Q_ARG(QString, QString::fromStdString(wifiMacAddress)));
             });
 
     connect(NetworkDeviceManager::sharedInstance(),
@@ -462,18 +453,6 @@ MainWindow::MainWindow(QWidget *parent)
                              << device.macAddress;
                     return;
                 }
-
-                const IdevicePairingFile *pairingFile =
-                    AppContext::sharedInstance()->getCachedPairingFile(
-                        device.macAddress);
-
-                if (!pairingFile) {
-                    qDebug() << "No cached pairing file for network device MAC:"
-                             << device.macAddress
-                             << "Cannot add as wireless device.";
-                    return;
-                }
-
                 qDebug() << "Trying to add network device with MAC:"
                          << device.macAddress;
 
@@ -486,6 +465,21 @@ MainWindow::MainWindow(QWidget *parent)
                     Q_ARG(QString, device.macAddress));
 
                 // Handle network device addition if needed
+            });
+
+    connect(AppContext::sharedInstance(), &AppContext::deviceHeartbeatFailed,
+            this, [this](const QString &macAddress, int tries) {
+                Toast *toast = new Toast(this);
+                toast->setAttribute(Qt::WA_DeleteOnClose);
+                toast->setDuration(8000); // Hide after 8 seconds
+                toast->setTitle("Heartbeat failed");
+                toast->setText(
+                    QString("Heartbeat failed for device with MAC %1. "
+                            "Number of failed attempts: %2")
+                        .arg(macAddress)
+                        .arg(tries));
+                toast->setPosition(ToastPosition::BOTTOM_MIDDLE);
+                toast->show();
             });
 
     // NetworkDevicesWidget *m_networkDevicesWidget = new

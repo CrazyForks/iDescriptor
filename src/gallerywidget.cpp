@@ -18,7 +18,7 @@
  */
 
 #include "gallerywidget.h"
-// #include "exportmanager.h"
+#include "exportmanager.h"
 #include "iDescriptor.h"
 #include "mediapreviewdialog.h"
 #include "photomodel.h"
@@ -42,6 +42,7 @@
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
+// todo: dont load paths on main thread, handle
 /*
     FIXME: this needs to be refactored once we
     figure out how to query Photos.sqlite
@@ -85,7 +86,7 @@ GalleryWidget::GalleryWidget(iDescriptorDevice *device, QWidget *parent)
     m_retryButton = new QPushButton("Retry", this);
     connect(m_retryButton, &QPushButton::clicked, this, [this]() {
         m_stackedWidget->setCurrentWidget(m_loadingWidget);
-        QTimer::singleShot(100, this, &GalleryWidget::loadAlbumList);
+        QTimer::singleShot(100, this, &GalleryWidget::reload);
     });
     errorLayout->addWidget(m_retryButton, 0, Qt::AlignCenter);
     m_errorWidget = new QWidget();
@@ -95,6 +96,13 @@ GalleryWidget::GalleryWidget(iDescriptorDevice *device, QWidget *parent)
     m_stackedWidget->setCurrentWidget(m_loadingWidget);
     setControlsEnabled(false); // Disable controls until album is selected
 }
+
+void GalleryWidget::reload()
+{
+    m_loaded = false;
+    load();
+}
+
 /*Load is called when the tab is active*/
 void GalleryWidget::load()
 {
@@ -102,8 +110,16 @@ void GalleryWidget::load()
         return;
 
     m_loaded = true;
+    qDebug() << "Before reading DCIM directory";
 
-    loadAlbumList();
+    auto *watcher = new QFutureWatcher<AFCFileTree>(this);
+    auto future = ServiceManager::getFileTreeAsync(m_device, "/DCIM", true);
+    watcher->setFuture(future);
+
+    connect(watcher, &QFutureWatcher<AFCFileTree>::finished, [this, watcher]() {
+        watcher->deleteLater();
+        loadAlbumList(watcher->result());
+    });
 }
 
 void GalleryWidget::setupControlsLayout()
@@ -111,6 +127,8 @@ void GalleryWidget::setupControlsLayout()
     m_controlsLayout = new QHBoxLayout();
     m_controlsLayout->setSpacing(5);
     m_controlsLayout->setContentsMargins(7, 7, 7, 7);
+
+    m_importButton = new QPushButton("Import");
 
     // Sort order combo box
     QLabel *sortLabel = new QLabel("Sort:");
@@ -128,13 +146,13 @@ void GalleryWidget::setupControlsLayout()
     QLabel *filterLabel = new QLabel("Filter:");
     filterLabel->setStyleSheet("font-weight: bold;");
     m_filterComboBox = new QComboBox();
-    m_filterComboBox->addItem("All Media",
-                              static_cast<int>(PhotoModel::ImagesOnly));
+    m_filterComboBox->addItem("All Media", static_cast<int>(PhotoModel::All));
     m_filterComboBox->addItem("Images Only",
                               static_cast<int>(PhotoModel::ImagesOnly));
     m_filterComboBox->addItem("Videos Only",
                               static_cast<int>(PhotoModel::VideosOnly));
-    m_filterComboBox->setCurrentIndex(2);   // Default to All
+    m_filterComboBox->setCurrentIndex(
+        static_cast<int>(PhotoModel::All)); // Default to All
     m_filterComboBox->setMinimumWidth(100); // Ensure text fits
     m_filterComboBox->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
@@ -164,6 +182,7 @@ void GalleryWidget::setupControlsLayout()
 
     // Add widgets to layout
     m_controlsLayout->addWidget(m_backButton);
+    m_controlsLayout->addWidget(m_importButton);
     m_controlsLayout->addWidget(sortLabel);
     m_controlsLayout->addWidget(m_sortComboBox);
     m_controlsLayout->addWidget(filterLabel);
@@ -222,39 +241,42 @@ void GalleryWidget::onExportSelected()
         return;
     }
 
-    // if (ExportManager::sharedInstance()->isExporting()) {
-    //     QMessageBox::information(this, "Export in Progress",
-    //                              "An export is already in progress.");
-    //     return;
-    // }
+    if (ExportManager::sharedInstance()->isExporting()) {
+        QMessageBox::information(this, "Export in Progress",
+                                 "An export is already in progress.");
+        return;
+    }
 
-    // QModelIndexList selectedIndexes =
-    //     m_listView->selectionModel()->selectedIndexes();
-    // QStringList filePaths = m_model->getSelectedFilePaths(selectedIndexes);
+    QModelIndexList selectedIndexes =
+        m_listView->selectionModel()->selectedIndexes();
+    QStringList filePaths = m_model->getSelectedFilePaths(selectedIndexes);
 
-    // if (filePaths.isEmpty()) {
-    //     QMessageBox::information(this, "No Items",
-    //                              "No valid items selected for export.");
-    //     return;
-    // }
+    if (filePaths.isEmpty()) {
+        QMessageBox::information(this, "No Items",
+                                 "No valid items selected for export.");
+        return;
+    }
 
-    // QString exportDir = selectExportDirectory();
-    // if (exportDir.isEmpty()) {
-    //     return;
-    // }
+    QString exportDir = selectExportDirectory();
+    if (exportDir.isEmpty()) {
+        return;
+    }
 
-    // // Convert QStringList to QList<ExportItem>
-    // QList<ExportItem> exportItems;
-    // for (const QString &filePath : filePaths) {
-    //     QString fileName = filePath.split('/').last();
-    //     exportItems.append(ExportItem(filePath, fileName));
-    // }
+    // Convert QStringList to QList<ExportItem>
+    QList<ExportItem> exportItems;
+    // FIXME: index
+    int index = 0;
+    for (const QString &filePath : filePaths) {
+        QString fileName = filePath.split('/').last();
+        exportItems.append(ExportItem(filePath, fileName, index));
+        ++index;
+    }
 
-    // qDebug() << "Starting export of selected files:" << exportItems.size()
-    //          << "items to" << exportDir;
+    qDebug() << "Starting export of selected files:" << exportItems.size()
+             << "items to" << exportDir;
 
-    // ExportManager::sharedInstance()->startExport(m_device, exportItems,
-    //                                              exportDir);
+    ExportManager::sharedInstance()->startExport(m_device, exportItems,
+                                                 exportDir);
 }
 
 void GalleryWidget::onExportAll()
@@ -419,12 +441,8 @@ void GalleryWidget::setupPhotoGalleryView()
             &GalleryWidget::onPhotoContextMenu);
 }
 
-void GalleryWidget::loadAlbumList()
+void GalleryWidget::loadAlbumList(const AFCFileTree &dcimTree)
 {
-    qDebug() << "Before reading DCIM directory";
-    AFCFileTree dcimTree =
-        ServiceManager::safeGetFileTree(m_device, "/DCIM", true);
-
     if (!dcimTree.success) {
         qDebug() << "Failed to read DCIM directory";
         m_stackedWidget->setCurrentWidget(m_errorWidget);
@@ -432,8 +450,6 @@ void GalleryWidget::loadAlbumList()
                              "Could not access DCIM directory on device.");
         return;
     }
-
-    m_stackedWidget->setCurrentWidget(m_albumSelectionWidget);
 
     qDebug() << "DCIM directory read successfully, found"
              << dcimTree.entries.size() << "entries";
@@ -464,6 +480,7 @@ void GalleryWidget::loadAlbumList()
     }
 
     m_albumListView->setModel(albumModel);
+    m_stackedWidget->setCurrentWidget(m_albumSelectionWidget);
 }
 
 void GalleryWidget::onAlbumSelected(const QString &albumPath)
@@ -484,6 +501,8 @@ void GalleryWidget::onAlbumSelected(const QString &albumPath)
                 });
     }
 
+    connect(m_model, &PhotoModel::thumbnailNeedsToBeLoaded, m_model,
+            &PhotoModel::requestThumbnail, Qt::QueuedConnection);
     // Set album path and load photos
     m_model->setAlbumPath(albumPath);
 
@@ -497,9 +516,16 @@ void GalleryWidget::onAlbumSelected(const QString &albumPath)
 
 void GalleryWidget::onBackToAlbums()
 {
+    if (m_model) {
+        disconnect(m_model, &PhotoModel::thumbnailNeedsToBeLoaded, m_model,
+                   &PhotoModel::requestThumbnail);
+    }
+
     // Switch back to album selection view
     m_stackedWidget->setCurrentWidget(m_albumSelectionWidget);
-    m_model->clear();
+    if (m_model) {
+        m_model->clear();
+    }
 
     // Disable controls and hide back button
     setControlsEnabled(false);
@@ -566,6 +592,7 @@ QIcon GalleryWidget::loadAlbumThumbnail(const QString &albumPath)
 
     if (firstImagePath.endsWith(".HEIC", Qt::CaseInsensitive)) {
         qDebug() << "Loading HEIC thumbnail from:" << firstImagePath;
+        // FIXME: move to servicemanager
         thumbnail = load_heic(imageData);
     } else {
         // Load regular image formats

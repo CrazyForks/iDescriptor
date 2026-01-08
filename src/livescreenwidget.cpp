@@ -228,6 +228,7 @@ void LiveScreenWidget::updateScreenshot()
     //     return;
     // }
     qDebug() << "Updating screenshot...";
+    // FIXME: move to services
     try {
         // TakeScreenshotResult result = take_screenshot(m_shotrClient);
         ScreenshotData screenshot;

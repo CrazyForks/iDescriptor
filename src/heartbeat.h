@@ -1,26 +1,19 @@
 #ifndef HEARTBEATTHREAD_H
 #define HEARTBEATTHREAD_H
+#include "iDescriptor.h"
 #include <QDebug>
 #include <QThread>
-#include <idevice++/bindings.hpp>
-#include <idevice++/core_device_proxy.hpp>
-#include <idevice++/dvt/remote_server.hpp>
-#include <idevice++/dvt/screenshot.hpp>
-#include <idevice++/ffi.hpp>
-#include <idevice++/heartbeat.hpp>
-#include <idevice++/provider.hpp>
-#include <idevice++/readwrite.hpp>
-#include <idevice++/rsd.hpp>
-#include <idevice++/usbmuxd.hpp>
 
 using namespace IdeviceFFI;
 
-class HeartBeatThread : public QThread
+class HeartbeatThread : public QThread
 {
     Q_OBJECT
 public:
-    HeartBeatThread(HeartbeatClientHandle *heartbeat, QObject *parent = nullptr)
-        : QThread(parent), m_hb(Heartbeat::adopt(heartbeat))
+    HeartbeatThread(HeartbeatClientHandle *heartbeat, QString macAddress,
+                    QObject *parent = nullptr)
+        : QThread(parent), m_hb(Heartbeat::adopt(heartbeat)),
+          m_macAddress(macAddress)
     {
     }
 
@@ -28,7 +21,6 @@ public:
     {
         qDebug() << "Heartbeat thread started";
         try {
-            // Start with initial interval (15 seconds as per the tool example)
             u_int64_t interval = 15;
 
             while (!isInterruptionRequested()) {
@@ -38,7 +30,19 @@ public:
                     qDebug()
                         << "Failed to get marco:"
                         << QString::fromStdString(result.unwrap_err().message);
-                    break;
+                    m_tries++;
+                    emit heartbeatFailed(m_macAddress, m_tries);
+                    if (m_tries >= HEARTBEAT_RETRY_LIMIT) {
+                        qDebug()
+                            << "Maximum heartbeat retries reached, exiting for "
+                               "device"
+                            << m_macAddress;
+                        emit heartbeatThreadExited(m_macAddress);
+                        break;
+                    }
+                    // If get_marco failed, skip the rest of this iteration
+                    // and try again with the current interval.
+                    continue;
                 }
 
                 // 2. Get the new interval from device
@@ -51,15 +55,31 @@ public:
                     qDebug() << "Failed to send polo:"
                              << QString::fromStdString(
                                     polo_result.unwrap_err().message);
-                    break;
+                    m_tries++;
+                    emit heartbeatFailed(m_macAddress, m_tries);
+                    if (m_tries >= HEARTBEAT_RETRY_LIMIT) {
+                        qDebug() << "Maximum heartbeat retries reached, "
+                                    "exiting for "
+                                    "device"
+                                 << m_macAddress;
+                        emit heartbeatThreadExited(m_macAddress);
+                        break;
+                    }
+                    // If send_polo failed, skip the rest of this iteration
+                    // and try again with the current interval.
+                    continue;
                 }
-                qDebug() << "Sent polo successfully";
 
-                interval += 5;
-                m_initialCompleted = true;
+                // If both marco and polo succeeded:
+                qDebug() << "Sent polo successfully";
+                interval += 5; // Increment interval for the next cycle
+                m_initialCompleted = true; // Mark as initially completed after
+                                           // first successful full cycle
             }
         } catch (const std::exception &e) {
             qDebug() << "Heartbeat error:" << e.what();
+
+            emit heartbeatThreadExited(m_macAddress);
         }
     }
 
@@ -68,5 +88,11 @@ public:
 private:
     Heartbeat m_hb;
     bool m_initialCompleted = false;
+    QString m_macAddress;
+    unsigned int m_tries = 0;
+
+signals:
+    void heartbeatFailed(const QString &macAddress, unsigned int tries = 0);
+    void heartbeatThreadExited(const QString &macAddress);
 };
 #endif // HEARTBEATTHREAD_H

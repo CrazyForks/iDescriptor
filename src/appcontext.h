@@ -34,8 +34,9 @@ public:
     QList<iDescriptorDevice *> getAllDevices();
     explicit AppContext(QObject *parent = nullptr);
     bool noDevicesConnected() const;
-    void cachePairingFile(const QString &udid, IdevicePairingFile *pairingFile);
-    const IdevicePairingFile *getCachedPairingFile(const QString &udid) const;
+    // QMap<WiFiMACAddress, PairingFilePath>
+    void cachePairingFile(const QString &udid, const QString &pairingFilePath);
+    const QString getCachedPairingFile(const QString &udid) const;
 
     // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
     //     QList<iDescriptorRecoveryDevice *> getAllRecoveryDevices();
@@ -55,8 +56,7 @@ private:
     // #endif
     QStringList m_pendingDevices;
     DeviceSelection m_currentSelection = DeviceSelection("");
-    // FIXME: QString can be macAddress or udid - both works fine for now
-    QMap<QString, IdevicePairingFile *> m_pairingFileCache;
+    QMap<QString, QString> m_pairingFileCache;
 signals:
     void deviceAdded(iDescriptorDevice *device);
     void deviceRemoved(const std::string &udid, const std::string &macAddress);
@@ -79,11 +79,14 @@ signals:
     */
     void deviceChange();
     void currentDeviceSelectionChanged(const DeviceSelection &selection);
+    void deviceHeartbeatFailed(const QString &macAddress, int tries);
 public slots:
     void removeDevice(QString udid);
     void addDevice(QString udid,
                    DeviceMonitorThread::IdeviceConnectionType connType,
                    AddType addType, QString wifiMacAddress = QString());
+    void heartbeatFailed(const QString &macAddress, int tries);
+    // void heartbeatThreadExited(const QString &macAddress);
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
     void addRecoveryDevice(uint64_t ecid);
     void removeRecoveryDevice(uint64_t ecid);

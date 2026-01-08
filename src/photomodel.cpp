@@ -40,9 +40,8 @@ extern "C" {
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
 }
+// todo implement std::priority_queue with thread pool
 
-// Limit concurrent video thumbnail generation to 2 to prevent resource
-// exhaustion
 QSemaphore PhotoModel::m_videoThumbnailSemaphore(4);
 
 PhotoModel::PhotoModel(iDescriptorDevice *device, FilterType filterType,
@@ -59,17 +58,27 @@ PhotoModel::PhotoModel(iDescriptorDevice *device, FilterType filterType,
 
 void PhotoModel::clear()
 {
+    blockSignals(true);
+
     // Clean up any active watchers
     for (auto *watcher : m_activeLoaders.values()) {
         if (watcher) {
+            watcher->disconnect();
             watcher->cancel();
-            watcher->waitForFinished();
+            // watcher->waitForFinished();
             watcher->deleteLater();
         }
     }
     m_activeLoaders.clear();
     m_loadingPaths.clear();
     m_thumbnailCache.clear();
+
+    beginResetModel();
+    m_photos.clear();
+    m_allPhotos.clear();
+    endResetModel();
+
+    blockSignals(false);
 }
 
 PhotoModel::~PhotoModel()
@@ -448,18 +457,15 @@ QVariant PhotoModel::data(const QModelIndex &index, int role) const
         return info.filePath;
 
     case Qt::DecorationRole: {
-        qDebug() << "DecorationRole requested for index:" << index.row();
 
         // Check memory cache first
         if (QPixmap *cached = m_thumbnailCache.object(info.filePath)) {
-            qDebug() << "Cache HIT for:" << info.fileName;
             return QIcon(*cached);
         }
 
         // Prevent duplicate requests
         if (m_loadingPaths.contains(info.filePath) ||
             m_activeLoaders.contains(info.filePath)) {
-            qDebug() << "Already loading:" << info.fileName;
             // Return appropriate placeholder based on file type
             if (info.fileName.endsWith(".MOV", Qt::CaseInsensitive) ||
                 info.fileName.endsWith(".MP4", Qt::CaseInsensitive) ||
@@ -473,7 +479,6 @@ QVariant PhotoModel::data(const QModelIndex &index, int role) const
 
         // Start async loading for both images and videos
         if (!m_loadingPaths.contains(info.filePath)) {
-            qDebug() << "Starting load for:" << info.fileName;
             emit const_cast<PhotoModel *>(this)->thumbnailNeedsToBeLoaded(
                 index.row());
         }
@@ -516,7 +521,6 @@ void PhotoModel::requestThumbnail(int index)
 
     connect(watcher, &QFutureWatcher<QPixmap>::finished, this,
             [this, watcher, filePath = info.filePath]() {
-                qDebug() << "Thumbnail load finished for:" << filePath;
                 QPixmap thumbnail = watcher->result();
 
                 m_loadingPaths.remove(filePath);
@@ -549,16 +553,12 @@ void PhotoModel::requestThumbnail(int index)
     if (isVideo) {
         future = QtConcurrent::run([this, info]() {
             // Acquire semaphore FIRST to limit concurrent video processing
-            qDebug() << "Waiting for semaphore for:" << info.fileName;
             m_videoThumbnailSemaphore.acquire();
-            qDebug() << "Acquired semaphore for:" << info.fileName;
 
             // Generate video thumbnail using FFmpeg directly (no QMediaPlayer)
             QPixmap thumbnail = generateVideoThumbnailFFmpeg(
                 m_device, info.filePath, m_thumbnailSize);
 
-            // Release semaphore
-            qDebug() << "Releasing semaphore for:" << info.fileName;
             m_videoThumbnailSemaphore.release();
             return thumbnail;
         });
@@ -587,7 +587,6 @@ QPixmap PhotoModel::loadThumbnailFromDevice(iDescriptorDevice *device,
     }
 
     if (filePath.endsWith(".HEIC", Qt::CaseInsensitive)) {
-        qDebug() << "Loading HEIC image from data for:" << filePath;
         QPixmap img = load_heic(imageData);
         return img.isNull() ? QPixmap()
                             : img.scaled(size, Qt::KeepAspectRatio,
@@ -872,13 +871,11 @@ PhotoInfo::FileType PhotoModel::determineFileType(const QString &fileName) const
 
 void PhotoModel::setAlbumPath(const QString &albumPath)
 {
-    if (m_albumPath != albumPath) {
-        qDebug() << "Setting new album path:" << albumPath;
-        clear();
+    qDebug() << "Setting new album path:" << albumPath;
+    clear();
 
-        m_albumPath = albumPath;
-        populatePhotoPaths();
-    }
+    m_albumPath = albumPath;
+    populatePhotoPaths();
 }
 
 void PhotoModel::refreshPhotos() { populatePhotoPaths(); }

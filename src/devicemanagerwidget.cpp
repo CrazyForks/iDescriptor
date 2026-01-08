@@ -145,8 +145,9 @@ void DeviceManagerWidget::addDevice(iDescriptorDevice *device)
     QString tabTitle = QString::fromStdString(device->deviceInfo.productType);
 
     m_stackedWidget->addWidget(deviceWidget);
-    m_deviceWidgets[device->udid] =
-        std::pair{deviceWidget, m_sidebar->addDevice(tabTitle, device->udid)};
+    m_deviceWidgets[device->udid] = std::pair{
+        deviceWidget, m_sidebar->addDevice(tabTitle, device->udid,
+                                           device->deviceInfo.isWireless)};
 }
 
 // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT

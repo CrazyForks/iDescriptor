@@ -291,11 +291,14 @@ void AfcExplorerWidget::onFileListContextMenu(const QPoint &pos)
         if (!currPath.endsWith("/"))
             currPath += "/";
 
+        // FIXME: index
+        int index = 0;
         for (QListWidgetItem *selItem : filesToExport) {
             QString fileName = selItem->text();
             QString devicePath =
                 currPath == "/" ? "/" + fileName : currPath + fileName;
-            exportItems.append(ExportItem(devicePath, fileName));
+            exportItems.append(ExportItem(devicePath, fileName, index));
+            index++;
         }
 
         // Start export with singleton - manager will show its own dialog
@@ -346,11 +349,13 @@ void AfcExplorerWidget::onExportClicked()
     if (!currPath.endsWith("/"))
         currPath += "/";
 
+    int index = 0;
     for (QListWidgetItem *item : filesToExport) {
         QString fileName = item->text();
         QString devicePath =
             currPath == "/" ? "/" + fileName : currPath + fileName;
-        exportItems.append(ExportItem(devicePath, fileName));
+        exportItems.append(ExportItem(devicePath, fileName, index));
+        index++;
     }
 
     // Start export with singleton - manager will show its own dialog

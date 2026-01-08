@@ -32,6 +32,7 @@
 #include <idevice++/dvt/remote_server.hpp>
 #include <idevice++/dvt/screenshot.hpp>
 #include <idevice++/ffi.hpp>
+#include <idevice++/heartbeat.hpp>
 #include <idevice++/installation_proxy.hpp>
 #include <idevice++/lockdown.hpp>
 #include <idevice++/provider.hpp>
@@ -69,6 +70,16 @@
 #define DeviceLockedMountErrorCode -21
 #define NotFoundErrorCode -14
 #define DISK_IMAGE_TYPE_DEVELOPER "Developer"
+
+#define HEARTBEAT_RETRY_LIMIT 2
+
+#ifdef __linux__
+#define LOCKDOWN_PATH "/var/lib/lockdown"
+#elif __APPLE__
+#define LOCKDOWN_PATH "/var/db/lockdown"
+#else
+#define LOCKDOWN_PATH ""
+#endif
 
 struct BatteryInfo {
     QString health;
@@ -412,12 +423,12 @@ void get_device_info_xml(const char *udid, LockdowndClientHandle *client,
                          pugi::xml_document &infoXml);
 
 struct WirelessInitArgs {
-    QString ip;
-    const IdevicePairingFile *pairing_file;
+    const QString ip;
+    const QString pairing_file;
 };
 iDescriptorInitDeviceResult
 init_idescriptor_device(const QString &udid,
-                        WirelessInitArgs wirelessArgs = {nullptr, nullptr});
+                        const WirelessInitArgs &wirelessArgs = {"", ""});
 
 // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
 // iDescriptorInitDeviceResultRecovery
@@ -670,3 +681,44 @@ inline int read_file(const char *filename, uint8_t **data, size_t *length)
     fclose(file);
     return 1;
 }
+
+struct ExportItem {
+    QString sourcePathOnDevice;
+    QString suggestedFileName;
+    int itemIndex = -1;
+
+    ExportItem() = default;
+    ExportItem(const QString &sourcePath, const QString &fileName, int index)
+        : sourcePathOnDevice(sourcePath), suggestedFileName(fileName),
+          itemIndex(index)
+    {
+    }
+};
+
+struct ExportResult {
+    QString sourceFilePath;
+    QString outputFilePath;
+    bool success = false;
+    QString errorMessage;
+    qint64 bytesTransferred = 0;
+};
+
+struct ExportJobSummary {
+    QUuid jobId;
+    int totalItems = 0;
+    int successfulItems = 0;
+    int failedItems = 0;
+    qint64 totalBytesTransferred = 0;
+    QString destinationPath;
+    bool wasCancelled = false;
+};
+
+struct ExportJob {
+    QUuid jobId;
+    iDescriptorDevice *device = nullptr;
+    QList<ExportItem> items;
+    QString destinationPath;
+    std::optional<AfcClientHandle *> altAfc;
+    std::atomic<bool> cancelRequested{false};
+    QUuid statusBalloonProcessId;
+};

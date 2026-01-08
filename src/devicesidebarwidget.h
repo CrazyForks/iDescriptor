@@ -36,7 +36,7 @@ class DeviceSidebarItem : public QFrame
 
 public:
     explicit DeviceSidebarItem(const QString &deviceName,
-                               const std::string &uuid,
+                               const std::string &uuid, bool isWireless,
                                QWidget *parent = nullptr);
     const std::string &getDeviceUuid() const;
 
@@ -67,6 +67,7 @@ private:
     QWidget *m_optionsWidget;
     QPushButton *m_toggleButton;
     QLabel *m_deviceLabel;
+    bool m_wireless;
 
     // Navigation buttons
     QPushButton *m_infoButton;
@@ -164,7 +165,7 @@ public:
 
     // Unified interface
     DeviceSidebarItem *addDevice(const QString &deviceName,
-                                 const std::string &uuid);
+                                 const std::string &uuid, bool isWireless);
     DevicePendingSidebarItem *addPendingDevice(const QString &uuid);
     RecoveryDeviceSidebarItem *addRecoveryDevice(uint64_t ecid);
 

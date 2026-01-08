@@ -26,9 +26,10 @@
 
 // DeviceSidebarItem Implementation
 DeviceSidebarItem::DeviceSidebarItem(const QString &deviceName,
-                                     const std::string &uuid, QWidget *parent)
+                                     const std::string &uuid, bool isWireless,
+                                     QWidget *parent)
     : QFrame(parent), m_deviceName(deviceName), m_uuid(uuid), m_selected(false),
-      m_collapsed(false)
+      m_wireless(isWireless), m_collapsed(false)
 {
     setupUI();
     setFrameStyle(QFrame::StyledPanel);
@@ -51,10 +52,20 @@ void DeviceSidebarItem::setupUI()
             [this]() { emit deviceSelected(m_uuid); });
 
     // Device name label
+    QHBoxLayout *nameLayout = new QHBoxLayout();
+    nameLayout->setContentsMargins(0, 0, 0, 0);
     m_deviceLabel = new QLabel(m_deviceName);
     m_deviceLabel->setStyleSheet("QLabel { font-weight: bold;  }");
     m_deviceLabel->setWordWrap(true);
-    headerLayout->addWidget(m_deviceLabel);
+    nameLayout->addWidget(m_deviceLabel);
+    if (m_wireless) {
+        auto wirelessIcon = new ZIconLabel(
+            QIcon(":/resources/icons/QlementineIconsWireless116.png"),
+            "Wireless", this);
+        nameLayout->setSpacing(5);
+        nameLayout->addWidget(wirelessIcon);
+    }
+    headerLayout->addLayout(nameLayout);
 
     // Toggle button
     m_toggleButton = new QPushButton();
@@ -292,9 +303,11 @@ DeviceSidebarWidget::DeviceSidebarWidget(QWidget *parent)
 }
 
 DeviceSidebarItem *DeviceSidebarWidget::addDevice(const QString &deviceName,
-                                                  const std::string &uuid)
+                                                  const std::string &uuid,
+                                                  bool isWireless)
 {
-    DeviceSidebarItem *item = new DeviceSidebarItem(deviceName, uuid, this);
+    DeviceSidebarItem *item =
+        new DeviceSidebarItem(deviceName, uuid, isWireless, this);
 
     // Connect to unified handler
     connect(item, &DeviceSidebarItem::deviceSelected, this,

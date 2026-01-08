@@ -66,24 +66,20 @@ AppContext::AppContext(QObject *parent) : QObject{parent}
         const std::string wifiMacAddress =
             PlistNavigator(fileData)["WiFiMACAddress"].getString();
         // plist_free(fileData);
-        qDebug() << "Found pairing file for MAC"
-                 << QString::fromStdString(wifiMacAddress);
         bool isCompatible = !wifiMacAddress.empty();
         // TODO: !important invalidate old pairing files
-        // libimobiledevice does not append WIFIMACAddress to the pairing file
+        // sometimes there is no WiFiMACAddress
         if (!isCompatible) {
             continue;
         }
+        qDebug() << "Found pairing file for MAC"
+                 << QString::fromStdString(wifiMacAddress);
 
-        IdevicePairingFile *pairing_file = nullptr;
-        idevice_pairing_file_read(
-            lockdowndir.filePath(fileName).toUtf8().constData(), &pairing_file);
-        if (pairing_file) {
-            qDebug() << "Caching pairing file for MAC"
-                     << QString::fromStdString(wifiMacAddress);
-            m_pairingFileCache[QString::fromStdString(wifiMacAddress)] =
-                pairing_file;
-        }
+        qDebug() << "Caching pairing file for MAC"
+                 << QString::fromStdString(wifiMacAddress) << "Local Path"
+                 << lockdowndir.filePath(fileName);
+        m_pairingFileCache[QString::fromStdString(wifiMacAddress)] =
+            lockdowndir.filePath(fileName);
     }
 }
 
@@ -99,14 +95,24 @@ void AppContext::addDevice(QString udid,
                                                   addType, wifiMacAddress,
                                                   initResult]() {
             if (addType == AddType::UpgradeToWireless) {
-                const IdevicePairingFile *pairingFile =
-                    getCachedPairingFile(udid);
-                if (!pairingFile) {
+                // udid is mac address here
+                const QString _pairingFilePath = getCachedPairingFile(udid);
+
+                if (_pairingFilePath.isEmpty()) {
+                    qDebug() << "Cannot upgrade to wireless, no cached pairing "
+                                "file for"
+                             << udid;
+                    return;
+                }
+
+                QFile pairingFilePath(_pairingFilePath);
+                if (!pairingFilePath.exists()) {
                     qDebug()
                         << "Cannot upgrade to wireless, no pairing file for"
                         << udid;
                     return;
                 }
+                pairingFilePath.close();
 
                 QList<NetworkDevice> networkDevices =
                     NetworkDeviceManager::sharedInstance()
@@ -121,15 +127,8 @@ void AppContext::addDevice(QString udid,
 
                 if (it != networkDevices.constEnd()) {
 
-                    IdevicePairingFile *pairing_file = nullptr;
-                    idevice_pairing_file_read(
-                        QString("/var/lib/lockdown/%1.plist")
-                            .arg(udid)
-                            .toUtf8()
-                            .constData(),
-                        &pairing_file);
                     *initResult = init_idescriptor_device(
-                        udid, {it->address, pairing_file});
+                        udid, {it->address, pairingFilePath.fileName()});
                 } else {
                     qDebug() << "No network device found with MAC address:"
                              << wifiMacAddress;
@@ -137,19 +136,29 @@ void AppContext::addDevice(QString udid,
                 }
             } else if (addType == AddType::Wireless) {
                 // FIXME: its not udid here its macAddress
-                const IdevicePairingFile *pairingFile =
-                    getCachedPairingFile(udid);
-                if (!pairingFile) {
-                    qDebug() << "Cannot initialize wireless device, no pairing "
+                const QString _pairingFilePath = getCachedPairingFile(udid);
+
+                if (_pairingFilePath.isEmpty()) {
+                    qDebug() << "Cannot upgrade to wireless, no cached pairing "
                                 "file for"
                              << udid;
                     return;
                 }
 
+                QFile pairingFilePath(_pairingFilePath);
+                if (!pairingFilePath.exists()) {
+                    qDebug()
+                        << "Cannot upgrade to wireless, no pairing file for"
+                        << udid;
+                    return;
+                }
+                pairingFilePath.close();
+
                 QList<NetworkDevice> networkDevices =
                     NetworkDeviceManager::sharedInstance()
                         ->m_networkProvider->getNetworkDevices();
 
+                // todo : retry logic if not found
                 auto it = std::find_if(
                     networkDevices.constBegin(), networkDevices.constEnd(),
                     [wifiMacAddress](const NetworkDevice &device) {
@@ -159,7 +168,7 @@ void AppContext::addDevice(QString udid,
 
                 if (it != networkDevices.constEnd()) {
                     *initResult = init_idescriptor_device(
-                        udid, {it->address, pairingFile});
+                        udid, {it->address, pairingFilePath.fileName()});
                 } else {
                     qDebug() << "No network device found with MAC address:"
                              << wifiMacAddress;
@@ -473,14 +482,13 @@ AppContext::getDeviceByMacAddress(const QString &macAddress) const
 }
 
 void AppContext::cachePairingFile(const QString &udid,
-                                  IdevicePairingFile *pairingFile)
+                                  const QString &pairingFilePath)
 {
-    m_pairingFileCache.insert(udid, pairingFile);
+    m_pairingFileCache.insert(udid, pairingFilePath);
 }
-const IdevicePairingFile *
-AppContext::getCachedPairingFile(const QString &udid) const
+const QString AppContext::getCachedPairingFile(const QString &udid) const
 {
-    const IdevicePairingFile *pairingFile = nullptr;
+    QString pairingFile;
 
     // Retrieve the pairing file from the cache
     if (m_pairingFileCache.contains(udid)) {
@@ -488,4 +496,9 @@ AppContext::getCachedPairingFile(const QString &udid) const
     }
 
     return pairingFile;
+}
+
+void AppContext::heartbeatFailed(const QString &macAddress, int tries)
+{
+    emit deviceHeartbeatFailed(macAddress, tries);
 }

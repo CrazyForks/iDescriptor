@@ -22,6 +22,7 @@
 
 #include "iDescriptor.h"
 #include <QDebug>
+#include <QFuture>
 #include <functional>
 #include <mutex>
 #include <optional>
@@ -199,6 +200,7 @@ public:
                 // altAfc was explicitly provided but is null, which is an
                 // invalid state.
                 qDebug() << "[executeAfcClientOperation] altAfc is null";
+                // c string is not safe in IdeviceFfiError ?
                 return new IdeviceFfiError{1, "ALT_AFC_CLIENT_IS_NULL"};
             }
 
@@ -248,6 +250,9 @@ public:
                                const char *path);
     static AFCFileTree safeGetFileTree(const iDescriptorDevice *device,
                                        const std::string &path, bool checkDir);
+    static QFuture<AFCFileTree>
+    getFileTreeAsync(const iDescriptorDevice *device, const std::string &path,
+                     bool checkDir);
     static MountedImageInfo getMountedImage(const iDescriptorDevice *device);
     static IdeviceFfiError *mountImage(const iDescriptorDevice *device,
                                        const char *image_file,
@@ -259,6 +264,13 @@ public:
                                         const char *filePath,
                                         const char *fileName);
     static bool enableWirelessConnections(const iDescriptorDevice *device);
+
+    // File export operations
+    static IdeviceFfiError *exportFileToPath(
+        const iDescriptorDevice *device, const char *device_path,
+        const char *local_path,
+        std::function<void(qint64, qint64)> progressCallback = nullptr,
+        std::atomic<bool> *cancelRequested = nullptr);
 };
 
 #endif // SERVICEMANAGER_H

@@ -90,7 +90,7 @@ signals:
     void thumbnailNeedsToBeLoaded(int index);
     void exportRequested(const QStringList &filePaths);
 
-private slots:
+public slots:
     void requestThumbnail(int index);
 
 private:
