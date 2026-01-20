@@ -28,14 +28,7 @@ ZLineEdit::ZLineEdit(const QString &text, QWidget *parent)
     setupStyles();
 }
 
-void ZLineEdit::setupStyles()
-{
-    updateStyles();
-
-    // Connect to palette changes for dynamic theme updates
-    connect(qApp, &QApplication::paletteChanged, this,
-            &ZLineEdit::updateStyles);
-}
+void ZLineEdit::setupStyles() { updateStyles(); }
 
 void ZLineEdit::updateStyles()
 {

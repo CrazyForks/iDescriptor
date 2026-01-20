@@ -107,19 +107,13 @@ void AppsWidget::setupUI()
 
     mainLayout->addWidget(headerWidget);
 
-    static ZIcon searchIcon(":/resources/icons/MdiLightMagnify.png");
+    m_searchIcon = ZIcon(":/resources/icons/MdiLightMagnify.png");
     m_searchAction = m_searchEdit->addAction(
-        searchIcon.getThemedPixmap(QSize(16, 16), palette()),
+        m_searchIcon.getThemedPixmap(QSize(16, 16), palette()),
         QLineEdit::TrailingPosition);
     m_searchAction->setToolTip("Search");
     connect(m_searchAction, &QAction::triggered, this,
             &AppsWidget::performSearch);
-
-    // Update search icon when theme changes
-    connect(qApp, &QApplication::paletteChanged, this, [this]() {
-        m_searchAction->setIcon(
-            searchIcon.getThemedPixmap(QSize(16, 16), palette()));
-    });
 
     headerLayout->addWidget(m_searchEdit);
     headerLayout->addStretch();

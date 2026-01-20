@@ -32,8 +32,14 @@ BatteryWidget::BatteryWidget(float value, bool isCharging, QWidget *parent)
 {
     setMinimumSize(30, 30);
     setMaximumSize(40, 40);
+}
 
-    connect(qApp, &QApplication::paletteChanged, this, [this]() { update(); });
+void BatteryWidget::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::PaletteChange) {
+        update();
+    }
+    QWidget::changeEvent(event);
 }
 
 void BatteryWidget::resizeEvent(QResizeEvent *)

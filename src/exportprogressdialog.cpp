@@ -60,9 +60,9 @@ ExportProgressDialog::ExportProgressDialog(ExportManager *exportManager,
     connect(m_transferRateTimer, &QTimer::timeout, this,
             &ExportProgressDialog::updateTransferRate);
 
-    // Listen for palette changes
-    connect(qApp, &QApplication::paletteChanged, this,
-            &ExportProgressDialog::updateColors);
+    // FIXME:Listen for palette changes
+    // connect(qApp, &QApplication::paletteChanged, this,
+    //         &ExportProgressDialog::updateColors);
 
     updateColors();
 }

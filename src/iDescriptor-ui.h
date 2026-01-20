@@ -152,11 +152,6 @@ public:
 
         updateIconSize();
         setCursor(Qt::PointingHandCursor);
-
-        connect(qApp, &QApplication::paletteChanged, this,
-                [this] { update(); });
-        connect(qApp, &QApplication::fontChanged, this,
-                [this] { updateIconSize(); });
     }
 
     void setIcon(const ZIcon &icon)
@@ -193,6 +188,16 @@ protected:
         m_icon.paint(&painter, iconRect, palette(), devicePixelRatioF());
     }
 
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::ApplicationFontChange) {
+            updateIconSize();
+        } else if (event->type() == QEvent::ApplicationPaletteChange) {
+            update();
+        }
+        QAbstractButton::changeEvent(event);
+    }
+
 private:
     void updateIconSize()
     {
@@ -224,10 +229,6 @@ public:
     {
         setToolTip(tooltip);
         updateIconSize();
-        connect(qApp, &QApplication::paletteChanged, this,
-                [this]() { update(); });
-        connect(qApp, &QApplication::fontChanged, this,
-                [this]() { updateIconSize(); });
     }
     void setIcon(const QIcon &icon)
     {
@@ -259,6 +260,16 @@ protected:
         iconRect.moveCenter(rect().center());
 
         m_icon.paint(&painter, iconRect, palette(), devicePixelRatioF());
+    }
+
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::ApplicationFontChange) {
+            updateIconSize();
+        } else if (event->type() == QEvent::ApplicationPaletteChange) {
+            update();
+        }
+        QLabel::changeEvent(event);
     }
 
 private:

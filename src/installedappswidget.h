@@ -66,6 +66,13 @@ signals:
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::PaletteChange) {
+            updateStyles();
+        }
+        QGroupBox::changeEvent(event);
+    };
 
 private:
     void fetchAppIcon();

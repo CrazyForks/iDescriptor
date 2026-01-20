@@ -77,6 +77,15 @@ private:
     qreal m_scale;
 
     QTimer *m_timer;
+
+protected:
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::PaletteChange) {
+            updateStyle();
+        }
+        QWidget::changeEvent(event);
+    };
 };
 
 #endif // QPROCESSINDICATOR_H

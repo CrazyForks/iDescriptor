@@ -248,6 +248,7 @@ void AirPlayWindow::showTutorialView()
     m_stackedWidget->setCurrentWidget(m_tutorialWidget);
     if (m_tutorialPlayer) {
         m_tutorialPlayer->play();
+        m_loadingIndicator->start();
     }
 }
 
@@ -387,6 +388,7 @@ void AirPlayWindow::onClientConnectionChanged(bool connected)
         showStreamingView();
     } else {
         m_loadingLabel->setText("Waiting for device connection...");
+        m_videoLabel->clear();
         showTutorialView();
     }
 }

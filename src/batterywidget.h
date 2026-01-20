@@ -35,6 +35,9 @@ public:
     void setValue(float newValue);
     float getValue() const;
 
+protected:
+    void changeEvent(QEvent *event) override;
+
 private:
     QRectF widgetFrame;
     QRectF mainBatteryFrame;

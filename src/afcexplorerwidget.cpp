@@ -525,8 +525,6 @@ void AfcExplorerWidget::setupFileExplorer()
     m_navWidget = new QWidget();
     m_navWidget->setObjectName("navWidget");
     m_navWidget->setFocusPolicy(Qt::StrongFocus); // Make it focusable
-    connect(qApp, &QApplication::paletteChanged, this,
-            &AfcExplorerWidget::updateNavStyles);
 
     m_navWidget->setMaximumWidth(500);
     m_navWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -693,6 +691,8 @@ void AfcExplorerWidget::onAddToFavoritesClicked()
 
 void AfcExplorerWidget::updateNavStyles()
 {
+    if (!m_navWidget || !m_addressBar)
+        return;
     bool isDark = isDarkMode();
     QColor lightColor = qApp->palette().color(QPalette::Light);
     QColor darkColor = qApp->palette().color(QPalette::Dark);

@@ -196,12 +196,6 @@ void InstalledAppsWidget::setupUI()
 
     // Start in loading state
     showLoadingState();
-
-    connect(qApp, &QApplication::paletteChanged, this, [this]() {
-        for (AppTabWidget *tab : m_appTabs) {
-            tab->updateStyles();
-        }
-    });
 }
 
 void InstalledAppsWidget::showLoadingState()
