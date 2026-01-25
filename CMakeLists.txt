@@ -306,8 +306,10 @@ if(APPLE)
     message(STATUS "Using macOS Bonjour framework for network service discovery")
 elseif (WIN32)
     find_path(DNSSD_INCLUDE_DIR dns_sd.h HINTS ${BONJOUR_SDK}/Include ) 
-    target_include_directories( iDescriptor PRIVATE ${DNSSD_INCLUDE_DIR} )
-    message( STATUS "Using Bonjour SDK for network service discovery" )
+    # $<$<COMPILE_LANGUAGE:CXX> fixes winres compiler errors
+    target_include_directories(iDescriptor PRIVATE 
+        $<$<COMPILE_LANGUAGE:CXX>:${DNSSD_INCLUDE_DIR}>
+    )
 else()
     pkg_check_modules(AVAHI_CLIENT REQUIRED IMPORTED_TARGET avahi-client)
 
