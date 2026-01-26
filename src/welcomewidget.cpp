@@ -79,14 +79,10 @@ void WelcomeWidget::setupUI()
     connect(m_githubLabel, &ZLabel::clicked, this,
             []() { QDesktopServices::openUrl(QUrl(REPO_URL)); });
 
-    // Make it look like a link
     QPalette githubPalette = m_githubLabel->palette();
     githubPalette.setColor(QPalette::WindowText,
                            QColor(0, 122, 255)); // Apple blue
     m_githubLabel->setPalette(githubPalette);
-
-    // Connect click functionality using installEventFilter
-    m_githubLabel->installEventFilter(this);
 
     m_mainLayout->addWidget(m_githubLabel, 0, Qt::AlignCenter);
 

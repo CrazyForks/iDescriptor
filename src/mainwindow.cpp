@@ -201,6 +201,10 @@ MainWindow::MainWindow(QWidget *parent)
     ui->statusbar->addPermanentWidget(appVersionLabel);
     ui->statusbar->addPermanentWidget(githubButton);
     ui->statusbar->addPermanentWidget(settingsButton);
+#ifdef WIN32
+    ui->statusbar->setStyleSheet(
+        "QStatusBar { border-top: 1px solid #dcdcdc; }");
+#endif
 
 #ifdef __linux__
     QList<QString> mounted_iFusePaths = iFuseManager::getMountPoints();

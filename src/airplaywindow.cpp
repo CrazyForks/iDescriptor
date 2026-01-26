@@ -69,8 +69,9 @@ QStringList AirPlaySettings::toArgs() const
     // FPS
     args << "-fps" << QString::number(fps);
 
+    // FIXME: causes seg fault on Windows ?
     // Allow new connections to take over
-    args << "-nohold";
+    // args << "-nohold";
 
     return args;
 }
@@ -80,7 +81,7 @@ AirPlaySettingsDialog::AirPlaySettingsDialog(QWidget *parent)
 {
     setupUI();
     setWindowTitle("AirPlay Settings");
-    resize(500, 600);
+    resize(300, 300);
 }
 
 void AirPlaySettingsDialog::setupUI()
@@ -167,16 +168,17 @@ void AirPlayWindow::setupUI()
 
     m_loadingIndicator = new QProcessIndicator();
     m_loadingIndicator->setType(QProcessIndicator::line_rotate);
-    m_loadingIndicator->setFixedSize(64, 32);
+    m_loadingIndicator->setFixedSize(24, 24);
     m_loadingIndicator->start();
 
     QHBoxLayout *loadingLayout = new QHBoxLayout();
-    loadingLayout->setSpacing(1);
     m_loadingLabel = new QLabel("Starting AirPlay Server...");
-    m_loadingLabel->setAlignment(Qt::AlignCenter);
 
+    loadingLayout->addStretch();
     loadingLayout->addWidget(m_loadingLabel);
+    loadingLayout->addSpacing(5);
     loadingLayout->addWidget(m_loadingIndicator);
+    loadingLayout->addStretch();
 
     m_tutorialLayout->addLayout(loadingLayout);
     m_tutorialLayout->addSpacing(1);
@@ -319,8 +321,6 @@ void AirPlayWindow::startAirPlayServer()
 void AirPlayWindow::stopAirPlayServer()
 {
     if (m_serverThread) {
-        // m_serverThread->stopServer();
-        // m_serverThread->wait(3000);
         m_serverThread->quit();
         m_serverThread->deleteLater();
         m_serverThread = nullptr;
@@ -364,7 +364,7 @@ void AirPlayWindow::onServerStatusChanged(bool running)
     if (running) {
         // Server started successfully, hide loading indicator and show tutorial
         // video
-        m_loadingLabel->setText("Waiting for device connection...");
+        m_loadingLabel->setText("Waiting for device connection");
 
         // Show tutorial video and instructions
         m_tutorialVideoWidget->setVisible(true);
@@ -460,7 +460,6 @@ AirPlayServerThread::AirPlayServerThread(QObject *parent)
 
 AirPlayServerThread::~AirPlayServerThread()
 {
-    // stopServer();
     uxplay_cleanup();
     wait();
 }

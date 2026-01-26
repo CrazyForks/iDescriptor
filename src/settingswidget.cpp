@@ -42,6 +42,10 @@ SettingsWidget::SettingsWidget(QWidget *parent) : QDialog{parent}
     setupUI();
     loadSettings();
     connectSignals();
+    // due to scrollbar add 10px on windows
+#ifdef WIN32
+    resize(sizeHint().width() + 10, sizeHint().height());
+#endif
 }
 
 void SettingsWidget::setupUI()
@@ -54,6 +58,7 @@ void SettingsWidget::setupUI()
     auto *scrollArea = new QScrollArea();
     auto *scrollWidget = new QWidget();
     auto *scrollLayout = new QVBoxLayout(scrollWidget);
+    scrollLayout->setContentsMargins(10, 10, 10, 10);
 
     // === GENERAL SETTINGS ===
     auto *generalGroup = new QGroupBox("General");
@@ -207,7 +212,7 @@ void SettingsWidget::setupUI()
         QString(
             "iDescriptor v%1\n"
             "A free, open-source, and cross-platform iDevice management tool.\n"
-            "© 2025 See AUTHORS for details. Licensed under AGPLv3.")
+            "© 2026 See AUTHORS for details. Licensed under AGPLv3.")
             .arg(APP_VERSION));
     footerLabel->setAlignment(Qt::AlignCenter);
     footerLabel->setStyleSheet("color: gray; font-size: 8pt;");
@@ -348,13 +353,25 @@ void SettingsWidget::onCheckUpdatesClicked()
     m_checkUpdatesButton->setText("Checking...");
     m_checkUpdatesButton->setEnabled(false);
 
-    MainWindow::sharedInstance()->m_updater->checkForUpdates();
+    connect(
+        MainWindow::sharedInstance()->m_updater, &ZUpdater::dataAvailable, this,
+        [this](const QJsonDocument data, bool isUpdateAvailable) {
+            if (isUpdateAvailable) {
+                QMessageBox::information(
+                    this, "Update Available",
+                    "A new version of iDescriptor is available. Please "
+                    "update to the latest version.");
+            } else {
+                QMessageBox::information(this, "No Updates",
+                                         "You are using the latest version of "
+                                         "iDescriptor.");
+            }
+            m_checkUpdatesButton->setText("Check for Updates");
+            m_checkUpdatesButton->setEnabled(true);
+        },
+        Qt::SingleShotConnection);
 
-    // Simulate check (replace with actual update check)
-    QTimer::singleShot(2000, this, [this]() {
-        m_checkUpdatesButton->setText("Check for Updates");
-        m_checkUpdatesButton->setEnabled(true);
-    });
+    MainWindow::sharedInstance()->m_updater->checkForUpdates();
 }
 
 void SettingsWidget::onResetToDefaultsClicked()

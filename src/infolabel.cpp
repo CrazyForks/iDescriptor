@@ -20,10 +20,13 @@
 #include "infolabel.h"
 #include <QApplication>
 #include <QClipboard>
+#include <QFontMetrics>
 #include <QMouseEvent>
 
-InfoLabel::InfoLabel(const QString &text, QWidget *parent)
-    : QLabel(text, parent), m_originalText(text)
+InfoLabel::InfoLabel(const QString &text, const QString &textToCopy,
+                     QWidget *parent)
+    : QLabel(text, parent), m_originalText(text),
+      m_textToCopy(!textToCopy.isEmpty() ? textToCopy : text)
 {
     setCursor(Qt::PointingHandCursor);
     setStyleSheet("QLabel:hover { background-color: rgba(255, 255, 255, 0.1); "
@@ -38,9 +41,13 @@ InfoLabel::InfoLabel(const QString &text, QWidget *parent)
 void InfoLabel::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {
-        QClipboard *clipboard = QApplication::clipboard();
-        clipboard->setText(m_originalText);
+        int originalWidth = width();
 
+        QClipboard *clipboard = QApplication::clipboard();
+        clipboard->setText(m_textToCopy);
+
+        // prevent layout shifts
+        setMinimumWidth(originalWidth);
         setText("Copied!");
         setStyleSheet("QLabel { color: #4CAF50; font-weight: bold; } "
                       "QLabel:hover { background-color: rgba(255, 255, 255, "
@@ -72,8 +79,14 @@ void InfoLabel::leaveEvent(QEvent *event)
 void InfoLabel::restoreOriginalText()
 {
     setText(m_originalText);
+    setMinimumWidth(0);
     setStyleSheet("QLabel:hover { background-color: rgba(255, 255, 255, 0.1); "
                   "border-radius: 2px; }");
 }
 
 void InfoLabel::setOriginalText(const QString &text) { m_originalText = text; }
+
+void InfoLabel::setTextToCopy(const QString &textToCopy)
+{
+    m_textToCopy = textToCopy;
+}
