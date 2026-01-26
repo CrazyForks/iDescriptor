@@ -68,6 +68,7 @@ jobs:
             mingw-w64-x86_64-gst-plugins-ugly
             mingw-w64-x86_64-gst-libav
             mingw-w64-x86_64-libheif
+            mingw-w64-x86_64-libarchive
 
       - uses: actions/setup-dotnet@v5
         with:
@@ -92,7 +93,31 @@ jobs:
       - name: Install WinFsp
         shell: pwsh
         run: |
-          choco install winfsp -y
+          $maxRetries = 3
+          $retryDelaySeconds = 10
+          $attempt = 0
+          $success = $false
+
+          while ($attempt -lt $maxRetries -and -not $success) {
+              $attempt++
+              Write-Host "Attempt $attempt to install WinFsp..."
+              choco install winfsp -y
+              if ($LASTEXITCODE -eq 0) {
+                  Write-Host "WinFsp installed successfully on attempt $attempt."
+                  $success = $true
+              } else {
+                  Write-Warning "WinFsp installation failed on attempt $attempt (exit code: $LASTEXITCODE)."
+                  if ($attempt -lt $maxRetries) {
+                      Write-Host "Retrying in $retryDelaySeconds seconds..."
+                      Start-Sleep -Seconds $retryDelaySeconds
+                  }
+              }
+          }
+
+          if (-not $success) {
+              Write-Error "Failed to install WinFsp after $maxRetries attempts."
+              exit 1 # Explicitly fail the step if all retries fail
+          }
 
       - name: Download and Extract Bonjour SDK
         run: |

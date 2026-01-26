@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(iDescriptor VERSION 0.1.2 LANGUAGES CXX)
 
+if(WIN32)
+    set(PKG_CONFIG_EXECUTABLE "C:/msys64/mingw64/bin/pkg-config.exe" CACHE FILEPATH "" FORCE)
+endif()
+
 # Feature options
 option(ENABLE_RECOVERY_DEVICE_SUPPORT "Enable recovery device support (requires libirecovery)" ON)
 set(PACKAGE_MANAGER_HINT "" CACHE STRING "Name of package manager(s) used to manage this build (e.g. paru, yay, pamac)")
@@ -115,10 +119,13 @@ find_library(TATSU_LIBRARY
     REQUIRED
 )
 
-# Add QR code generation library
 pkg_check_modules(QRENCODE REQUIRED IMPORTED_TARGET libqrencode)
 pkg_check_modules(HEIF REQUIRED IMPORTED_TARGET libheif)
 pkg_check_modules(ZIP REQUIRED IMPORTED_TARGET libzip)
+
+if(WIN32)
+    pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
+endif()
 
 # Add FFmpeg libraries for video thumbnail generation
 pkg_check_modules(AVFORMAT REQUIRED IMPORTED_TARGET libavformat)
@@ -304,6 +311,7 @@ if(APPLE)
     ${CORE_SERVICES_FRAMEWORK})
     message(STATUS "Using macOS Bonjour framework for network service discovery")
 elseif (WIN32)
+    target_link_libraries(iDescriptor PRIVATE PkgConfig::LIBARCHIVE)
     find_path(DNSSD_INCLUDE_DIR dns_sd.h HINTS ${BONJOUR_SDK}/Include ) 
     # $<$<COMPILE_LANGUAGE:CXX> fixes winres compiler errors
     target_include_directories(iDescriptor PRIVATE 
