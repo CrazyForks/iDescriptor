@@ -505,8 +505,8 @@ void GalleryWidget::setControlsEnabled(bool enabled)
 QIcon GalleryWidget::loadAlbumThumbnail(const QString &albumPath)
 {
     // Get album directory contents
-    AFCFileTree albumTree =
-        ServiceManager::safeGetFileTree(m_device, albumPath.toStdString());
+    AFCFileTree albumTree = ServiceManager::safeGetFileTree(
+        m_device, albumPath.toStdString(), false);
 
     if (!albumTree.success) {
         qDebug() << "Failed to read album directory:" << albumPath;

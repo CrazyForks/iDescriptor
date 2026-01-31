@@ -28,7 +28,7 @@ PrivateInfoLabel::PrivateInfoLabel(const QString &fullText, QWidget *parent)
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(5);
 
-    m_textLabel = new InfoLabel(m_maskedText, this);
+    m_textLabel = new InfoLabel(m_maskedText, m_fullText, this);
     layout->addWidget(m_textLabel);
 
     m_toggleButton = new ZIconWidget(
@@ -55,12 +55,10 @@ void PrivateInfoLabel::toggleVisibility()
     m_isVisible = !m_isVisible;
     if (m_isVisible) {
         m_textLabel->setText(m_fullText);
-        m_textLabel->setOriginalText(m_fullText);
         m_toggleButton->setIcon(QIcon(":/resources/icons/ClarityEyeLine.png"));
         m_toggleButton->setToolTip("Hide");
     } else {
         m_textLabel->setText(m_maskedText);
-        m_textLabel->setOriginalText(m_fullText);
         m_toggleButton->setIcon(
             QIcon(":/resources/icons/ClarityEyeHideLine.png"));
         m_toggleButton->setToolTip("Show");

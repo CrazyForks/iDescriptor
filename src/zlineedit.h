@@ -20,6 +20,7 @@
 #pragma once
 
 #include <QApplication>
+#include <QEvent>
 #include <QLineEdit>
 
 class ZLineEdit : public QLineEdit
@@ -35,4 +36,13 @@ private slots:
 
 private:
     void setupStyles();
+
+protected:
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::PaletteChange) {
+            updateStyles();
+        }
+        QLineEdit::changeEvent(event);
+    }
 };

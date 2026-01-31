@@ -24,7 +24,8 @@
 #include <libimobiledevice/lockdown.h>
 #include <string.h>
 
-AFCFileTree get_file_tree(afc_client_t afcClient, const std::string &path)
+AFCFileTree get_file_tree(afc_client_t afcClient, const std::string &path,
+                          bool checkDir)
 {
 
     AFCFileTree result;
@@ -47,9 +48,11 @@ AFCFileTree get_file_tree(afc_client_t afcClient, const std::string &path)
             fullPath += "/";
         fullPath += entryName;
         bool isDir = false;
-        if (afc_get_file_info(afcClient, fullPath.c_str(), &info) ==
-                AFC_E_SUCCESS &&
-            info) {
+        if (!checkDir) {
+            isDir = false;
+        } else if (afc_get_file_info(afcClient, fullPath.c_str(), &info) ==
+                       AFC_E_SUCCESS &&
+                   info) {
             if (entryName == "var") {
                 qDebug() << "File info for var:" << info[0] << info[1]
                          << info[2] << info[3] << info[4] << info[5];

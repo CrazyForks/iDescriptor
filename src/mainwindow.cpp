@@ -136,9 +136,8 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    const QSize minSize(900, 600);
-    setMinimumSize(minSize);
-    resize(minSize);
+    setMinimumSize(MIN_MAIN_WINDOW_SIZE);
+    resize(MIN_MAIN_WINDOW_SIZE);
     m_ZTabWidget = new ZTabWidget(this);
     m_ZTabWidget->setAttribute(Qt::WA_ContentsMarginsRespectsSafeArea, false);
 
@@ -162,7 +161,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_ZTabWidget->addTab(m_mainStackedWidget, "iDevice");
     auto *appsWidgetTab =
         m_ZTabWidget->addTab(AppsWidget::sharedInstance(), "Apps");
-    m_ZTabWidget->addTab(new ToolboxWidget(this), "Toolbox");
+    m_ZTabWidget->addTab(ToolboxWidget::sharedInstance(), "Toolbox");
 
     auto *jailbrokenWidget = new JailbrokenWidget(this);
     m_ZTabWidget->addTab(jailbrokenWidget, "Jailbroken");
@@ -201,6 +200,10 @@ MainWindow::MainWindow(QWidget *parent)
     ui->statusbar->addPermanentWidget(appVersionLabel);
     ui->statusbar->addPermanentWidget(githubButton);
     ui->statusbar->addPermanentWidget(settingsButton);
+#ifdef WIN32
+    ui->statusbar->setStyleSheet(
+        "QStatusBar { border-top: 1px solid #dcdcdc; }");
+#endif
 
 #ifdef __linux__
     QList<QString> mounted_iFusePaths = iFuseManager::getMountPoints();

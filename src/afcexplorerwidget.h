@@ -23,6 +23,7 @@
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include <QAction>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
@@ -117,6 +118,15 @@ private:
     void updateNavStyles();
     void updateButtonStates();
     void goUp();
+
+protected:
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::PaletteChange) {
+            updateNavStyles();
+        }
+        QWidget::changeEvent(event);
+    }
 };
 
 #endif // AFCEXPLORER_H

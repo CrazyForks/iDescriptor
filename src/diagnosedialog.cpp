@@ -18,34 +18,29 @@
  */
 
 #include "diagnosedialog.h"
+#include "iDescriptor-ui.h"
 #include <QApplication>
 
 DiagnoseDialog::DiagnoseDialog(QWidget *parent) : QDialog(parent)
 {
     setupUI();
-
     setWindowTitle("System Dependencies");
     setModal(true);
-    resize(500, 400);
-
-    // Set clean close behavior
     setAttribute(Qt::WA_DeleteOnClose, true);
 }
 
 void DiagnoseDialog::setupUI()
 {
+    setMinimumSize(MIN_MAIN_WINDOW_SIZE.width(), MIN_MAIN_WINDOW_SIZE.height() / 2);
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    QScrollArea *scrollArea = new QScrollArea(this);
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     mainLayout->setContentsMargins(10, 10, 10, 10);
 
-    // Add the main diagnose widget
+    /*
+        TODO: either subclass DiagnoseWidget or
+        modify its layout to better fit dialog
+    */
     m_diagnoseWidget = new DiagnoseWidget();
-    scrollArea->setWidget(m_diagnoseWidget);
 
-    // Close button
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
 
@@ -56,8 +51,7 @@ void DiagnoseDialog::setupUI()
 
     buttonLayout->addWidget(m_closeButton);
 
-    // Layout assembly
-    mainLayout->addWidget(scrollArea);
+    mainLayout->addWidget(m_diagnoseWidget);
     mainLayout->addLayout(buttonLayout);
 }
 

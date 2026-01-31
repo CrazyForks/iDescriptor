@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
-project(iDescriptor VERSION 0.1.2 LANGUAGES CXX)
+project(iDescriptor VERSION 0.2.0 LANGUAGES CXX)
+
+if(WIN32)
+    set(PKG_CONFIG_EXECUTABLE "C:/msys64/mingw64/bin/pkg-config.exe" CACHE FILEPATH "" FORCE)
+endif()
 
 # Feature options
 option(ENABLE_RECOVERY_DEVICE_SUPPORT "Enable recovery device support (requires libirecovery)" ON)
@@ -115,10 +119,13 @@ find_library(TATSU_LIBRARY
     REQUIRED
 )
 
-# Add QR code generation library
 pkg_check_modules(QRENCODE REQUIRED IMPORTED_TARGET libqrencode)
 pkg_check_modules(HEIF REQUIRED IMPORTED_TARGET libheif)
 pkg_check_modules(ZIP REQUIRED IMPORTED_TARGET libzip)
+
+if(WIN32)
+    pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
+endif()
 
 # Add FFmpeg libraries for video thumbnail generation
 pkg_check_modules(AVFORMAT REQUIRED IMPORTED_TARGET libavformat)
@@ -216,7 +223,7 @@ if (NOT ENABLE_RECOVERY_DEVICE_SUPPORT)
     )
 endif()
 
-add_subdirectory(lib/airplay)
+add_subdirectory(lib/uxplay)
 add_subdirectory(lib/ipatool-go)
 add_subdirectory(lib/zupdater)
 
@@ -282,7 +289,7 @@ target_link_libraries(iDescriptor PRIVATE
     PkgConfig::AVCODEC
     PkgConfig::AVUTIL
     PkgConfig::SWSCALE
-    airplay
+    uxplay
     ipatool-go
     ZUpdater
 )
@@ -293,7 +300,9 @@ if(ENABLE_RECOVERY_DEVICE_SUPPORT)
 endif()
 
 target_include_directories(iDescriptor PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/lib/zupdater/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/zupdater/src 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib 
 )
 
 if(APPLE)
@@ -302,9 +311,12 @@ if(APPLE)
     ${CORE_SERVICES_FRAMEWORK})
     message(STATUS "Using macOS Bonjour framework for network service discovery")
 elseif (WIN32)
+    target_link_libraries(iDescriptor PRIVATE PkgConfig::LIBARCHIVE)
     find_path(DNSSD_INCLUDE_DIR dns_sd.h HINTS ${BONJOUR_SDK}/Include ) 
-    target_include_directories( iDescriptor PRIVATE ${DNSSD_INCLUDE_DIR} )
-    message( STATUS "Using Bonjour SDK for network service discovery" )
+    # $<$<COMPILE_LANGUAGE:CXX> fixes winres compiler errors
+    target_include_directories(iDescriptor PRIVATE 
+        $<$<COMPILE_LANGUAGE:CXX>:${DNSSD_INCLUDE_DIR}>
+    )
 else()
     pkg_check_modules(AVAHI_CLIENT REQUIRED IMPORTED_TARGET avahi-client)
 

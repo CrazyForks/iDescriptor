@@ -168,6 +168,17 @@ void SettingsManager::setConnectionTimeout(int seconds)
     m_settings->sync();
 }
 
+int SettingsManager::wirelessFileServerPort() const
+{
+    return m_settings->value("wirelessFileServerPort", 8080).toInt();
+}
+
+void SettingsManager::setWirelessFileServerPort(int port)
+{
+    m_settings->setValue("wirelessFileServerPort", port);
+    m_settings->sync();
+}
+
 bool SettingsManager::showKeychainDialog() const
 {
     return m_settings->value("showKeychainDialog", true).toBool();
@@ -235,6 +246,13 @@ void SettingsManager::resetToDefaults()
     setConnectionTimeout(30);
     setShowKeychainDialog(true);
     setDefaultJailbrokenRootPassword("alpine");
+    setIconSizeBaseMultiplier(1.0);
+    setAirplayFps(60);
+    setAirplayNoHold(true);
+    setWirelessFileServerPort(8080);
+#ifdef __linux__
+    setShowV4L2(false);
+#endif
 }
 
 void SettingsManager::saveFavoritePlace(const QString &path,
@@ -391,3 +409,37 @@ void SettingsManager::setIconSizeBaseMultiplier(double multiplier)
     m_settings->setValue("iconSizeBaseMultiplier", multiplier);
     m_settings->sync();
 }
+
+int SettingsManager::airplayFps() const
+{
+    return m_settings->value("airplayFps", 60).toInt();
+}
+
+void SettingsManager::setAirplayFps(int fps)
+{
+    m_settings->setValue("airplayFps", fps);
+    m_settings->sync();
+}
+
+bool SettingsManager::airplayNoHold() const
+{
+    return m_settings->value("airplayNoHold", true).toBool();
+}
+void SettingsManager::setAirplayNoHold(bool noHold)
+{
+    m_settings->setValue("airplayNoHold", noHold);
+    m_settings->sync();
+}
+
+#ifdef __linux__
+bool SettingsManager::showV4L2() const
+{
+    return m_settings->value("showV4L2", false).toBool();
+}
+
+void SettingsManager::setShowV4L2(bool show)
+{
+    m_settings->setValue("showV4L2", show);
+    m_settings->sync();
+}
+#endif

@@ -35,8 +35,6 @@ QProcessIndicator::QProcessIndicator(QWidget *parent)
 
     m_timer = new QTimer();
     connect(m_timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
-    connect(qApp, &QApplication::paletteChanged, this,
-            &QProcessIndicator::updateStyle);
 }
 void QProcessIndicator::updateStyle()
 {

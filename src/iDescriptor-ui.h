@@ -21,6 +21,7 @@
 #include "settingsmanager.h"
 #include <QAbstractButton>
 #include <QApplication>
+#include <QEvent>
 #include <QGraphicsView>
 #include <QGuiApplication>
 #include <QLabel>
@@ -44,6 +45,7 @@
 #define COLOR_RED QColor(255, 0, 0)      // Red
 #define COLOR_BLUE QColor("#2b5693")
 #define COLOR_ACCENT_BLUE QColor("#0b5ed7")
+#define MIN_MAIN_WINDOW_SIZE QSize(900, 600)
 
 class ResponsiveGraphicsView : public QGraphicsView
 {
@@ -152,11 +154,6 @@ public:
 
         updateIconSize();
         setCursor(Qt::PointingHandCursor);
-
-        connect(qApp, &QApplication::paletteChanged, this,
-                [this] { update(); });
-        connect(qApp, &QApplication::fontChanged, this,
-                [this] { updateIconSize(); });
     }
 
     void setIcon(const ZIcon &icon)
@@ -193,6 +190,19 @@ protected:
         m_icon.paint(&painter, iconRect, palette(), devicePixelRatioF());
     }
 
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::ApplicationFontChange) {
+            updateIconSize();
+            /* TODO: may be use PaletteChange event?
+             but ApplicationPaletteChange seems to be a better fit here than
+             PaletteChange*/
+        } else if (event->type() == QEvent::ApplicationPaletteChange) {
+            update();
+        }
+        QAbstractButton::changeEvent(event);
+    }
+
 private:
     void updateIconSize()
     {
@@ -224,10 +234,6 @@ public:
     {
         setToolTip(tooltip);
         updateIconSize();
-        connect(qApp, &QApplication::paletteChanged, this,
-                [this]() { update(); });
-        connect(qApp, &QApplication::fontChanged, this,
-                [this]() { updateIconSize(); });
     }
     void setIcon(const QIcon &icon)
     {
@@ -259,6 +265,16 @@ protected:
         iconRect.moveCenter(rect().center());
 
         m_icon.paint(&painter, iconRect, palette(), devicePixelRatioF());
+    }
+
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::ApplicationFontChange) {
+            updateIconSize();
+        } else if (event->type() == QEvent::ApplicationPaletteChange) {
+            update();
+        }
+        QLabel::changeEvent(event);
     }
 
 private:

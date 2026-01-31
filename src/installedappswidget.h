@@ -24,6 +24,7 @@
 #include "zlineedit.h"
 #include <QCheckBox>
 #include <QEnterEvent>
+#include <QEvent>
 #include <QFrame>
 #include <QFutureWatcher>
 #include <QGroupBox>
@@ -66,6 +67,13 @@ signals:
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::PaletteChange) {
+            updateStyles();
+        }
+        QGroupBox::changeEvent(event);
+    };
 
 private:
     void fetchAppIcon();
@@ -79,7 +87,6 @@ private:
     QLabel *m_iconLabel;
     QLabel *m_nameLabel;
     QLabel *m_versionLabel;
-    QList<AppTabWidget *> m_appTabs;
     QNetworkAccessManager *m_networkManager = new QNetworkAccessManager(this);
 };
 

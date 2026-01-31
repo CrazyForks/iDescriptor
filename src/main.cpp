@@ -78,9 +78,6 @@ int main(int argc, char *argv[])
     setenv("GST_PLUGIN_SYSTEM_PATH", gstPluginPath.toUtf8().constData(), 1);
     setenv("GST_PLUGIN_SCANNER", gstPluginScannerPath.toUtf8().constData(), 1);
 #endif
-#ifndef __APPLE__
-    QApplication::setStyle(QStyleFactory::create("Fusion"));
-#endif
     MainWindow *w = MainWindow::sharedInstance();
     w->show();
     return a.exec();

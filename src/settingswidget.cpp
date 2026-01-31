@@ -42,6 +42,10 @@ SettingsWidget::SettingsWidget(QWidget *parent) : QDialog{parent}
     setupUI();
     loadSettings();
     connectSignals();
+    // due to scrollbar add 10px on windows
+#ifdef WIN32
+    resize(sizeHint().width() + 10, sizeHint().height());
+#endif
 }
 
 void SettingsWidget::setupUI()
@@ -54,6 +58,7 @@ void SettingsWidget::setupUI()
     auto *scrollArea = new QScrollArea();
     auto *scrollWidget = new QWidget();
     auto *scrollLayout = new QVBoxLayout(scrollWidget);
+    scrollLayout->setContentsMargins(10, 10, 10, 10);
 
     // === GENERAL SETTINGS ===
     auto *generalGroup = new QGroupBox("General");
@@ -69,6 +74,18 @@ void SettingsWidget::setupUI()
     auto *browseButton = new QPushButton("Browse...");
     downloadLayout->addWidget(browseButton);
     generalLayout->addLayout(downloadLayout);
+
+    // Wireless file server port
+    auto *portLayout = new QHBoxLayout();
+    portLayout->addWidget(new QLabel("Wireless File Server Port:"));
+    m_wirelessFileServerPort = new QSpinBox();
+    m_wirelessFileServerPort->setRange(1024, 65535);
+    m_wirelessFileServerPort->setToolTip(
+        "The starting port for the wireless file server. If this port is "
+        "unavailable, it will try the next 10 ports.");
+    portLayout->addWidget(m_wirelessFileServerPort);
+    portLayout->addStretch();
+    generalLayout->addLayout(portLayout);
 
     // Unmount iFuse drives on exit (not implemented on macOS)
     // TODO: Implement
@@ -153,6 +170,34 @@ void SettingsWidget::setupUI()
 
     scrollLayout->addWidget(jailbrokenGroup);
 
+    // === AirPlay SETTINGS ===
+    auto *airplayGroup = new QGroupBox("AirPlay");
+    auto *airplayLayout = new QVBoxLayout(airplayGroup);
+
+    auto *fpsLayout = new QHBoxLayout();
+
+    auto *fpsLabel = new QLabel("Fps:");
+    m_fpsComboBox = new QComboBox();
+    m_fpsComboBox->addItems({"24", "30", "60", "120"});
+    m_fpsComboBox->setToolTip(
+        "Set the fps for AirPlay. Go with 30 fps if have an older device.");
+
+    fpsLayout->addWidget(fpsLabel);
+    fpsLayout->addWidget(m_fpsComboBox);
+    fpsLayout->addStretch();
+    airplayLayout->addLayout(fpsLayout);
+
+    m_noHoldCheckbox = new QCheckBox("Allow New Connections to Take Over");
+    airplayLayout->addWidget(m_noHoldCheckbox);
+
+
+#ifdef __linux__
+    m_showV4L2CheckBox = new QCheckBox("Show V4L2 Button on AirPlay Widget");
+    airplayLayout->addWidget(m_showV4L2CheckBox);
+#endif
+
+    scrollLayout->addWidget(airplayGroup);
+
     // === MISCELLANEOUS SETTINGS ===
     auto *miscGroup = new QGroupBox("Miscellaneous");
     auto *miscLayout = new QVBoxLayout(miscGroup);
@@ -183,7 +228,7 @@ void SettingsWidget::setupUI()
         QString(
             "iDescriptor v%1\n"
             "A free, open-source, and cross-platform iDevice management tool.\n"
-            "© 2025 See AUTHORS for details. Licensed under AGPLv3.")
+            "© 2026 See AUTHORS for details. Licensed under AGPLv3.")
             .arg(APP_VERSION));
     footerLabel->setAlignment(Qt::AlignCenter);
     footerLabel->setStyleSheet("color: gray; font-size: 8pt;");
@@ -229,6 +274,7 @@ void SettingsWidget::loadSettings()
     m_autoUpdateCheck->setChecked(sm->autoCheckUpdates());
     m_autoRaiseWindow->setChecked(sm->autoRaiseWindow());
     m_switchToNewDevice->setChecked(sm->switchToNewDevice());
+    m_wirelessFileServerPort->setValue(sm->wirelessFileServerPort());
 
 #ifndef __APPLE__
     m_unmount_iFuseDrives->setChecked(sm->unmountiFuseOnExit());
@@ -250,6 +296,11 @@ void SettingsWidget::loadSettings()
     m_applyButton->setEnabled(false);
 
     m_iconSizeBaseMultiplier->setValue(sm->iconSizeBaseMultiplier());
+    m_fpsComboBox->setCurrentText(QString::number(sm->airplayFps()));
+    m_noHoldCheckbox->setChecked(sm->airplayNoHold());
+#ifdef __linux__
+    m_showV4L2CheckBox->setChecked(sm->showV4L2());
+#endif
 }
 
 void SettingsWidget::connectSignals()
@@ -269,6 +320,9 @@ void SettingsWidget::connectSignals()
             this, &SettingsWidget::onSettingChanged);
     connect(m_connectionTimeout, QOverload<int>::of(&QSpinBox::valueChanged),
             this, &SettingsWidget::onSettingChanged);
+    connect(m_wirelessFileServerPort,
+            QOverload<int>::of(&QSpinBox::valueChanged), this,
+            &SettingsWidget::onSettingChanged);
 
     connect(m_iconSizeBaseMultiplier,
             QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
@@ -301,6 +355,14 @@ void SettingsWidget::connectSignals()
 
     connect(m_defaultJailbrokenRootPassword, &QLineEdit::textChanged, this,
             &SettingsWidget::onSettingChanged);
+    connect(m_fpsComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &SettingsWidget::onSettingChanged);
+    connect(m_noHoldCheckbox, &QCheckBox::toggled, this,
+            &SettingsWidget::onSettingChanged);
+#ifdef __linux__
+    connect(m_showV4L2CheckBox, &QCheckBox::toggled, this,
+            &SettingsWidget::onSettingChanged);
+#endif
 }
 
 void SettingsWidget::onBrowseButtonClicked()
@@ -320,13 +382,20 @@ void SettingsWidget::onCheckUpdatesClicked()
     m_checkUpdatesButton->setText("Checking...");
     m_checkUpdatesButton->setEnabled(false);
 
-    MainWindow::sharedInstance()->m_updater->checkForUpdates();
+    connect(
+        MainWindow::sharedInstance()->m_updater, &ZUpdater::dataAvailable, this,
+        [this](const QJsonDocument data, bool isUpdateAvailable) {
+            if (!isUpdateAvailable) {
+                QMessageBox::information(this, "No Updates",
+                                         "You are using the latest version of "
+                                         "iDescriptor.");
+            }
+            m_checkUpdatesButton->setText("Check for Updates");
+            m_checkUpdatesButton->setEnabled(true);
+        },
+        Qt::SingleShotConnection);
 
-    // Simulate check (replace with actual update check)
-    QTimer::singleShot(2000, this, [this]() {
-        m_checkUpdatesButton->setText("Check for Updates");
-        m_checkUpdatesButton->setEnabled(true);
-    });
+    MainWindow::sharedInstance()->m_updater->checkForUpdates();
 }
 
 void SettingsWidget::onResetToDefaultsClicked()
@@ -367,6 +436,7 @@ void SettingsWidget::saveSettings()
     sm->setAutoCheckUpdates(m_autoUpdateCheck->isChecked());
     sm->setAutoRaiseWindow(m_autoRaiseWindow->isChecked());
     sm->setSwitchToNewDevice(m_switchToNewDevice->isChecked());
+    sm->setWirelessFileServerPort(m_wirelessFileServerPort->value());
 
 #ifndef __APPLE__
     sm->setUnmountiFuseOnExit(m_unmount_iFuseDrives->isChecked());
@@ -380,6 +450,11 @@ void SettingsWidget::saveSettings()
 
     sm->setIconSizeBaseMultiplier(m_iconSizeBaseMultiplier->value());
 
+    sm->setAirplayFps(m_fpsComboBox->currentText().toInt());
+    sm->setAirplayNoHold(m_noHoldCheckbox->isChecked());
+#ifdef __linux__
+    sm->setShowV4L2(m_showV4L2CheckBox->isChecked());
+#endif
     m_applyButton->setEnabled(false);
 }
 

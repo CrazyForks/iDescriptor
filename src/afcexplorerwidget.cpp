@@ -206,8 +206,9 @@ void AfcExplorerWidget::loadPath(const QString &path)
     updateAddressBar(path);
     updateNavigationButtons();
 
-    AFCFileTree tree =
-        ServiceManager::safeGetFileTree(m_device, path.toStdString(), m_afc);
+    AFCFileTree tree = ServiceManager::safeGetFileTree(
+        m_device, path.toStdString(), true, m_afc);
+
     if (!tree.success) {
         showErrorState();
         return;
@@ -525,8 +526,6 @@ void AfcExplorerWidget::setupFileExplorer()
     m_navWidget = new QWidget();
     m_navWidget->setObjectName("navWidget");
     m_navWidget->setFocusPolicy(Qt::StrongFocus); // Make it focusable
-    connect(qApp, &QApplication::paletteChanged, this,
-            &AfcExplorerWidget::updateNavStyles);
 
     m_navWidget->setMaximumWidth(500);
     m_navWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -693,6 +692,8 @@ void AfcExplorerWidget::onAddToFavoritesClicked()
 
 void AfcExplorerWidget::updateNavStyles()
 {
+    if (!m_navWidget || !m_addressBar)
+        return;
     bool isDark = isDarkMode();
     QColor lightColor = qApp->palette().color(QPalette::Light);
     QColor darkColor = qApp->palette().color(QPalette::Dark);

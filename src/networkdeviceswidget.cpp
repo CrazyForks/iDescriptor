@@ -99,11 +99,6 @@ void NetworkDevicesWidget::setupUI()
     m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_scrollArea->setStyleSheet(
         "QScrollArea { background: transparent; border: none; }");
-    /* FIXME: We need a better approach to theme awareness   */
-    connect(qApp, &QApplication::paletteChanged, this, [this]() {
-        m_scrollArea->setStyleSheet(
-            "QScrollArea { background: transparent; border: none; }");
-    });
 
     // Scroll content
     m_scrollContent = new QWidget();

@@ -151,13 +151,13 @@ ServiceManager::safeReadAfcFileToByteArray(iDescriptorDevice *device,
 }
 
 AFCFileTree ServiceManager::safeGetFileTree(iDescriptorDevice *device,
-                                            const std::string &path,
+                                            const std::string &path, bool checkDir,
                                             std::optional<afc_client_t> altAfc)
 {
     return executeOperation<AFCFileTree>(
         device,
-        [path](afc_client_t client) -> AFCFileTree {
-            return get_file_tree(client, path.c_str());
+        [path, checkDir](afc_client_t client) -> AFCFileTree {
+            return get_file_tree(client, path.c_str(), checkDir);
         },
         altAfc);
 }

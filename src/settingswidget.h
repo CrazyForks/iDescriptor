@@ -52,6 +52,7 @@ private:
     // UI Elements
     // General
     QLineEdit *m_downloadPathEdit;
+    QSpinBox *m_wirelessFileServerPort;
     QCheckBox *m_autoUpdateCheck;
     QComboBox *m_themeCombo;
     QCheckBox *m_autoRaiseWindow;
@@ -67,6 +68,14 @@ private:
     QLineEdit *m_defaultJailbrokenRootPassword;
 
     QDoubleSpinBox *m_iconSizeBaseMultiplier;
+
+    // Airplay
+    QComboBox *m_fpsComboBox;
+    QCheckBox *m_noHoldCheckbox;
+
+#ifdef __linux__
+    QCheckBox *m_showV4L2CheckBox;
+#endif
 
     // Buttons
     QPushButton *m_checkUpdatesButton;

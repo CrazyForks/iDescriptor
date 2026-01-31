@@ -29,10 +29,11 @@ class InfoLabel : public QLabel
 
 public:
     explicit InfoLabel(const QString &text = QString(),
+                       const QString &textToCopy = QString(),
                        QWidget *parent = nullptr);
 
-    // Allow updating the original text (useful for PrivateInfoLabel)
     void setOriginalText(const QString &text);
+    void setTextToCopy(const QString &textToCopy);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -44,6 +45,7 @@ private slots:
 
 private:
     QString m_originalText;
+    QString m_textToCopy;
     QTimer *m_restoreTimer;
 };
 

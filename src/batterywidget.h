@@ -20,6 +20,7 @@
 #ifndef BATTERYWIDGET_H
 #define BATTERYWIDGET_H
 
+#include <QEvent>
 #include <QWidget>
 
 class BatteryWidget : public QWidget
@@ -34,6 +35,9 @@ public:
     // New methods for value management
     void setValue(float newValue);
     float getValue() const;
+
+protected:
+    void changeEvent(QEvent *event) override;
 
 private:
     QRectF widgetFrame;

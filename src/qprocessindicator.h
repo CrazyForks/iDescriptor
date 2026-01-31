@@ -22,6 +22,7 @@
 #define QPROCESSINDICATOR_H
 
 #include <QColor>
+#include <QEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QTimer>
@@ -77,6 +78,15 @@ private:
     qreal m_scale;
 
     QTimer *m_timer;
+
+protected:
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::PaletteChange) {
+            updateStyle();
+        }
+        QWidget::changeEvent(event);
+    };
 };
 
 #endif // QPROCESSINDICATOR_H

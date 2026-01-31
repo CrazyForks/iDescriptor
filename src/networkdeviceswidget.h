@@ -26,6 +26,7 @@
 #include "core/services/dnssd/dnssd_service.h"
 #endif
 
+#include <QEvent>
 #include <QGroupBox>
 #include <QLabel>
 #include <QScrollArea>
@@ -63,6 +64,18 @@ private:
 #endif
 
     QList<QWidget *> m_deviceCards;
+
+protected:
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::PaletteChange) {
+            if (m_scrollArea) {
+                m_scrollArea->setStyleSheet(
+                    "QScrollArea { background: transparent; border: none; }");
+            }
+        }
+        QWidget::changeEvent(event);
+    };
 };
 
 #endif // NETWORKDEVICESWIDGET_H

@@ -86,6 +86,9 @@ public:
     int connectionTimeout() const;
     void setConnectionTimeout(int seconds);
 
+    int wirelessFileServerPort() const;
+    void setWirelessFileServerPort(int port);
+
     bool showKeychainDialog() const;
     void setShowKeychainDialog(bool show);
 
@@ -105,6 +108,17 @@ public:
 
     double iconSizeBaseMultiplier() const;
     void setIconSizeBaseMultiplier(double multiplier);
+
+    int airplayFps() const;
+    void setAirplayFps(int fps);
+
+    bool airplayNoHold() const;
+    void setAirplayNoHold(bool noHold);
+
+#ifdef __linux__
+    bool showV4L2() const;
+    void setShowV4L2(bool show);
+#endif
 signals:
     void favoritePlacesChanged();
     void recentLocationsChanged();

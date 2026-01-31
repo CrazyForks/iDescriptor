@@ -21,9 +21,14 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QDebug>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include <QFileInfo>
 #include <QFont>
+#include <QFormLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMediaPlayer>
@@ -31,10 +36,11 @@
 #include <QPalette>
 #include <QPixmap>
 #include <QProcess>
+#include <QPushButton>
+#include <QSpinBox>
 #include <QStackedWidget>
 #include <QVBoxLayout>
 #include <QVideoWidget>
-
 #ifdef Q_OS_LINUX
 // V4L2 includes
 #include <cstring>
@@ -44,12 +50,91 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #endif
+#include "settingsmanager.h"
 
-// Include the rpiplay server functions
-#include "../lib/airplay/renderers/video_renderer.h"
-extern "C" {
-int start_server_qt(const char *name, void *callbacks);
-int stop_server_qt();
+#include <uxplay/renderers/video_renderer.h>
+#include <uxplay/uxplay.h>
+
+#include "diagnosedialog.h"
+#ifdef WIN32
+#include "platform/windows/check_deps.h"
+#endif
+#include "toolboxwidget.h"
+
+AirPlaySettings::AirPlaySettings()
+    : fps(SettingsManager::sharedInstance()->airplayFps()),
+      noHold(SettingsManager::sharedInstance()->airplayNoHold())
+{
+}
+
+QStringList AirPlaySettings::toArgs() const
+{
+    QStringList args;
+
+    // FPS
+    args << "-fps" << QString::number(fps);
+
+    // Allow new connections to take over
+    if (noHold)
+        args << "-nohold";
+
+    return args;
+}
+
+AirPlaySettingsDialog::AirPlaySettingsDialog(QWidget *parent)
+    : QDialog(parent), m_settings(AirPlaySettings())
+{
+    setupUI();
+    setWindowTitle("AirPlay Settings");
+    resize(300, 300);
+}
+
+void AirPlaySettingsDialog::setupUI()
+{
+    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+
+    // Video Settings Group
+    QGroupBox *videoGroup = new QGroupBox("Video Settings");
+    QFormLayout *videoLayout = new QFormLayout(videoGroup);
+
+    // FPS Layout
+    QVBoxLayout *fpsLayout = new QVBoxLayout();
+    m_fpsComboBox = new QComboBox();
+    m_fpsComboBox->addItems({"24", "30", "60", "120"});
+    m_fpsComboBox->setCurrentText(
+        QString::number(SettingsManager::sharedInstance()->airplayFps()));
+    m_fpsComboBox->setToolTip("Set maximum allowed streaming framerate");
+
+    QLabel *fpsFootnote =
+        new QLabel("Note: Older devices may not support higher framerates. If "
+                   "you are experiencing issues, set this to 30 FPS or lower.");
+    fpsFootnote->setWordWrap(true);
+    fpsFootnote->setStyleSheet("color: #666; font-size: 12px;");
+    fpsLayout->addWidget(m_fpsComboBox);
+    fpsLayout->addWidget(fpsFootnote);
+
+    videoLayout->addRow("Max FPS:", fpsLayout);
+
+    m_noHoldCheckbox = new QCheckBox("Allow New Connections to Take Over");
+    m_noHoldCheckbox->setChecked(
+        SettingsManager::sharedInstance()->airplayNoHold());
+    videoLayout->addRow(m_noHoldCheckbox);
+
+    mainLayout->addWidget(videoGroup);
+    // Buttons
+    QDialogButtonBox *buttonBox =
+        new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    mainLayout->addWidget(buttonBox);
+}
+
+AirPlaySettings AirPlaySettingsDialog::getSettings() const
+{
+    AirPlaySettings settings;
+    settings.fps = m_fpsComboBox->currentText().toInt();
+    settings.noHold = m_noHoldCheckbox->isChecked();
+    return settings;
 }
 
 AirPlayWindow::AirPlayWindow(QWidget *parent)
@@ -57,16 +142,35 @@ AirPlayWindow::AirPlayWindow(QWidget *parent)
       m_streamingWidget(nullptr), m_loadingIndicator(nullptr),
       m_loadingLabel(nullptr), m_tutorialPlayer(nullptr),
       m_tutorialVideoWidget(nullptr), m_videoLabel(nullptr),
-      m_tutorialLayout(nullptr), m_v4l2Checkbox(nullptr),
-      m_serverThread(nullptr), m_serverRunning(false)
-#ifdef Q_OS_LINUX
-      ,
-      m_v4l2_fd(-1), m_v4l2_width(0), m_v4l2_height(0), m_v4l2_enabled(false)
+      m_tutorialLayout(nullptr), m_settingsButton(nullptr),
+#ifdef __linux__
+      m_v4l2Checkbox(nullptr), m_v4l2_fd(-1), m_v4l2_width(0), m_v4l2_height(0),
+      m_v4l2_enabled(false),
 #endif
+      m_serverThread(nullptr), m_serverRunning(false), m_clientConnected(false)
 {
     setupUI();
+    setMinimumSize(800, 600);
+    QTimer::singleShot(0, this, [this]() {
+        /* HACK: qt ignores resize() calls so let's workaround */
+        setMinimumSize(0, 0);
+    });
 
-    // Auto-start server after UI setup
+/* FIXME: this can be handled better, add linux support */
+#ifdef WIN32
+    bool bonjour = IsBonjourServiceInstalled();
+    if (!bonjour) {
+        QMessageBox::warning(
+            this, "Bonjour Service Not Installed",
+            "Bonjour service is not installed on your system. Please install "
+            "it to enable AirPlay functionality.");
+
+        DiagnoseDialog *diagnoseDialog = new DiagnoseDialog();
+        diagnoseDialog->show();
+        QTimer::singleShot(0, this, &AirPlayWindow::close);
+        return;
+    }
+#endif
     QTimer::singleShot(500, this, &AirPlayWindow::startAirPlayServer);
 }
 
@@ -81,8 +185,6 @@ AirPlayWindow::~AirPlayWindow()
 void AirPlayWindow::setupUI()
 {
     setWindowTitle("AirPlay Receiver - iDescriptor");
-    setMinimumSize(800, 600);
-    resize(1000, 700);
 
     // Create stacked widget
     m_stackedWidget = new QStackedWidget(this);
@@ -90,24 +192,36 @@ void AirPlayWindow::setupUI()
 
     m_tutorialWidget = new QWidget();
     m_tutorialLayout = new QVBoxLayout(m_tutorialWidget);
-    m_tutorialLayout->setContentsMargins(40, 40, 40, 40);
+    m_tutorialLayout->setContentsMargins(0, 0, 0, 0);
     m_tutorialLayout->setSpacing(20);
 
     m_loadingIndicator = new QProcessIndicator();
     m_loadingIndicator->setType(QProcessIndicator::line_rotate);
-    m_loadingIndicator->setFixedSize(64, 32);
+    m_loadingIndicator->setFixedSize(24, 24);
     m_loadingIndicator->start();
 
     QHBoxLayout *loadingLayout = new QHBoxLayout();
-    loadingLayout->setSpacing(1);
     m_loadingLabel = new QLabel("Starting AirPlay Server...");
-    m_loadingLabel->setAlignment(Qt::AlignCenter);
-
+    loadingLayout->setContentsMargins(0, 40, 0, 0);
+    loadingLayout->addStretch();
     loadingLayout->addWidget(m_loadingLabel);
+    loadingLayout->addSpacing(5);
     loadingLayout->addWidget(m_loadingIndicator);
+    loadingLayout->addStretch();
 
     m_tutorialLayout->addLayout(loadingLayout);
     m_tutorialLayout->addSpacing(1);
+
+    // Settings button (shown when no client connected)
+    m_settingsButton = new QPushButton("Settings");
+    m_settingsButton->setVisible(false);
+    connect(m_settingsButton, &QPushButton::clicked, this,
+            &AirPlayWindow::showSettingsDialog);
+    QHBoxLayout *settingsLayout = new QHBoxLayout();
+    settingsLayout->addStretch();
+    settingsLayout->addWidget(m_settingsButton);
+    settingsLayout->addStretch();
+    m_tutorialLayout->addLayout(settingsLayout);
 
     QTimer::singleShot(100, this, &AirPlayWindow::setupTutorialVideo);
 
@@ -116,7 +230,7 @@ void AirPlayWindow::setupUI()
     streamingLayout->setContentsMargins(10, 10, 10, 10);
     streamingLayout->setSpacing(10);
 
-#ifdef Q_OS_LINUX
+#ifdef __linux__
     // Add V4L2 checkbox at the top of streaming view
     setupV4L2Checkbox();
     if (m_v4l2Checkbox) {
@@ -126,7 +240,6 @@ void AirPlayWindow::setupUI()
 
     // Video display
     m_videoLabel = new QLabel();
-    m_videoLabel->setMinimumSize(640, 480);
     m_videoLabel->setAlignment(Qt::AlignCenter);
     m_videoLabel->setScaledContents(false);
     streamingLayout->addWidget(m_videoLabel, 1);
@@ -151,7 +264,7 @@ void AirPlayWindow::setupTutorialVideo()
                                          QSizePolicy::Expanding);
 
     m_tutorialPlayer->setVideoOutput(m_tutorialVideoWidget);
-    m_tutorialPlayer->setSource(QUrl("qrc:/resources/airplayer-tutorial.mp4"));
+    m_tutorialPlayer->setSource(QUrl("qrc:/resources/airplay-tutorial.mp4"));
     m_tutorialVideoWidget->setAspectRatioMode(
         Qt::AspectRatioMode::KeepAspectRatioByExpanding);
     m_tutorialVideoWidget->setStyleSheet(
@@ -181,6 +294,7 @@ void AirPlayWindow::showTutorialView()
     m_stackedWidget->setCurrentWidget(m_tutorialWidget);
     if (m_tutorialPlayer) {
         m_tutorialPlayer->play();
+        m_loadingIndicator->start();
     }
 }
 
@@ -190,6 +304,23 @@ void AirPlayWindow::showStreamingView()
     m_stackedWidget->setCurrentWidget(m_streamingWidget);
     if (m_tutorialPlayer) {
         m_tutorialPlayer->pause();
+    }
+}
+
+void AirPlayWindow::showSettingsDialog()
+{
+    AirPlaySettingsDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        AirPlaySettings newSettings = dialog.getSettings();
+
+        // Save settings
+        SettingsManager::sharedInstance()->setAirplayFps(newSettings.fps);
+        SettingsManager::sharedInstance()->setAirplayNoHold(newSettings.noHold);
+       
+        QMessageBox::information(this, "Settings Saved",
+                                 "AirPlay will be restarted to apply the new "
+                                 "settings.");
+        ToolboxWidget::sharedInstance()->restartAirPlayWindow();
     }
 }
 
@@ -205,15 +336,21 @@ void AirPlayWindow::startAirPlayServer()
             &AirPlayWindow::updateVideoFrame);
     connect(m_serverThread, &AirPlayServerThread::clientConnectionChanged, this,
             &AirPlayWindow::onClientConnectionChanged);
+    connect(m_serverThread, &AirPlayServerThread::errorOccurred, this,
+            [this](const QString &message) {
+                QMessageBox::critical(this, "AirPlay Server Error", message);
+                close();
+            });
 
+    QStringList args = m_settings.toArgs();
+    m_serverThread->setArguments(args);
     m_serverThread->start();
 }
 
 void AirPlayWindow::stopAirPlayServer()
 {
     if (m_serverThread) {
-        m_serverThread->stopServer();
-        m_serverThread->wait(3000);
+        m_serverThread->quit();
         m_serverThread->deleteLater();
         m_serverThread = nullptr;
     }
@@ -223,8 +360,10 @@ void AirPlayWindow::stopAirPlayServer()
 void AirPlayWindow::updateVideoFrame(QByteArray frameData, int width,
                                      int height)
 {
-    if (frameData.size() != width * height * 3)
+    if (frameData.size() != width * height * 3) {
+        qDebug() << "Invalid frame data size";
         return;
+    }
 
 #ifdef __linux__
     // V4L2 output if enabled
@@ -254,10 +393,15 @@ void AirPlayWindow::onServerStatusChanged(bool running)
     if (running) {
         // Server started successfully, hide loading indicator and show tutorial
         // video
-        m_loadingLabel->setText("Waiting for device connection...");
+        m_loadingLabel->setText("Waiting for device connection");
 
         // Show tutorial video and instructions
         m_tutorialVideoWidget->setVisible(true);
+
+        // Show settings button when server is running but no client connected
+        m_settingsButton->setVisible(!m_clientConnected);
+
+        // Show tutorial video and instructions
         QLabel *instructionLabel = m_tutorialWidget->findChild<QLabel *>();
         if (instructionLabel && !instructionLabel->text().contains("Follow")) {
             // Find the instruction label (not title or loading label)
@@ -279,12 +423,17 @@ void AirPlayWindow::onServerStatusChanged(bool running)
 void AirPlayWindow::onClientConnectionChanged(bool connected)
 {
     m_clientConnected = connected;
+
+    // Hide settings button when client is connected
+    m_settingsButton->setVisible(!connected && m_serverRunning);
+
     if (connected) {
         m_loadingLabel->setText("Device connected - receiving stream...");
 
         showStreamingView();
     } else {
         m_loadingLabel->setText("Waiting for device connection...");
+        m_videoLabel->clear();
         showTutorialView();
     }
 }
@@ -340,57 +489,79 @@ AirPlayServerThread::AirPlayServerThread(QObject *parent)
 
 AirPlayServerThread::~AirPlayServerThread()
 {
-    stopServer();
+    uxplay_cleanup();
     wait();
 }
 
-void AirPlayServerThread::stopServer()
+void AirPlayServerThread::setArguments(const QStringList &args)
 {
     QMutexLocker locker(&m_mutex);
-    m_shouldStop = true;
-    m_waitCondition.wakeAll();
+
+    m_argData.clear();
+    m_argv.clear();
+
+    m_argData.append("uxplay");
+
+    // Add all arguments
+    for (const QString &arg : args) {
+        m_argData.append(arg.toUtf8());
+    }
+
+    // Build argv array with persistent pointers
+    for (QByteArray &data : m_argData) {
+        m_argv.append(data.data());
+    }
 }
 
 // Global pointer to current server thread for callbacks
 static AirPlayServerThread *g_currentServerThread = nullptr;
 
-// Static callback wrappers for C interface
-extern "C" void qt_video_callback(uint8_t *data, int width, int height)
+void frame_callback(const unsigned char *data, int width, int height,
+                    int stride, int format)
 {
-    if (g_currentServerThread) {
-        QByteArray frameData((const char *)data, width * height * 3);
-        emit g_currentServerThread->videoFrameReady(frameData, width, height);
-    }
+    if (!g_currentServerThread)
+        return;
+    QByteArray frameData((const char *)data, width * height * 3);
+    emit g_currentServerThread->videoFrameReady(frameData, width, height);
 }
 
-extern "C" void qt_connection_callback(bool connected)
+void connection_callback(bool connected)
 {
-    if (g_currentServerThread) {
-        emit g_currentServerThread->clientConnectionChanged(connected);
-    }
+    qDebug() << "Connection callback: "
+             << (connected ? "Connected" : "Disconnected");
+    if (!g_currentServerThread)
+        return;
+    emit g_currentServerThread->clientConnectionChanged(connected);
 }
 
 void AirPlayServerThread::run()
 {
     g_currentServerThread = this;
     emit statusChanged(true);
+    callbacks_t callbacks;
+    callbacks.frame_callback = frame_callback;
+    callbacks.connection_callback = connection_callback;
+    uxplay_callbacks = &callbacks;
 
-    // Create callbacks structure
-    video_renderer_qt_callbacks_t callbacks;
-    callbacks.video_callback = qt_video_callback;
-    callbacks.connection_callback = qt_connection_callback;
-
-    start_server_qt("iDescriptor", &callbacks);
-
-    // Wait efficiently until stopServer() is called
-    QMutexLocker locker(&m_mutex);
-    while (!m_shouldStop) {
-        m_waitCondition.wait(&m_mutex);
+    qDebug() << "Starting AirPlay server with arguments:" << m_argv.size();
+    for (int i = 0; i < m_argv.size(); ++i) {
+        qDebug() << "  argv[" << i << "] =" << m_argv[i];
     }
 
-    stop_server_qt();
+    try {
+        int res = init_uxplay(m_argv.size(), m_argv.data());
+        qDebug() << "AirPlay server exited with code: " << res;
+        if (res != 0) {
+            emit errorOccurred("AirPlay server exited unexpectedly.");
+        }
+    } catch (const std::exception &e) {
+        qDebug() << "Exception in AirPlay server thread: " << e.what();
+        emit errorOccurred(
+            QString("AirPlay server encountered an error: %1").arg(e.what()));
+    }
+
+    uxplay_callbacks = nullptr;
     g_currentServerThread = nullptr;
-    emit statusChanged(false);
 }
 
 #ifdef __linux__
@@ -511,6 +682,9 @@ bool AirPlayWindow::createV4L2Loopback()
 
 void AirPlayWindow::setupV4L2Checkbox()
 {
+    if (!SettingsManager::sharedInstance()->showV4L2())
+        return;
+
     try {
         m_v4l2Checkbox = new QCheckBox("Enable V4L2 Virtual Camera Output");
         m_v4l2Checkbox->setToolTip("Enable output to virtual camera device "

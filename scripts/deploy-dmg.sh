@@ -34,14 +34,22 @@ mkdir -p "${GST_PLUGIN_DIR}"
 PLUGINS=(
   "libgstapp"
   "libgstaudioconvert"
+  "libgstaudioresample"
   "libgstautodetect"
   "libgstavi"
   "libgstcoreelements"
+  "libgstimagefreeze"
+  "libgstjpeg"
   "libgstlevel"
   "libgstlibav"
   "libgstosxaudio"
   "libgstplayback"
+  "libgstvideobox"
+  "libgstvideofilter"
+  "libgstvideoparsersbad"
   "libgstvolume"
+  "libgstvideoconvertscale"
+  "libgstvideorate"
 )
 
 BREW_PREFIX="$(brew --prefix)"
@@ -74,6 +82,7 @@ GST_LIBS=(
   "libgsttag-1.0.0.dylib"
   "libgstriff-1.0.0.dylib"
   "libgstcodecparsers-1.0.0.dylib"
+  "libgstcodecs-1.0.0.dylib"
   "libgstrtp-1.0.0.dylib"
   "libgstsdp-1.0.0.dylib"
   "libglib-2.0.0.dylib"
@@ -89,7 +98,7 @@ for lib in "${GST_LIBS[@]}"; do
   if [ -f "${BREW_PREFIX}/lib/${lib}" ]; then
     cp "${BREW_PREFIX}/lib/${lib}" "${FRAMEWORKS_DIR}/"
     install_name_tool -id "@rpath/${lib}" "${FRAMEWORKS_DIR}/${lib}"
-    echo "✓ Copied and fixed ID for ${lib}"
+    echo "Fixed rpath for ${lib}"
   fi
 done
 
@@ -111,11 +120,21 @@ for lib_base in "${FFMPEG_LIBS[@]}"; do
     cp "$lib_path" "${FRAMEWORKS_DIR}/"
     #These maybe unneeded, macdeployqt already does this but just in case
     install_name_tool -id "@rpath/${lib_name}" "${FRAMEWORKS_DIR}/${lib_name}"
-    echo "Copied and fixed rpath for ${lib_name}"
+    echo "Fixed rpath for ${lib_name}"
   else
     echo "Warning: ${lib_base} library not found in ${FFMPEG_LIB_DIR}"
   fi
 done
+
+echo "Bundling iproxy..."
+IPROXY_PATH="$(which iproxy)"
+if [ -z "${IPROXY_PATH}" ]; then
+  echo "Error: iproxy not found in PATH"
+  exit 1
+fi
+
+cp "${IPROXY_PATH}" "${APP_PATH}/Contents/MacOS/"
+chmod +x "${APP_PATH}/Contents/MacOS/iproxy"
 
 macdeployqt "${APP_PATH}" -qmldir=qml -verbose=2
 

@@ -283,7 +283,7 @@ DeviceSidebarWidget::DeviceSidebarWidget(QWidget *parent)
 
     // Set minimum width
     setMinimumWidth(200);
-    setMaximumWidth(250);
+    setMaximumWidth(200);
 
     // Listen to AppContext selection changes
     connect(AppContext::sharedInstance(),

@@ -62,7 +62,7 @@ QUuid ExportManager::startExport(iDescriptorDevice *device,
                                  const QString &destinationPath,
                                  std::optional<afc_client_t> altAfc)
 {
-    if (!device || !device->mutex) {
+    if (!device) {
         qWarning() << "Invalid device provided to ExportManager";
         return QUuid();
     }
@@ -251,8 +251,8 @@ ExportResult ExportManager::exportSingleItem(iDescriptorDevice *device,
     }
 
     uint64_t modTimeNs = fileInfo["st_mtime"].getUInt();
-    // The timestamp from the device is in nanoseconds, convert to seconds
-    modificationTime = QDateTime::fromSecsSinceEpoch(modTimeNs / 1000000000);
+    // The timestamp from the device is in nanoseconds, convert to seconds (UTC)
+    modificationTime = QDateTime::fromSecsSinceEpoch(modTimeNs / 1000000000, Qt::UTC);
 
     valid = fileInfo["st_birthtime"].valid();
     if (!valid) {
@@ -263,7 +263,7 @@ ExportResult ExportManager::exportSingleItem(iDescriptorDevice *device,
         return result;
     }
     uint64_t birthTimeNs = fileInfo["st_birthtime"].getUInt();
-    birthTime = QDateTime::fromSecsSinceEpoch(birthTimeNs / 1000000000);
+    birthTime = QDateTime::fromSecsSinceEpoch(birthTimeNs / 1000000000, Qt::UTC);
 
     plist_free(info);
 
@@ -333,28 +333,24 @@ ExportResult ExportManager::exportSingleItem(iDescriptorDevice *device,
         }
     }
 
-    outputFile.close();
     ServiceManager::safeAfcFileClose(device, handle, altAfc);
 
-    // reopen is required for timestamps
-    QFile reopen(outputPath);
-    reopen.open(QIODevice::ReadOnly);
+    outputFile.flush();
     if (modificationTime.isValid()) {
-        if (!reopen.setFileTime(modificationTime,
-                                QFileDevice::FileModificationTime)) {
+        if (!outputFile.setFileTime(modificationTime, QFileDevice::FileModificationTime)) {
             qWarning() << "Could not set modification time for" << outputPath;
         }
     }
     if (birthTime.isValid()) {
-        // fails on linux
-        if (!reopen.setFileTime(birthTime, QFileDevice::FileBirthTime)) {
+        if (!outputFile.setFileTime(birthTime, QFileDevice::FileBirthTime)) {
             qWarning() << "Could not set birth time for" << outputPath;
         }
     }
+    outputFile.close();
 
     if (totalBytes == 0) {
         result.errorMessage = "No data read from device file";
-        outputFile.remove(); // Clean up empty file
+        QFile::remove(outputPath); // Clean up empty file
         return result;
     }
 

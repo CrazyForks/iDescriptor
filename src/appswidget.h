@@ -21,10 +21,12 @@
 #define APPSWIDGET_H
 
 #include "appstoremanager.h"
+#include "iDescriptor-ui.h"
 #include "qprocessindicator.h"
 #include <QAction>
 #include <QComboBox>
 #include <QDialog>
+#include <QEvent>
 #include <QFile>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -136,6 +138,19 @@ private:
     QJsonArray m_goldSponsors;
     QJsonArray m_silverSponsors;
     QJsonArray m_bronzeSponsors;
+    ZIcon m_searchIcon;
+
+protected:
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::PaletteChange) {
+            if (m_searchAction && !m_searchIcon.isNull()) {
+                m_searchAction->setIcon(
+                    m_searchIcon.getThemedPixmap(QSize(16, 16), palette()));
+            }
+        }
+        QWidget::changeEvent(event);
+    }
 };
 
 #endif // APPSWIDGET_H

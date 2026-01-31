@@ -154,7 +154,10 @@ void AppTabWidget::updateStyles()
                 "; border-radius: 10px; border: 1px solid " +
                 bgColor.lighter().name() + "; }";
     }
-    setStyleSheet(style);
+    // prevent infinite loop
+    if (style != styleSheet()) {
+        setStyleSheet(style);
+    }
 }
 
 InstalledAppsWidget::InstalledAppsWidget(iDescriptorDevice *device,
@@ -196,12 +199,6 @@ void InstalledAppsWidget::setupUI()
 
     // Start in loading state
     showLoadingState();
-
-    connect(qApp, &QApplication::paletteChanged, this, [this]() {
-        for (AppTabWidget *tab : m_appTabs) {
-            tab->updateStyles();
-        }
-    });
 }
 
 void InstalledAppsWidget::showLoadingState()
@@ -739,18 +736,6 @@ void InstalledAppsWidget::loadAppContainer(const QString &bundleId)
                 return result;
             }
 
-            QStringList files;
-            if (list) {
-                for (int i = 0; list[i]; i++) {
-                    QString fileName = QString::fromUtf8(list[i]);
-                    if (fileName != "." && fileName != "..") {
-                        qDebug() << "Found file:" << fileName;
-                        files.append(fileName);
-                    }
-                }
-                afc_dictionary_free(list);
-            }
-            result["files"] = files;
             result["afcClient"] =
                 QVariant::fromValue(reinterpret_cast<void *>(afcClient));
             result["houseArrestClient"] = QVariant::fromValue(
