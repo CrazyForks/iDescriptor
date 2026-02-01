@@ -70,7 +70,7 @@
   Open the `.dmg` and drag iDescriptor to Applications.
   <br/>
 
- After moving the app to Applications, run the code below
+After moving the app to Applications, run the code below
 <br/>
 
 ```shell
@@ -105,14 +105,28 @@ make sure to do "sudo pacman -Syu" otherwise it's not going to find libimobilede
     <img src="./resources/repo/crossplatform.png"><br/>
 </p>
 
+</br>
+</br>
+</br>
+
+## Good News!
+
+### iDescriptor v0.3.0 will feature **WIRELESS CONNECTION** support!
+
+Learn more about our roadmap [here](#roadmap).
+
+</br>
+</br>
+</br>
+
 ## Features
 
 ### Connection
 
-| Feature                     | Status               | Notes                                         |
-| --------------------------- | -------------------- | --------------------------------------------- |
-| USB Connection              | ✅ Implemented       | Fully supported on Windows, macOS, and Linux. |
-| Wireless Connection (Wi‑Fi) | ⚠️ To be implemented | -                                             |
+| Feature             | Status               | Notes                                                           |
+| ------------------- | -------------------- | --------------------------------------------------------------- |
+| USB Connection      | ✅ Implemented       | Fully supported on Windows, macOS, and Linux.                   |
+| Wireless Connection | ⚠️ Under Development | Currently under development, planned to be released in v0.3.0 |
 
 ### Tools
 
@@ -277,13 +291,26 @@ sudo udevadm trigger
 
 Contributions are welcome!
 
-You can check the source code in some places we have TODOs and FIXMEs that you can work on.
+We actively develop on dev branch, so please base your pull requests off of that branch.
 
-For example
+You can also send a pr to main branch but it should be something related to building, publish to some package manager or documentation.
 
-- [Photos.sqlite](https://github.com/iDescriptor/iDescriptor/blob/main/src/gallerywidget.cpp)
 
-Or if you'd like to introduce new features, feel free to open an issue or a pull request!
+## Roadmap
+
+**Planned Features for v0.3.0:**
+
+- Migrato idevice-rs `99% done`
+- Wireless Connection Support `DONE`
+- Install IPA files directly from the app
+- Virtual Location Support for iOS 17 and above
+- Complete iOS 26 Support
+- Migrate to UCRT for better performance and stability ``Windows``
+- New UI/UX improvements
+- Read gallery from Photos.sqlite (maybe delayed to v0.4.0)
+
+
+**You can always become a sponsor/donate to request/prioritize a feature or speed up the development process!**
 
 ## Damaged Error on macOS
 
