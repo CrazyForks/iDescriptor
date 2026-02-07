@@ -5,13 +5,13 @@ pkgs,
 
 pkgs.stdenv.mkDerivation rec {
   pname = "idescriptor";
-  version = "0.1.2";
+  version = "0.2.0";
 
   src = pkgs.fetchFromGitHub {
     owner = "iDescriptor";
     repo = "iDescriptor";
     rev = "v${version}";
-    hash = "sha256-pj/8PCZUTPu28MQd3zL8ceDsQy4+55348ZOCpiQaiEo=";
+    hash = "sha256-p6iJP4duesUiYEH8pgGgX5GOdaOhaAegPPphBaXU4VM=";
     fetchSubmodules = true;
   };
 
@@ -47,6 +47,9 @@ pkgs.stdenv.mkDerivation rec {
     pkg-config
     go
     qt6.wrapQtAppsHook
+    libimobiledevice
+    libirecovery
+    usbmuxd
     copyDesktopItems
   ];
 
@@ -57,21 +60,18 @@ pkgs.stdenv.mkDerivation rec {
     qt6.qtserialport
     qt6.qtpositioning
     qt6.qtlocation
+    qt6.qtwayland
     lxqt.qtermwidget
     qrencode
     libheif
     libde265
     x265
-    libirecovery
     libssh
     ffmpeg
     pugixml
     avahi
     avahi-compat
-    libimobiledevice
-    libirecovery
     libplist
-    usbmuxd
     libzip
     openssl
   ];
