@@ -268,7 +268,7 @@ You might get this pop-up on any platform this is because this app uses secure b
 - [libimobiledevice](https://libimobiledevice.org/)
 - [ipatool](https://github.com/majd/ipatool) - We use a modified version [here](https://github.com/uncor3/libipatool-go)
 - [QSimpleUpdater](https://github.com/alex-spataru/QSimpleUpdater) - We use a modified version [here](https://github.com/uncor3/ZUpdater)
-- [airplay](https://github.com/rcarmo/RPiPlay) - We use a modified version [here](https://github.com/uncor3/airplay)
+- [UxPlay (for AirPlay)](https://github.com/FDH2/UxPlay) - We use a modified version [here](https://github.com/iDescriptor/uxplay)
 
 ## Linux Udev Rules
 
