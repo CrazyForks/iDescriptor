@@ -50,7 +50,7 @@ public:
 
 signals:
     void deviceAdded(const NetworkDevice &device);
-    void deviceRemoved(const QString &deviceName);
+    void deviceRemoved(const QString &macAddress);
 
 private slots:
     void processDnssdEvents();

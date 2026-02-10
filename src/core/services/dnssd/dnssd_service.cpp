@@ -140,16 +140,16 @@ void DNSSD_API DnssdService::browseCallback(
             DNSServiceRefDeallocate(resolveRef);
         }
     } else {
-        qDebug() << "Apple device removed:" << serviceName;
-        emit service->deviceRemoved(QString::fromUtf8(serviceName));
+        QString macAddress = QString::fromUtf8(serviceName).split('@').first();
+        emit service->deviceRemoved(macAddress);
 
         // Remove from our list
         QMutexLocker locker(&service->m_devicesMutex);
         service->m_networkDevices.removeIf(
-            [serviceName](const NetworkDevice &dev) {
-                return dev.name == QString::fromUtf8(serviceName);
+            [macAddress](const NetworkDevice &dev) {
+                return dev.macAddress == macAddress;
             });
-        service->m_pendingDevices.remove(QString::fromUtf8(serviceName));
+        service->m_pendingDevices.remove(macAddress);
     }
 }
 

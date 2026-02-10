@@ -144,6 +144,7 @@ void AvahiService::browseCallback(AvahiServiceBrowser *browser,
     Q_UNUSED(flags)
 
     AvahiService *service = static_cast<AvahiService *>(userdata);
+    QString macAddress = QString::fromUtf8(name).split('@').first();
 
     switch (event) {
     case AVAHI_BROWSER_NEW:
@@ -157,14 +158,14 @@ void AvahiService::browseCallback(AvahiServiceBrowser *browser,
 
     case AVAHI_BROWSER_REMOVE:
         qDebug() << "Apple device removed:" << name;
-        emit service->deviceRemoved(QString::fromUtf8(name));
+        emit service->deviceRemoved(macAddress);
 
         // Remove from our list
         {
             QMutexLocker locker(&service->m_devicesMutex);
             service->m_networkDevices.removeIf(
-                [name](const NetworkDevice &dev) {
-                    return dev.name == QString::fromUtf8(name);
+                [macAddress](const NetworkDevice &dev) {
+                    return dev.macAddress == macAddress;
                 });
         }
         break;
