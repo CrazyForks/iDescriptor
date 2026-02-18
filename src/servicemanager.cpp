@@ -180,7 +180,7 @@ IdeviceFfiError *ServiceManager::mountImage(const iDescriptorDevice *device,
 void ServiceManager::getCableInfo(const iDescriptorDevice *device,
                                   plist_t &response)
 {
-    executeOperation<void>(
+    executeVoidOperation(
         device, [device, &response]() { _get_cable_info(device, response); });
 }
 

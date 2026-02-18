@@ -75,6 +75,7 @@ signals:
     // only fired on wireless devices when we have no pairing file for them
     void noPairingFileForWirelessDevice(const QString &macAddress);
     void initFailed(const QString &udid);
+    void initStarted(const QString &udid);
 
     void systemSleepStarting();
     void systemWakeup();

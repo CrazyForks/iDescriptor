@@ -72,9 +72,9 @@ void AppContext::cachePairedDevices()
         if (!fileData) {
             continue;
         }
-        plist_print(fileData);
         const std::string wifiMacAddress =
             PlistNavigator(fileData)["WiFiMACAddress"].getString();
+        // FIXME: free ?
         // plist_free(fileData);
         bool isCompatible = !wifiMacAddress.empty();
         // TODO: !important invalidate expired pairing files
@@ -98,13 +98,11 @@ void AppContext::cachePairedDevices()
     auto conn = UsbmuxdConnection::default_new(0);
     if (conn.is_err()) {
         qDebug() << "ERROR: Failed to connect to usbmuxd!";
-        // return 1;
     }
 
     auto devices = conn.unwrap().get_devices();
     if (devices.is_err()) {
         qDebug() << "ERROR: Failed to get device list!";
-        // return 1;
     }
 
     for (const auto &device : devices.unwrap()) {
@@ -142,11 +140,14 @@ void AppContext::cachePairedDevices()
                             if (mac_address) {
                                 qDebug() << "Adding to cache"
                                          << QString::fromUtf8(mac_address);
+                                QString path = QString::fromStdString(
+                                    "/var/db/lockdown/" + udid.unwrap() +
+                                    ".plist");
+                                SettingsManager::sharedInstance()
+                                    ->setIdeviceDefaultPairingFile(
+                                        QString::fromUtf8(mac_address), path);
                                 m_pairingFileCache[QString::fromUtf8(
-                                    mac_address)] =
-                                    QString::fromStdString("/var/db/lockdown/" +
-                                                           udid.unwrap() +
-                                                           ".plist");
+                                    mac_address)] = path;
                                 free(mac_address);
                             }
                         }
@@ -155,12 +156,6 @@ void AppContext::cachePairedDevices()
                     }
                     free(plist_data);
                 }
-                // qDebug() << "Wireless device UDID:"
-                //          << QString::fromStdString(udid.unwrap())
-                //          << "Pairing file retrieval"
-                //          << (error == nullptr
-                //                  ? "succeeded"
-                //                  : QString::fromStdString(error->message));
                 // Clean up
                 // idevice_pairing_file_free(pairing_file.unwrap().raw());
             }
@@ -172,6 +167,19 @@ void AppContext::cachePairedDevices()
             }
         }
     }
+
+    // sometimes macOS doesn't find the network iDevice even tho we can connect
+    // if we know the ip address
+    QMap<QString, QString> cachedPairingFiles =
+        SettingsManager::sharedInstance()->getAllIdeviceDefaultPairingFiles();
+
+    for (const QString &mac : cachedPairingFiles.keys()) {
+        const QString path = cachedPairingFiles.value(mac);
+        qDebug() << "Using pairing file for MAC:" << mac
+                 << "cached from settings";
+        m_pairingFileCache[mac] = path;
+    }
+
 #endif
 }
 
@@ -181,6 +189,7 @@ void AppContext::addDevice(QString udid,
                            QString ipAddress)
 {
 
+    emit initStarted(udid);
     try {
         // iDescriptorInitDeviceResult initResult;
         auto initResult = std::make_shared<iDescriptorInitDeviceResult>();

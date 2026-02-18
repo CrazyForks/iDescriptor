@@ -32,6 +32,7 @@
 #include <QLabel>
 #include <QPalette>
 #include <QPushButton>
+#include <QTimer>
 
 NetworkDeviceCard::NetworkDeviceCard(const NetworkDevice &device,
                                      QWidget *parent)
@@ -117,6 +118,25 @@ void NetworkDeviceCard::failed()
     });
 }
 
+void NetworkDeviceCard::noPairingFile()
+{
+    // TODO: add a button or hint to explain how to create a pairing file for
+    // this device
+    m_connectButton->setText("No pairing file");
+    m_connectButton->setEnabled(false);
+
+    QTimer::singleShot(5000, this, [this]() {
+        m_connectButton->setText("Connect");
+        m_connectButton->setEnabled(true);
+    });
+}
+
+void NetworkDeviceCard::initStarted()
+{
+    m_connectButton->setText("Connecting...");
+    m_connectButton->setEnabled(false);
+}
+
 NetworkDevicesToConnectWidget::NetworkDevicesToConnectWidget(QWidget *parent)
     : QWidget(parent)
 {
@@ -147,6 +167,8 @@ NetworkDevicesToConnectWidget::NetworkDevicesToConnectWidget(QWidget *parent)
             &NetworkDevicesToConnectWidget::onNoPairingFileForWirelessDevice);
     connect(AppContext::sharedInstance(), &AppContext::initFailed, this,
             &NetworkDevicesToConnectWidget::onDeviceInitFailed);
+    connect(AppContext::sharedInstance(), &AppContext::initStarted, this,
+            &NetworkDevicesToConnectWidget::onDeviceInitStarted);
 }
 
 NetworkDevicesToConnectWidget::~NetworkDevicesToConnectWidget()
@@ -284,7 +306,11 @@ void NetworkDevicesToConnectWidget::onWirelessDeviceRemoved(
 void NetworkDevicesToConnectWidget::onNoPairingFileForWirelessDevice(
     const QString &macAddress)
 {
-    // m_deviceCards.
+    NetworkDeviceCard *deviceCard = m_deviceCards[macAddress];
+    if (deviceCard) {
+        qDebug() << "Calling noPairingFile() on device card for" << macAddress;
+        deviceCard->noPairingFile();
+    }
 }
 
 // udid or mac address
@@ -294,5 +320,14 @@ void NetworkDevicesToConnectWidget::onDeviceInitFailed(const QString &udid)
     if (deviceCard) {
         qDebug() << "Calling failed() on device card for" << udid;
         deviceCard->failed();
+    }
+}
+
+void NetworkDevicesToConnectWidget::onDeviceInitStarted(const QString &udid)
+{
+    NetworkDeviceCard *deviceCard = m_deviceCards[udid];
+    if (deviceCard) {
+        qDebug() << "Calling initStarted() on device card for" << udid;
+        deviceCard->initStarted();
     }
 }

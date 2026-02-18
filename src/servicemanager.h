@@ -146,6 +146,31 @@ public:
         operation();
     }
 
+    static void
+    executeVoidOperation(const iDescriptorDevice *device,
+                         std::function<void()> operation,
+                         std::optional<AfcClientHandle *> altAfc = std::nullopt)
+    {
+        if (!device) {
+            return;
+        }
+
+        std::lock_guard<std::recursive_mutex> lock(device->mutex);
+
+        // Double-check device is still valid after acquiring lock
+        if (!device->afcClient) {
+            return;
+        }
+
+        if (altAfc && !*altAfc) {
+            // altAfc was explicitly provided but is null, which is an
+            // invalid state.
+            return;
+        }
+
+        operation();
+    }
+
     static IdeviceFfiError *executeAfcOperation(
         const iDescriptorDevice *device,
         std::function<IdeviceFfiError *(AfcFileHandle *handle)> operation,

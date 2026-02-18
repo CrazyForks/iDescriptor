@@ -443,3 +443,36 @@ void SettingsManager::setShowV4L2(bool show)
     m_settings->sync();
 }
 #endif
+
+/*
+    only needed on macOS because
+    we cannot read /var/db/lockdown without root perm
+    so caching must be implemented
+*/
+#ifdef __APPLE__
+void SettingsManager::setIdeviceDefaultPairingFile(const QString &macAddress,
+                                                   const QString &pairingFile)
+{
+    m_settings->setValue("_macos_idevice_" + macAddress, pairingFile);
+    m_settings->sync();
+}
+
+QString
+SettingsManager::getIdeviceDefaultPairingFile(const QString &macAddress) const
+{
+    return m_settings->value("_macos_idevice_" + macAddress, "").toString();
+}
+
+QMap<QString, QString> SettingsManager::getAllIdeviceDefaultPairingFiles() const
+{
+    QMap<QString, QString> macAddresses;
+    QStringList allKeys = m_settings->allKeys();
+    for (const QString &key : allKeys) {
+        if (key.startsWith("_macos_idevice_")) {
+            QString macAddress = key.mid(QString("_macos_idevice_").length());
+            macAddresses[macAddress] = m_settings->value(key, "").toString();
+        }
+    }
+    return macAddresses;
+}
+#endif

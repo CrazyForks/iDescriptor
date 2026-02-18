@@ -20,6 +20,8 @@
 #ifndef NETWORKDEVICESTOCONNECTWIDGET_H
 #define NETWORKDEVICESTOCONNECTWIDGET_H
 
+#include "iDescriptor-ui.h"
+
 #ifdef __linux__
 #include "core/services/avahi/avahi_service.h"
 #else
@@ -45,6 +47,8 @@ private:
 
 public:
     void failed();
+    void noPairingFile();
+    void initStarted();
 };
 
 class NetworkDevicesToConnectWidget : public QWidget
@@ -60,6 +64,7 @@ private slots:
     void onWirelessDeviceRemoved(const QString &deviceName);
     void onNoPairingFileForWirelessDevice(const QString &macAddress);
     void onDeviceInitFailed(const QString &udid);
+    void onDeviceInitStarted(const QString &udid);
 
 private:
     void setupUI();

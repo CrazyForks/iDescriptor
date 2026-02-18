@@ -119,6 +119,14 @@ public:
     bool showV4L2() const;
     void setShowV4L2(bool show);
 #endif
+
+#ifdef __APPLE__
+    void setIdeviceDefaultPairingFile(const QString &macAddress,
+                                      const QString &pairingFile);
+    QString getIdeviceDefaultPairingFile(const QString &macAddress) const;
+    QMap<QString, QString> getAllIdeviceDefaultPairingFiles() const;
+#endif
+
 signals:
     void favoritePlacesChanged();
     void recentLocationsChanged();
