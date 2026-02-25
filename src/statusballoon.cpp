@@ -203,10 +203,11 @@ void StatusBalloon::connectExportThreadSignals()
     connect(exportManager->m_exportThread,
             &ExportManagerThread::fileTransferProgress, this,
             &StatusBalloon::onFileTransferProgress);
-    QTimer::singleShot(3000, this, [this]() {
-        // test
-        startExportProcess("Test Export Process", 10, "/path/to/destination");
-    });
+    // QTimer::singleShot(3000, this, [this]() {
+    //     // test
+    //     startExportProcess("Test Export Process", 10,
+    //     "/path/to/destination");
+    // });
 }
 
 void StatusBalloon::onFileTransferProgress(const QUuid &processId,
