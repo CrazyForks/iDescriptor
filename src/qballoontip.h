@@ -10,15 +10,12 @@ class QBalloonTip : public QWidget
 {
     Q_OBJECT
 public:
-    explicit QBalloonTip(const QIcon &icon, const QString &title,
-                         const QString &msg, QWidget *widget);
+    explicit QBalloonTip(QWidget *widget);
     void hideBalloon();
     bool isBalloonVisible();
     void updateBalloonPosition(const QPoint &pos);
-    void showBalloon(const QIcon &icon, const QString &title,
-                     const QString &msg, QWidget *widget, const QPoint &pos,
-                     int timeout, bool showArrow = true);
-    void balloon(const QPoint &, int, bool);
+    void toggleBaloon(const QPoint &pos, int timeout, bool forceVisible);
+    void balloon(const QPoint &, int msecs);
 
 signals:
     void messageClicked();
@@ -34,8 +31,7 @@ protected:
 
 private:
     QWidget *widget;
-    QPixmap pixmap;
     QBasicTimer timer;
-    bool showArrow;
+    bool m_visible = false;
 };
 #endif // QBALLOONTIP_H

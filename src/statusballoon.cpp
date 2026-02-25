@@ -30,290 +30,18 @@
 #include "platform/windows/win_common.h"
 #endif
 
-Process::Process(QWidget *parent) : QWidget(parent) {}
-
-StatusBalloon *StatusBalloon::sharedInstance()
+BalloonProcess::BalloonProcess(ProcessItem *item, QWidget *parent)
+    : QWidget(parent), m_item(item)
 {
-    static StatusBalloon instance;
-    return &instance;
-}
-
-StatusBalloon::StatusBalloon(QWidget *parent)
-    : QBalloonTip(QIcon(), "", "", parent)
-{
-    setMinimumHeight(300);
-    setMinimumWidth(300);
-#ifdef WIN32
-    // FIXME: doesnt work the second time we call it
-    enableAcrylic((HWND)winId());
-#endif
-    // Create main layout
-    m_mainLayout = new QVBoxLayout();
-    m_mainLayout->setSpacing(8);
-    m_mainLayout->setContentsMargins(12, 12, 12, 12);
-
-    // Header label
-    m_headerLabel = new QLabel("Processes");
-    QFont headerFont = m_headerLabel->font();
-    headerFont.setPointSize(headerFont.pointSize() + 2);
-    headerFont.setBold(true);
-    m_headerLabel->setFont(headerFont);
-    m_mainLayout->addWidget(m_headerLabel);
-
-    // Container for processes
-    m_processesContainer = new QWidget();
-    m_processesLayout = new QVBoxLayout(m_processesContainer);
-    m_processesLayout->setSpacing(12);
-    m_processesLayout->setContentsMargins(0, 0, 0, 0);
-    m_mainLayout->addWidget(m_processesContainer);
-
-    setLayout(m_mainLayout);
-    connect(m_button, &ZIconWidget::clicked, this, &StatusBalloon::showBalloon);
-    connectExportThreadSignals();
-}
-
-void StatusBalloon::connectExportThreadSignals()
-{
-    ExportManager *exportManager = ExportManager::sharedInstance();
-
-    connect(exportManager->m_exportThread, &ExportManagerThread::exportFinished,
-            this, &StatusBalloon::onExportFinished);
-
-    connect(exportManager->m_exportThread, &ExportManagerThread::itemExported,
-            this, &StatusBalloon::onItemExported);
-
-    connect(exportManager->m_exportThread,
-            &ExportManagerThread::fileTransferProgress, this,
-            &StatusBalloon::onFileTransferProgress);
-    // QTimer::singleShot(0, this, [this]() {
-    //     // test
-    //     startExportProcess("Test Export Process", 10,
-    //     "/path/to/destination");
-    // });
-}
-
-void StatusBalloon::onFileTransferProgress(const QUuid &processId,
-                                           int currentItem,
-                                           const QString &currentFile,
-                                           qint64 bytesTransferred,
-                                           qint64 totalBytes)
-{
-    qDebug() << "StatusBalloon::updateProcessProgress entry:" << processId
-             << currentItem << currentFile << bytesTransferred << totalBytes;
-    QMutexLocker locker(&m_processesMutex);
-
-    if (!m_processes.contains(processId)) {
-        qDebug() << "StatusBalloon::updateProcessProgress: unknown processId"
-                 << processId;
-        return;
-    }
-
-    ProcessItem *item = m_processes[processId];
-    item->completedItems = currentItem;
-    item->currentFile = currentFile;
-    item->transferredBytes = bytesTransferred;
-    item->totalBytes = totalBytes;
-
-    if (!item->processWidget)
-        qDebug()
-            << "StatusBalloon::updateProcessProgress: no widget for processId"
-            << processId;
-
-    // Update status label
-    QString statusText;
-    if (item->status == ProcessStatus::Running) {
-        if (!item->currentFile.isEmpty()) {
-            statusText = item->currentFile;
-        } else {
-            statusText = "Processing...";
-        }
-    } else if (item->status == ProcessStatus::Completed) {
-        statusText = "Completed successfully";
-    } else if (item->status == ProcessStatus::Failed) {
-        statusText = "Failed";
-    } else if (item->status == ProcessStatus::Cancelled) {
-        statusText = "Cancelled";
-    }
-    item->statusLabel->setText(statusText);
-
-    // Update progress bar
-    // progess should be based on exported bytes vs total bytes of the current
-    // file
-    if (item->totalItems > 0) {
-        int progress = (item->transferredBytes * 100) / item->totalBytes;
-        item->progressBar->setValue(progress);
-    }
-
-    // Update stats
-    QString statsText = QString("%1 of %2 items")
-                            .arg(item->completedItems)
-                            .arg(item->totalItems);
-    if (item->failedItems > 0) {
-        statsText += QString(" • %1 failed").arg(item->failedItems);
-    }
-
-    if (item->status == ProcessStatus::Running && item->transferredBytes > 0) {
-        // Calculate transfer rate
-        QDateTime now = QDateTime::currentDateTime();
-        qint64 elapsed = m_lastUpdateTime[item->processId].msecsTo(now);
-        if (elapsed > 0) {
-            qint64 bytesDiff = item->transferredBytes -
-                               m_lastBytesTransferred[item->processId];
-            qint64 bytesPerSecond = (bytesDiff * 1000) / elapsed;
-            if (bytesPerSecond > 0) {
-                statsText += " • " + formatTransferRate(bytesPerSecond);
-            }
-            m_lastBytesTransferred[item->processId] = item->transferredBytes;
-            m_lastUpdateTime[item->processId] = now;
-        }
-    }
-
-    item->statsLabel->setText(statsText);
-
-    // Update buttons
-    if (item->status == ProcessStatus::Running) {
-        item->cancelButton->setVisible(true);
-        item->actionButton->setVisible(false);
-    } else {
-        item->cancelButton->setVisible(false);
-        if (item->type == ProcessType::Export &&
-            item->status == ProcessStatus::Completed) {
-            item->actionButton->setVisible(true);
-        }
-    }
-}
-
-// todo fix these
-// StatusBalloon::onItemExported entry:
-// QUuid("{9bd97848-cb52-4ef8-93c1-a1d1c285e6a3}") Success: true
-// StatusBalloon::onItemExported: unknown processId
-// QUuid("{9bd97848-cb52-4ef8-93c1-a1d1c285e6a3}")
-// StatusBalloon::onExportFinished entry:
-// QUuid("{9bd97848-cb52-4ef8-93c1-a1d1c285e6a3}") WasCancelled: false
-// StatusBalloon::onExportFinished: unknown processId
-// QUuid("{9bd97848-cb52-4ef8-93c1-a1d1c285e6a3}")
-
-void StatusBalloon::onExportFinished(const QUuid &processId,
-                                     const ExportJobSummary &summary)
-{
-    qDebug() << "StatusBalloon::onExportFinished entry:" << processId
-             << "WasCancelled:" << summary.wasCancelled;
-    QMutexLocker locker(&m_processesMutex);
-    if (!m_processes.contains(processId)) {
-        qDebug() << "StatusBalloon::onExportFinished: unknown processId"
-                 << processId;
-        return;
-    }
-
-    // todo: handle failed ?
-    ProcessItem *item = m_processes[processId];
-    if (summary.wasCancelled) {
-        item->status = ProcessStatus::Cancelled;
-    } else {
-        item->status = ProcessStatus::Completed;
-    }
-    item->endTime = QDateTime::currentDateTime();
-
-    updateUI();
-}
-
-void StatusBalloon::onItemExported(const QUuid &processId,
-                                   const ExportResult &result)
-{
-    qDebug() << "StatusBalloon::onItemExported entry:" << processId
-             << "Success:" << result.success;
-    QMutexLocker locker(&m_processesMutex);
-
-    if (!m_processes.contains(processId)) {
-        qDebug() << "StatusBalloon::onItemExported: unknown processId"
-                 << processId;
-        return;
-    }
-
-    ProcessItem *item = m_processes[processId];
-    if (result.success) {
-        item->completedItems += 1;
-    } else {
-        item->failedItems += 1;
-    }
-
-    updateUI();
-}
-
-QUuid StatusBalloon::startExportProcess(const QString &title, int totalItems,
-                                        const QString &destinationPath)
-{
-    qDebug() << "StatusBalloon::startExportProcess entry:" << title
-             << totalItems << destinationPath;
-
-    // allocate item first so it can be used after unlocking
-    auto *item = new ProcessItem();
-    item->processId = QUuid::createUuid();
-    item->type = ProcessType::Export;
-    item->status = ProcessStatus::Running;
-    item->title = title;
-    item->totalItems = totalItems;
-    item->completedItems = 0;
-    item->failedItems = 0;
-    item->totalBytes = 0;
-    item->transferredBytes = 0;
-    item->startTime = QDateTime::currentDateTime();
-    item->destinationPath = destinationPath;
-
-    { // scope the lock only for shared-state mutation
-        QMutexLocker locker(&m_processesMutex);
-        m_processes[item->processId] = item;
-        m_currentProcessId = item->processId;
-        m_lastBytesTransferred[item->processId] = 0;
-        m_lastUpdateTime[item->processId] = QDateTime::currentDateTime();
-    } // mutex released here
-
-    // UI work must run without holding m_processesMutex to avoid re-locking
-    // deadlock
-    createProcessWidget(item);
-    updateUI();
-
-    return item->processId;
-}
-
-QUuid StatusBalloon::startUploadProcess(const QString &title, int totalItems)
-{
-    // allocate item first
-    auto *item = new ProcessItem();
-    item->processId = QUuid::createUuid();
-    item->type = ProcessType::Upload;
-    item->status = ProcessStatus::Running;
-    item->title = title;
-    item->totalItems = totalItems;
-    item->completedItems = 0;
-    item->failedItems = 0;
-    item->totalBytes = 0;
-    item->transferredBytes = 0;
-    item->startTime = QDateTime::currentDateTime();
-
-    { // scope the lock only for shared-state mutation
-        QMutexLocker locker(&m_processesMutex);
-        m_processes[item->processId] = item;
-        m_currentProcessId = item->processId;
-        m_lastBytesTransferred[item->processId] = 0;
-        m_lastUpdateTime[item->processId] = QDateTime::currentDateTime();
-    } // mutex released here
-
-    createProcessWidget(item);
-    updateUI();
-
-    return item->processId;
-}
-
-void StatusBalloon::createProcessWidget(ProcessItem *item)
-{
-    item->processWidget = new QWidget();
-    auto *layout = new QVBoxLayout(item->processWidget);
+    auto *layout = new QVBoxLayout(this);
     layout->setSpacing(6);
     layout->setContentsMargins(0, 0, 0, 0);
 
+    m_lastBytesTransferred = 0;
+    m_lastUpdateTime = QDateTime::currentDateTime();
+
     // Title
-    item->titleLabel = new QLabel(item->title);
+    item->titleLabel = new QLabel(m_item->title);
     QFont titleFont = item->titleLabel->font();
     titleFont.setBold(true);
     item->titleLabel->setFont(titleFont);
@@ -347,7 +75,8 @@ void StatusBalloon::createProcessWidget(ProcessItem *item)
     item->actionButton->setVisible(false);
     if (item->type == ProcessType::Export) {
         item->actionButton->setText("Open Folder");
-        connect(item->actionButton, &QPushButton::clicked, this,
+        connect(item->actionButton, &QPushButton::clicked,
+                StatusBalloon::sharedInstance(),
                 &StatusBalloon::onOpenFolderClicked);
     }
     buttonsLayout->addWidget(item->actionButton);
@@ -356,85 +85,263 @@ void StatusBalloon::createProcessWidget(ProcessItem *item)
 
     // Cancel button
     item->cancelButton = new QPushButton("Cancel");
-    connect(item->cancelButton, &QPushButton::clicked, this,
-            &StatusBalloon::onCancelClicked);
+    connect(item->cancelButton, &QPushButton::clicked,
+            StatusBalloon::sharedInstance(), &StatusBalloon::onCancelClicked);
     buttonsLayout->addWidget(item->cancelButton);
 
     layout->addLayout(buttonsLayout);
-
-    m_processesLayout->addWidget(item->processWidget);
 }
 
-void StatusBalloon::markProcessCompleted(const QUuid &processId)
+void BalloonProcess::setProgress(int progress)
 {
-    QMutexLocker locker(&m_processesMutex);
+    m_item->progressBar->setValue(progress);
+}
 
-    if (!m_processes.contains(processId)) {
-        return;
+void BalloonProcess::updateStats()
+{
+    QString statsText = QString("%1 of %2 items")
+                            .arg(m_item->completedItems)
+                            .arg(m_item->totalItems);
+    if (m_item->failedItems > 0) {
+        statsText += QString(" • %1 failed").arg(m_item->failedItems);
     }
 
-    ProcessItem *item = m_processes[processId];
-    item->status = ProcessStatus::Completed;
-    item->endTime = QDateTime::currentDateTime();
+    if (m_item->status == ProcessStatus::Running &&
+        m_item->transferredBytes > 0) {
+        // Calculate transfer rate
+        QDateTime now = QDateTime::currentDateTime();
+        qint64 elapsed = m_lastUpdateTime.msecsTo(now);
+        if (elapsed > 0) {
+            qint64 bytesDiff =
+                m_item->transferredBytes - m_lastBytesTransferred;
+            qint64 bytesPerSecond = (bytesDiff * 1000) / elapsed;
+            if (bytesPerSecond > 0) {
+                statsText += " • " + formatTransferRate(bytesPerSecond);
+            }
+            m_lastBytesTransferred = m_item->transferredBytes;
+            m_lastUpdateTime = now;
+        }
+    }
 
-    updateUI();
+    m_item->statsLabel->setText(statsText);
+}
 
-    // Check if all processes are done
-    bool allDone = true;
-    for (auto *proc : m_processes) {
-        if (proc->status == ProcessStatus::Running) {
-            allDone = false;
-            break;
+void BalloonProcess::updateButtons()
+{
+    // Update buttons
+    if (m_item->status == ProcessStatus::Running) {
+        m_item->cancelButton->setVisible(true);
+        m_item->actionButton->setVisible(false);
+    } else {
+        m_item->cancelButton->setVisible(false);
+        if (m_item->type == ProcessType::Export &&
+            m_item->status == ProcessStatus::Completed) {
+            m_item->actionButton->setVisible(true);
         }
     }
 }
 
-void StatusBalloon::markProcessFailed(const QUuid &processId,
-                                      const QString &error)
+StatusBalloon *StatusBalloon::sharedInstance()
 {
-    QMutexLocker locker(&m_processesMutex);
+    static StatusBalloon instance;
+    return &instance;
+}
+
+StatusBalloon::StatusBalloon(QWidget *parent) : QBalloonTip(parent)
+{
+    setMinimumHeight(300);
+    setMinimumWidth(300);
+#ifdef WIN32
+    // FIXME: doesnt work the second time we call it
+    enableAcrylic((HWND)winId());
+#endif
+    // Create main layout
+    m_mainLayout = new QVBoxLayout();
+    m_mainLayout->setSpacing(8);
+    m_mainLayout->setContentsMargins(0, 0, 0, 0);
+
+    // Header label
+    m_headerLabel = new QLabel("Processes");
+    QFont headerFont = m_headerLabel->font();
+    headerFont.setPointSize(headerFont.pointSize() + 2);
+    headerFont.setBold(true);
+    m_headerLabel->setFont(headerFont);
+    m_mainLayout->addWidget(m_headerLabel);
+
+    // Container for processes
+    m_processesContainer = new QWidget();
+    m_processesLayout = new QVBoxLayout(m_processesContainer);
+
+    QScrollArea *scrollArea = new QScrollArea();
+    scrollArea->setWidget(m_processesContainer);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea->setStyleSheet(
+        "QScrollArea { background: transparent; border: none; }");
+    scrollArea->viewport()->setStyleSheet("background: transparent;");
+
+    m_processesLayout->setSpacing(12);
+    m_processesLayout->setContentsMargins(5, 5, 5, 5);
+    m_mainLayout->addWidget(scrollArea);
+
+    setLayout(m_mainLayout);
+    connect(m_button, &ZIconWidget::clicked, this, &StatusBalloon::handleShow);
+    connectExportThreadSignals();
+}
+
+void StatusBalloon::connectExportThreadSignals()
+{
+    ExportManager *exportManager = ExportManager::sharedInstance();
+
+    connect(exportManager->m_exportThread, &ExportManagerThread::exportFinished,
+            this, &StatusBalloon::onExportFinished);
+
+    connect(exportManager->m_exportThread, &ExportManagerThread::itemExported,
+            this, &StatusBalloon::onItemExported);
+
+    connect(exportManager->m_exportThread,
+            &ExportManagerThread::fileTransferProgress, this,
+            &StatusBalloon::onFileTransferProgress);
+    QTimer::singleShot(3000, this, [this]() {
+        // test
+        startExportProcess("Test Export Process", 10, "/path/to/destination");
+    });
+}
+
+void StatusBalloon::onFileTransferProgress(const QUuid &processId,
+                                           int currentItem,
+                                           const QString &currentFile,
+                                           qint64 bytesTransferred,
+                                           qint64 totalBytes)
+{
+    qDebug() << "StatusBalloon::updateProcessProgress";
+    // QMutexLocker locker(&m_processesMutex);
 
     if (!m_processes.contains(processId)) {
+        qDebug() << "StatusBalloon::updateProcessProgress: unknown processId"
+                 << processId;
         return;
     }
 
     ProcessItem *item = m_processes[processId];
-    item->status = ProcessStatus::Failed;
-    item->endTime = QDateTime::currentDateTime();
+    item->completedItems = currentItem;
+    item->currentFile = currentFile;
+    item->transferredBytes = bytesTransferred;
+    item->totalBytes = totalBytes;
 
-    updateUI();
+    if (!item->processWidget) {
+        qDebug()
+            << "StatusBalloon::updateProcessProgress: no widget for processId"
+            << processId;
+        return;
+    }
+
+    handleJobUpdate(item);
 }
 
-void StatusBalloon::markProcessCancelled(const QUuid &processId)
+void StatusBalloon::onExportFinished(const QUuid &processId,
+                                     const ExportJobSummary &summary)
 {
+    qDebug() << "StatusBalloon::onExportFinished entry:" << processId
+             << "WasCancelled:" << summary.wasCancelled;
+    QMutexLocker locker(&m_processesMutex);
+    if (!m_processes.contains(processId)) {
+        qDebug() << "StatusBalloon::onExportFinished: unknown processId"
+                 << processId;
+        return;
+    }
+
+    // todo: handle failed ?
+    ProcessItem *item = m_processes[processId];
+    if (summary.wasCancelled) {
+        item->status = ProcessStatus::Cancelled;
+    } else {
+        item->status = ProcessStatus::Completed;
+    }
+    item->endTime = QDateTime::currentDateTime();
+
+    updateHeader();
+}
+
+void StatusBalloon::onItemExported(const QUuid &processId,
+                                   const ExportResult &result)
+{
+    qDebug() << "StatusBalloon::onItemExported entry:" << processId
+             << "Success:" << result.success;
     QMutexLocker locker(&m_processesMutex);
 
     if (!m_processes.contains(processId)) {
+        qDebug() << "StatusBalloon::onItemExported: unknown processId"
+                 << processId;
         return;
     }
 
     ProcessItem *item = m_processes[processId];
-    item->status = ProcessStatus::Cancelled;
-    item->endTime = QDateTime::currentDateTime();
-
-    updateUI();
-}
-
-void StatusBalloon::incrementFailedItems(const QUuid &processId)
-{
-    QMutexLocker locker(&m_processesMutex);
-
-    if (!m_processes.contains(processId)) {
-        return;
+    if (result.success) {
+        item->completedItems += 1;
+    } else {
+        item->failedItems += 1;
     }
 
-    m_processes[processId]->failedItems++;
-    updateUI();
+    if (item->completedItems + item->failedItems == item->totalItems) {
+        // meaning all items are processed, but we don't know if the overall
+        // status is
+        if (item->failedItems > 0) {
+            item->status = ProcessStatus::Failed;
+        } else {
+            item->status = ProcessStatus::Completed;
+        }
+    }
+    handleJobUpdate(item);
+    updateHeader();
 }
 
-void StatusBalloon::updateUI()
+QUuid StatusBalloon::startExportProcess(const QString &title, int totalItems,
+                                        const QString &destinationPath)
 {
-    QMutexLocker locker(&m_processesMutex);
+    qDebug() << "StatusBalloon::startExportProcess entry:" << title
+             << totalItems << destinationPath;
+
+    handleShow(); // ensure balloon is visible when process starts
+
+    auto *item = new ProcessItem();
+    item->processId = QUuid::createUuid();
+    item->type = ProcessType::Export;
+    item->status = ProcessStatus::Running;
+    item->title = title;
+    item->totalItems = totalItems;
+    item->completedItems = 0;
+    item->failedItems = 0;
+    item->totalBytes = 0;
+    item->transferredBytes = 0;
+    item->startTime = QDateTime::currentDateTime();
+    item->destinationPath = destinationPath;
+
+    { // scope the lock only for shared-state mutation
+        QMutexLocker locker(&m_processesMutex);
+        m_processes[item->processId] = item;
+        m_currentProcessId = item->processId;
+    } // mutex released here
+
+    // UI work must run without holding m_processesMutex to avoid re-locking
+    // deadlock
+    createProcessWidget(item);
+    updateHeader();
+
+    return item->processId;
+}
+
+void StatusBalloon::createProcessWidget(ProcessItem *item)
+{
+    BalloonProcess *processWidget = new BalloonProcess(item);
+    item->processWidget = processWidget;
+    m_processesLayout->addWidget(item->processWidget);
+}
+
+void StatusBalloon::updateHeader()
+{
+    // QMutexLocker locker(&m_processesMutex);
 
     // Update header
     int running = 0, completed = 0, failed = 0;
@@ -455,86 +362,14 @@ void StatusBalloon::updateUI()
         }
     }
     m_headerLabel->setText(headerText);
-
-    // Update each process widget
-    for (auto *item : m_processes) {
-        if (!item->processWidget)
-            continue;
-
-        // Update status label
-        QString statusText;
-        if (item->status == ProcessStatus::Running) {
-            if (!item->currentFile.isEmpty()) {
-                statusText = item->currentFile;
-            } else {
-                statusText = "Processing...";
-            }
-        } else if (item->status == ProcessStatus::Completed) {
-            statusText = "Completed successfully";
-        } else if (item->status == ProcessStatus::Failed) {
-            statusText = "Failed";
-        } else if (item->status == ProcessStatus::Cancelled) {
-            statusText = "Cancelled";
-        }
-        item->statusLabel->setText(statusText);
-
-        // Update progress bar
-        if (item->totalItems > 0) {
-            int progress = (item->completedItems * 100) / item->totalItems;
-            item->progressBar->setValue(progress);
-        }
-
-        // Update stats
-        QString statsText = QString("%1 of %2 items")
-                                .arg(item->completedItems)
-                                .arg(item->totalItems);
-        if (item->failedItems > 0) {
-            statsText += QString(" • %1 failed").arg(item->failedItems);
-        }
-
-        if (item->status == ProcessStatus::Running &&
-            item->transferredBytes > 0) {
-            // Calculate transfer rate
-            QDateTime now = QDateTime::currentDateTime();
-            qint64 elapsed = m_lastUpdateTime[item->processId].msecsTo(now);
-            if (elapsed > 0) {
-                qint64 bytesDiff = item->transferredBytes -
-                                   m_lastBytesTransferred[item->processId];
-                qint64 bytesPerSecond = (bytesDiff * 1000) / elapsed;
-                if (bytesPerSecond > 0) {
-                    statsText += " • " + formatTransferRate(bytesPerSecond);
-                }
-                m_lastBytesTransferred[item->processId] =
-                    item->transferredBytes;
-                m_lastUpdateTime[item->processId] = now;
-            }
-        }
-
-        item->statsLabel->setText(statsText);
-
-        // Update buttons
-        if (item->status == ProcessStatus::Running) {
-            item->cancelButton->setVisible(true);
-            item->actionButton->setVisible(false);
-        } else {
-            item->cancelButton->setVisible(false);
-            if (item->type == ProcessType::Export &&
-                item->status == ProcessStatus::Completed) {
-                item->actionButton->setVisible(true);
-            }
-        }
-    }
-
-    showBalloon();
 }
 
-void StatusBalloon::showBalloon()
+void StatusBalloon::handleShow(bool forceVisible)
 {
-    qDebug() << "StatusBalloon::showBalloon" << sender();
     QPoint pos = m_button->mapToGlobal(
         QPoint(m_button->width() / 2, m_button->height()));
 
-    balloon(pos, -1, true);
+    toggleBaloon(pos, -1, forceVisible);
 }
 
 bool StatusBalloon::isProcessRunning(const QUuid &processId) const
@@ -602,31 +437,6 @@ void StatusBalloon::onOpenFolderClicked()
     }
 }
 
-QString StatusBalloon::formatFileSize(qint64 bytes) const
-{
-    const qint64 KB = 1024;
-    const qint64 MB = KB * 1024;
-    const qint64 GB = MB * 1024;
-
-    if (bytes >= GB) {
-        return QString("%1 GB").arg(
-            QString::number(bytes / double(GB), 'f', 2));
-    } else if (bytes >= MB) {
-        return QString("%1 MB").arg(
-            QString::number(bytes / double(MB), 'f', 1));
-    } else if (bytes >= KB) {
-        return QString("%1 KB").arg(
-            QString::number(bytes / double(KB), 'f', 0));
-    } else {
-        return QString("%1 B").arg(bytes);
-    }
-}
-
-QString StatusBalloon::formatTransferRate(qint64 bytesPerSecond) const
-{
-    return formatFileSize(bytesPerSecond) + "/s";
-}
-
 void StatusBalloon::removeProcessWidget(const QUuid &processId)
 {
     QMutexLocker locker(&m_processesMutex);
@@ -649,4 +459,35 @@ void StatusBalloon::removeProcessWidget(const QUuid &processId)
     }
 }
 
-ZIconWidget *StatusBalloon::getButton() { return m_button; }
+void StatusBalloon::handleJobUpdate(ProcessItem *item)
+{
+    // QMutexLocker locker(&m_processesMutex);
+
+    // Update status label
+    QString statusText;
+    if (item->status == ProcessStatus::Running) {
+        if (!item->currentFile.isEmpty()) {
+            statusText = item->currentFile;
+        } else {
+            statusText = "Processing...";
+        }
+    } else if (item->status == ProcessStatus::Completed) {
+        statusText = "Completed successfully";
+    } else if (item->status == ProcessStatus::Failed) {
+        statusText = "Failed";
+    } else if (item->status == ProcessStatus::Cancelled) {
+        statusText = "Cancelled";
+    }
+    item->statusLabel->setText(statusText);
+
+    // Update progress bar
+    // progess should be based on exported bytes vs total bytes of the current
+    // file
+    if (item->totalItems > 0) {
+        int progress = (item->transferredBytes * 100) / item->totalBytes;
+        item->processWidget->setProgress(progress);
+    }
+
+    item->processWidget->updateStats();
+    item->processWidget->updateButtons();
+}

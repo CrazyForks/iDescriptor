@@ -16,6 +16,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <atomic>
+class BalloonProcess;
 
 enum class ProcessType { Export, Upload };
 
@@ -35,7 +36,7 @@ struct ProcessItem {
     QDateTime startTime;
     QDateTime endTime;
     QString destinationPath; // For export
-    QWidget *processWidget;
+    BalloonProcess *processWidget;
     QLabel *titleLabel;
     QLabel *statusLabel;
     QLabel *statsLabel;
@@ -45,11 +46,21 @@ struct ProcessItem {
     std::atomic<bool> cancelRequested{false};
 };
 
-class Process : public QWidget
+class BalloonProcess : public QWidget
 {
     Q_OBJECT
 public:
-    explicit Process(QWidget *parent = nullptr);
+    explicit BalloonProcess(ProcessItem *item, QWidget *parent = nullptr);
+
+    void setProgress(int progress);
+    void updateStats();
+    void updateButtons();
+    void done();
+
+private:
+    ProcessItem *m_item;
+    QDateTime m_lastUpdateTime;
+    qint64 m_lastBytesTransferred;
 };
 
 class StatusBalloon : public QBalloonTip
@@ -62,35 +73,28 @@ public:
     // Process management
     QUuid startExportProcess(const QString &title, int totalItems,
                              const QString &destinationPath);
-    QUuid startUploadProcess(const QString &title, int totalItems);
 
     void onFileTransferProgress(const QUuid &processId, int currentItem,
                                 const QString &currentFile,
                                 qint64 bytesTransferred, qint64 totalBytes);
-    void markProcessCompleted(const QUuid &processId);
-    void markProcessFailed(const QUuid &processId, const QString &error);
-    void markProcessCancelled(const QUuid &processId);
-    void incrementFailedItems(const QUuid &processId);
 
     bool isProcessRunning(const QUuid &processId) const;
     bool hasActiveProcesses() const;
     bool isCancelRequested(const QUuid &processId) const;
-    ZIconWidget *getButton();
-private slots:
+    ZIconWidget *getButton() { return m_button; }
     void onCancelClicked();
     void onOpenFolderClicked();
 
 private:
-    void updateUI();
-    void showBalloon();
+    void updateHeader();
+    void handleShow(bool forceVisible = false);
     void createProcessWidget(ProcessItem *item);
-    QString formatFileSize(qint64 bytes) const;
-    QString formatTransferRate(qint64 bytesPerSecond) const;
     void removeProcessWidget(const QUuid &processId);
     void connectExportThreadSignals();
     void onExportFinished(const QUuid &processId,
                           const ExportJobSummary &summary);
     void onItemExported(const QUuid &processId, const ExportResult &result);
+    void handleJobUpdate(ProcessItem *item);
 
     QVBoxLayout *m_mainLayout;
     QLabel *m_headerLabel;
@@ -101,8 +105,6 @@ private:
     QUuid m_currentProcessId;
     mutable QMutex m_processesMutex;
 
-    QMap<QUuid, qint64> m_lastBytesTransferred;
-    QMap<QUuid, QDateTime> m_lastUpdateTime;
     ZIconWidget *m_button =
         new ZIconWidget(QIcon(":/resources/icons/UimProcess.png"), "Processes");
 };

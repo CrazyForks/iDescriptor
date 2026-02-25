@@ -15,49 +15,40 @@
 #include <QTimerEvent>
 #include <qpainterpath.h>
 
-static QBalloonTip *theSolitaryBalloonTip = nullptr;
-
-void QBalloonTip::showBalloon(const QIcon &icon, const QString &title,
-                              const QString &message, QWidget *widget,
-                              const QPoint &pos, int timeout, bool showArrow)
+void QBalloonTip::toggleBaloon(const QPoint &pos, int timeout,
+                               bool forceVisible)
 {
-    hideBalloon();
-    if (message.isEmpty() && title.isEmpty())
+    if (m_visible && !forceVisible) {
+        hideBalloon();
         return;
+    }
 
-    theSolitaryBalloonTip = new QBalloonTip(icon, title, message, widget);
     if (timeout < 0)
         timeout = 10000; // 10 s default
-    theSolitaryBalloonTip->balloon(pos, timeout, showArrow);
+    balloon(pos, timeout);
 }
 
 void QBalloonTip::hideBalloon()
 {
-    if (!theSolitaryBalloonTip)
-        return;
-    theSolitaryBalloonTip->hide();
-    // delete theSolitaryBalloonTip;
-    theSolitaryBalloonTip = nullptr;
+    m_visible = false;
+    hide();
 }
 
 void QBalloonTip::updateBalloonPosition(const QPoint &pos)
 {
-    if (!theSolitaryBalloonTip)
-        return;
-    theSolitaryBalloonTip->hide();
-    theSolitaryBalloonTip->balloon(pos, 0, theSolitaryBalloonTip->showArrow);
+    hideBalloon();
+    balloon(pos, 0);
 }
 
-bool QBalloonTip::isBalloonVisible() { return theSolitaryBalloonTip; }
+bool QBalloonTip::isBalloonVisible() { return m_visible; }
 
-QBalloonTip::QBalloonTip(const QIcon &icon, const QString &title,
-                         const QString &message, QWidget *widget)
+QBalloonTip::QBalloonTip(QWidget *widget)
     : QWidget(widget ? widget->window() : QApplication::activeWindow(),
               Qt::ToolTip),
-      widget(widget), showArrow(true)
+      widget(widget)
 {
     // setAttribute(Qt::WA_DeleteOnClose);
-    setAttribute(Qt::WA_TranslucentBackground);
+    // setAttribute(Qt::WA_TranslucentBackground);
     if (widget) {
         connect(widget, &QWidget::destroyed, this, &QBalloonTip::close);
     } else if (QApplication::activeWindow()) {
@@ -119,146 +110,64 @@ QBalloonTip::QBalloonTip(const QIcon &icon, const QString &title,
     // setLayout(layout);
 }
 
-QBalloonTip::~QBalloonTip() { theSolitaryBalloonTip = nullptr; }
+QBalloonTip::~QBalloonTip() {}
 
 void QBalloonTip::paintEvent(QPaintEvent *ev)
 {
-    QPainter painter(this);
-    painter.drawPixmap(rect(), pixmap);
+    // QPainter painter(this);
+    // painter.drawPixmap(rect(), pixmap);
     QWidget::paintEvent(ev);
 }
 
 void QBalloonTip::resizeEvent(QResizeEvent *ev) { QWidget::resizeEvent(ev); }
 
-void QBalloonTip::balloon(const QPoint &pos, int msecs, bool showArrow)
+void QBalloonTip::balloon(const QPoint &pos, int msecs)
 {
-    // this->showArrow = showArrow;
-    // QScreen *screen = QGuiApplication::screenAt(pos);
-    // if (!screen)
-    //     screen = QGuiApplication::primaryScreen();
-    // QRect screenRect = screen->geometry();
-    // QSize sh = sizeHint();
-    // const int border = 1;
-    // const int ah = 18, aw = 18, rc = 7;
-    // bool arrowAtTop = (pos.y() + sh.height() + ah < screenRect.height());
-
-    // setContentsMargins(border + 3, border + (arrowAtTop ? ah : 0) + 2,
-    //                    border + 3, border + (arrowAtTop ? 0 : ah) + 2);
-    // updateGeometry();
-    // sh = sizeHint();
-
-    // // Center the balloon relative to the pos point (button center)
-    // int balloonX = pos.x() - sh.width() / 2;
-
-    // // Calculate arrow offset from left edge of balloon to center it
-    // int ao = sh.width() / 2 - aw / 2; // Center the arrow on the balloon
-
-    // int ml, mr, mt, mb;
-    // QSize sz = sizeHint();
-    // if (!arrowAtTop) {
-    //     ml = mt = 0;
-    //     mr = sz.width() - 1;
-    //     mb = sz.height() - ah - 1;
-    // } else {
-    //     ml = 0;
-    //     mt = ah;
-    //     mr = sz.width() - 1;
-    //     mb = sz.height() - 1;
-    // }
-
-    // QPainterPath path;
-    // path.moveTo(ml + rc, mt);
-    // if (arrowAtTop) {
-    //     if (showArrow) {
-    //         path.lineTo(ml + ao, mt);
-    //         path.lineTo(ml + ao + aw / 2, mt - ah);
-    //         path.lineTo(ml + ao + aw, mt);
-    //     }
-    //     move(qBound(screenRect.left() + 2, balloonX,
-    //                 screenRect.right() - sh.width() - 2),
-    //          pos.y());
-    // }
-    // path.lineTo(mr - rc, mt);
-    // path.arcTo(QRect(mr - rc * 2, mt, rc * 2, rc * 2), 90, -90);
-    // path.lineTo(mr, mb - rc);
-    // path.arcTo(QRect(mr - rc * 2, mb - rc * 2, rc * 2, rc * 2), 0, -90);
-    // if (!arrowAtTop) {
-    //     if (showArrow) {
-    //         path.lineTo(mr - ao - aw, mb);
-    //         path.lineTo(mr - ao - aw / 2, mb + ah);
-    //         path.lineTo(mr - ao, mb);
-    //     }
-    //     move(qBound(screenRect.left() + 2, balloonX,
-    //                 screenRect.right() - sh.width() - 2),
-    //          pos.y() - sh.height());
-    // }
-    // path.lineTo(ml + rc, mb);
-    // path.arcTo(QRect(ml, mb - rc * 2, rc * 2, rc * 2), -90, -90);
-    // path.lineTo(ml, mt + rc);
-    // path.arcTo(QRect(ml, mt, rc * 2, rc * 2), 180, -90);
-
-    // // Set the mask
-    // QBitmap bitmap = QBitmap(sizeHint());
-    // bitmap.fill(Qt::color0);
-    // QPainter painter1(&bitmap);
-    // painter1.setPen(QPen(Qt::color1, border));
-    // painter1.setBrush(QBrush(Qt::color1));
-    // painter1.drawPath(path);
-    // setMask(bitmap);
-
-    // // Draw the border with background color
-    // pixmap = QPixmap(sz);
-    // pixmap.fill(Qt::transparent);
-    // QPainter painter2(&pixmap);
-    // painter2.setRenderHint(QPainter::Antialiasing);
-    // bool isDark = isDarkMode();
-    // QColor lightColor = qApp->palette().color(QPalette::Light);
-    // QColor darkColor = qApp->palette().color(QPalette::Dark);
-    // QColor bgColor = isDark ? lightColor : darkColor;
-    // painter2.setPen(QPen(bgColor.darker(160), border));
-    // painter2.setBrush(bgColor);
-    // painter2.drawPath(path);
-
-    if (msecs > 0)
-        timer.start(msecs, this);
-
-    // Install event filter to detect clicks outside
+    m_visible = true;
     qApp->installEventFilter(this);
 
-    // // Set initial scale and opacity for animation
-    // setWindowOpacity(0.0);
+    QScreen *screen = QGuiApplication::screenAt(pos);
+    if (!screen) {
+        screen = QGuiApplication::primaryScreen();
+    }
+    QRect scr = screen->availableGeometry();
+    const int border = 1;
+    const int ah = 18, ao = 18, aw = 18, rc = 7;
+    // bool arrowAtTop = (pos.y() + sh.height() + ah < scr.height());
+    // bool arrowAtLeft = (pos.x() + sh.width() - ao < scr.width());
+    // setContentsMargins(border + 3, border + (arrowAtTop ? ah : 0) + 2,
+    //                    border + 3, border + (arrowAtTop ? 0 : ah) + 2);
+    updateGeometry();
+    QSize sz = sizeHint();
+    QRect screenRect = screen->availableGeometry();
 
-    // Store the transform origin point (center of the widget)
-    QPoint center = rect().center();
-    setProperty("transformOriginPoint", center);
+    // Calculate the total required size for the balloon widget, including
+    // potential arrow space. Assuming the arrow takes up 'ah' height at either
+    // the top or bottom of the widget.
+    QSize sh_total = QSize(sz.width(), sz.height() + ah);
 
+    // Determine the desired X position: center the balloon horizontally on
+    // pos.x 'pos' is the global bottom-center of your button.
+    int targetX = pos.x() - sh_total.width() / 2;
+    // Clamp X position to screen bounds
+    targetX = qBound(screenRect.left(), targetX,
+                     screenRect.right() - sh_total.width());
+
+    // Determine the desired Y position: Place the bottom of the balloon at
+    // pos.y() (button's bottom) This makes the balloon appear ABOVE the button.
+    int targetY = pos.y() - sh_total.height();
+    // Clamp Y position to screen bounds
+    targetY = qBound(screenRect.top(), targetY,
+                     screenRect.bottom() - sh_total.height());
+
+    // Apply the calculated position
+    move(targetX, targetY);
+
+    // if (msecs > 0)
+    //      timer = startTimer(msecs);
     show();
-
-    // Create scale and opacity animations
-    QPropertyAnimation *scaleAnim = new QPropertyAnimation(this, "geometry");
-    scaleAnim->setDuration(200);
-    scaleAnim->setEasingCurve(QEasingCurve::OutBack);
-
-    // Calculate scaled geometry (start from 80% size)
-    QRect finalGeometry = geometry();
-    QRect startGeometry = finalGeometry;
-    int widthDiff = finalGeometry.width() * 0.2;
-    int heightDiff = finalGeometry.height() * 0.2;
-    startGeometry.adjust(widthDiff / 2, heightDiff / 2, -widthDiff / 2,
-                         -heightDiff / 2);
-
-    scaleAnim->setStartValue(startGeometry);
-    scaleAnim->setEndValue(finalGeometry);
-
-    // QPropertyAnimation *opacityAnim =
-    //     new QPropertyAnimation(this, "windowOpacity");
-    // opacityAnim->setDuration(200);
-    // opacityAnim->setStartValue(0.0);
-    // opacityAnim->setEndValue(1.0);
-    // opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
-
-    // scaleAnim->start(QAbstractAnimation::DeleteWhenStopped);
-    // opacityAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    raise();
+    activateWindow();
 }
 
 void QBalloonTip::mousePressEvent(QMouseEvent *e)
@@ -285,12 +194,14 @@ bool QBalloonTip::eventFilter(QObject *obj, QEvent *event)
         QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
         // Check if click is outside the balloon
         if (!geometry().contains(mouseEvent->globalPos())) {
+            m_visible = false;
             close();
             return false;
         }
     } else if (event->type() == QEvent::WindowDeactivate) {
         // Close when window loses focus
         if (obj == this) {
+            m_visible = false;
             close();
             return false;
         }

@@ -647,11 +647,13 @@ struct ExportItem {
     QString sourcePathOnDevice;
     QString suggestedFileName;
     int itemIndex = -1;
+    std::string d_udid;
 
     ExportItem() = default;
-    ExportItem(const QString &sourcePath, const QString &fileName, int index)
+    ExportItem(const QString &sourcePath, const QString &fileName,
+               std::string d_udid, int index)
         : sourcePathOnDevice(sourcePath), suggestedFileName(fileName),
-          itemIndex(index)
+          d_udid(d_udid), itemIndex(index)
     {
     }
 };
@@ -676,10 +678,36 @@ struct ExportJobSummary {
 
 struct ExportJob {
     QUuid jobId;
-    iDescriptorDevice *device = nullptr;
     QList<ExportItem> items;
     QString destinationPath;
     std::optional<AfcClientHandle *> altAfc;
     std::atomic<bool> cancelRequested{false};
     QUuid statusBalloonProcessId;
+    // device udid
+    std::string d_udid;
 };
+
+inline QString formatFileSize(qint64 bytes)
+{
+    const qint64 KB = 1024;
+    const qint64 MB = KB * 1024;
+    const qint64 GB = MB * 1024;
+
+    if (bytes >= GB) {
+        return QString("%1 GB").arg(
+            QString::number(bytes / double(GB), 'f', 2));
+    } else if (bytes >= MB) {
+        return QString("%1 MB").arg(
+            QString::number(bytes / double(MB), 'f', 1));
+    } else if (bytes >= KB) {
+        return QString("%1 KB").arg(
+            QString::number(bytes / double(KB), 'f', 0));
+    } else {
+        return QString("%1 B").arg(bytes);
+    }
+}
+
+inline QString formatTransferRate(qint64 bytesPerSecond)
+{
+    return formatFileSize(bytesPerSecond) + "/s";
+}
