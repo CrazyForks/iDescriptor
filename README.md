@@ -76,7 +76,7 @@
   Open the `.dmg` and drag iDescriptor to Applications.
   <br/>
 
- After moving the app to Applications, run the code below
+After moving the app to Applications, run the code below
 <br/>
 
 ```shell
@@ -111,14 +111,28 @@ make sure to do "sudo pacman -Syu" otherwise it's not going to find libimobilede
     <img src="./resources/repo/crossplatform.png"><br/>
 </p>
 
+</br>
+</br>
+</br>
+
+## Good News!
+
+### iDescriptor v0.4.0 will feature **WIRELESS CONNECTION** support!
+
+Learn more about our roadmap [here](#roadmap).
+
+</br>
+</br>
+</br>
+
 ## Features
 
 ### Connection
 
-| Feature                     | Status               | Notes                                         |
-| --------------------------- | -------------------- | --------------------------------------------- |
-| USB Connection              | ✅ Implemented       | Fully supported on Windows, macOS, and Linux. |
-| Wireless Connection (Wi‑Fi) | ⚠️ Under development | -                                             |
+| Feature             | Status               | Notes                                                         |
+| ------------------- | -------------------- | ------------------------------------------------------------- |
+| USB Connection      | ✅ Implemented       | Fully supported on Windows, macOS, and Linux.                 |
+| Wireless Connection | ⚠️ Under Development | Currently under development, planned to be released in v0.4.0 |
 
 ### Tools
 
@@ -249,16 +263,18 @@ You might get this pop-up on any platform this is because this app uses secure b
 
 ## Become a Sponsor
 
-Please support us at <a href="https://opencollective.com/idescriptor">
+<div style="flex-direction: row; align-items: center; display: flex; gap: 10px;">
+<span>You can become a sponsor from GitHub Sponsors or</span> <a href="https://opencollective.com/idescriptor">
 <img src="https://img.shields.io/badge/OpenCollective-1F87FF?style=for-the-badge&logo=OpenCollective&logoColor=white" alt="AppImage"/>
 </a>
+</div>
 
 ## Thanks
 
 - [libimobiledevice](https://libimobiledevice.org/)
 - [ipatool](https://github.com/majd/ipatool) - We use a modified version [here](https://github.com/uncor3/libipatool-go)
 - [QSimpleUpdater](https://github.com/alex-spataru/QSimpleUpdater) - We use a modified version [here](https://github.com/uncor3/ZUpdater)
-- [airplay](https://github.com/rcarmo/RPiPlay) - We use a modified version [here](https://github.com/uncor3/airplay)
+- [UxPlay (for AirPlay)](https://github.com/FDH2/UxPlay) - We use a modified version [here](https://github.com/iDescriptor/uxplay)
 
 ## Linux Udev Rules
 
@@ -283,13 +299,24 @@ sudo udevadm trigger
 
 Contributions are welcome!
 
-You can check the source code in some places we have TODOs and FIXMEs that you can work on.
+We actively develop on dev branch, so please base your pull requests off of that branch.
 
-For example
+You can also send a pr to main branch but it should be something related to building, publish to some package manager or documentation.
 
-- [Photos.sqlite](https://github.com/iDescriptor/iDescriptor/blob/main/src/gallerywidget.cpp)
+## Roadmap
 
-Or if you'd like to introduce new features, feel free to open an issue or a pull request!
+**Planned Features for v0.4.0:**
+
+- Migrate to idevice-rs `99% done`
+- Wireless Connection Support `DONE`
+- Install IPA files directly from the app
+- Virtual Location Support for iOS 17 and above
+- Complete iOS 26 Support
+- Migrate to UCRT for better performance and stability `Windows`
+- New UI/UX improvements
+- Read gallery from Photos.sqlite (maybe delayed to v0.5.0)
+
+**You can always become a sponsor/donate to request/prioritize a feature or speed up the development process!**
 
 ## Damaged Error on macOS
 
