@@ -34,14 +34,13 @@ public:
     QList<iDescriptorDevice *> getAllDevices();
     explicit AppContext(QObject *parent = nullptr);
     bool noDevicesConnected() const;
-    // QMap<WiFiMACAddress, PairingFilePath>
     void cachePairingFile(const QString &udid, const QString &pairingFilePath);
     const QString getCachedPairingFile(const QString &udid) const;
 
     void tryToConnectToNetworkDevice(const NetworkDevice &device);
-    // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-    //     QList<iDescriptorRecoveryDevice *> getAllRecoveryDevices();
-    // #endif
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
+    QList<iDescriptorRecoveryDevice *> getAllRecoveryDevices();
+#endif
     ~AppContext();
     int getConnectedDeviceCount() const;
 
@@ -52,24 +51,25 @@ public:
 
 private:
     QMap<std::string, iDescriptorDevice *> m_devices;
-    // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-    //     QMap<uint64_t, iDescriptorRecoveryDevice *> m_recoveryDevices;
-    // #endif
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
+    QMap<uint64_t, iDescriptorRecoveryDevice *> m_recoveryDevices;
+#endif
     QStringList m_pendingDevices;
     DeviceSelection m_currentSelection = DeviceSelection("");
     QMap<QString, QString> m_pairingFileCache;
     void cachePairedDevices();
     void emitNoPairingFileForWirelessDevice(const QString &udid);
 signals:
-    void deviceAdded(iDescriptorDevice *device);
+    void deviceAdded(const iDescriptorDevice *device);
     void deviceRemoved(const std::string &udid, const std::string &macAddress,
                        const std::string &ipAddress, bool wasWireless);
-    void devicePaired(iDescriptorDevice *device);
+    void devicePaired(const iDescriptorDevice *device);
     void devicePasswordProtected(const QString &udid);
-    // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-    //     void recoveryDeviceAdded(const iDescriptorRecoveryDevice
-    //     *deviceInfo); void recoveryDeviceRemoved(uint64_t ecid);
-    // #endif
+    void deviceAlreadyExists(const iDescriptor::Uniq &uniq);
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
+    void recoveryDeviceAdded(const iDescriptorRecoveryDevice *deviceInfo);
+    void recoveryDeviceRemoved(uint64_t ecid);
+#endif
     void devicePairPending(const QString &udid);
     void devicePairingExpired(const QString &udid);
     // only fired on wireless devices when we have no pairing file for them

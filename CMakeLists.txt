@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(iDescriptor VERSION 0.3.0 LANGUAGES CXX)
+project(iDescriptor VERSION 0.3.0 LANGUAGES C CXX)
 
 if(WIN32)
     set(PKG_CONFIG_EXECUTABLE "C:/msys64/mingw64/bin/pkg-config.exe" CACHE FILEPATH "" FORCE)
 endif()
 
 # Feature options
-set(PACKAGE_MANAGER_HINT "" CACHE STRING "Name of package manager(s) used to manage this build (e.g. paru, yay, pamac)")
+option(ENABLE_RECOVERY_DEVICE_SUPPORT "Enable recovery device support (requires libirecovery)" ON)
+set(PACKAGE_MANAGER_HINT "" CACHE STRING "Name of package manager(s) used to manage future updates (e.g. paru, yay, pamac), only used if PACKAGE_MANAGER_MANAGED is ON)")
 option(PACKAGE_MANAGER_MANAGED "Build as package manager managed version (auto updates will be handled by the package manager)" OFF)
 option(DEPLOY "Deploy the application (WIN32 only)" ON)
 
@@ -40,7 +41,7 @@ if(WIN32)
     set(ENV{PKG_CONFIG_PATH} "${CUSTOM_PKGCONFIG_PATH};$ENV{PKG_CONFIG_PATH}")
 elseif(APPLE)
     set(CUSTOM_LIB_PATH "/usr/local/lib")
-    # Remove the problematic include path that's causing conflicts
+    # TODO: do we need this on macOS? 
     # set(CUSTOM_INCLUDE_PATH "/usr/local/include")
     set(CUSTOM_PKGCONFIG_PATH "/usr/local/lib/pkgconfig")
     set(ENV{PKG_CONFIG_PATH} "${CUSTOM_PKGCONFIG_PATH}:$ENV{PKG_CONFIG_PATH}")
@@ -92,7 +93,6 @@ set(IDEVICE_RS_LIB_PATH ${IDEVICE_RS_SOURCE_DIR}/target/debug/libidevice_ffi.a)
 if(APPLE)
 add_custom_command(
     OUTPUT ${IDEVICE_RS_LIB_PATH}
-    # Ensure rustc is visible in the build environment
     COMMAND ${CMAKE_COMMAND} -E env
             "PATH=$ENV{HOME}/.cargo/bin:/usr/local/bin:$ENV{PATH}"
             "RUSTC=/usr/local/bin/rustc"
@@ -101,6 +101,7 @@ add_custom_command(
     COMMENT "Building idevice-rs FFI libraryy"
     VERBATIM
 )
+# We must use +stable-x86_64-pc-windows-gnu on Windows
 elseif(WIN32)
 add_custom_command(
     OUTPUT ${IDEVICE_RS_LIB_PATH}
@@ -109,6 +110,7 @@ add_custom_command(
     COMMENT "Building idevice-rs FFI libraryy"
     VERBATIM
 )
+# Linux
 else()
 add_custom_command(
     OUTPUT ${IDEVICE_RS_LIB_PATH}
@@ -166,7 +168,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(idevice_cpp PUBLIC idevice_ffi Threads::Threads)
 
 if (UNIX AND NOT APPLE)
-    pkg_check_modules(UDEV REQUIRED IMPORTED_TARGET udev)
+    pkg_check_modules(UDEV REQUIRED IMPORTED_TARGET libudev)
     target_link_libraries(idevice_cpp PUBLIC PkgConfig::UDEV dl m)
 elseif(APPLE)
     find_library(COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
@@ -218,6 +220,20 @@ endif()
 
 pkg_check_modules(PUGIXML REQUIRED IMPORTED_TARGET pugixml)
 
+if(ENABLE_RECOVERY_DEVICE_SUPPORT)
+    find_library(IRECOVERY_LIBRARY 
+        NAMES irecovery-1.0
+    	${CUSTOM_FIND_LIB_ARGS}
+    )
+    if(IRECOVERY_LIBRARY)
+        message(STATUS "Building with recovery device support enabled")
+    else()
+        message(WARNING "libirecovery not found. Recovery device support will be disabled. This is to be expected if you are installing from Arch AUR.")
+        set(ENABLE_RECOVERY_DEVICE_SUPPORT OFF)
+    endif()
+else()
+    message(STATUS "Recovery device support disabled")
+endif()
 
 file(GLOB PROJECT_SOURCES
 src/*.h
@@ -228,6 +244,15 @@ src/base/*.cpp
 src/base/*.h
 resources.qrc
 )
+
+if (NOT ENABLE_RECOVERY_DEVICE_SUPPORT)
+    list(REMOVE_ITEM PROJECT_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recoverydeviceinfowidget.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recoverydeviceinfowidget.h
+        src/recoverydeviceinfowidget.cpp
+        src/recoverydeviceinfowidget.h
+    )
+endif()
 
 if(APPLE)
     list(APPEND PROJECT_SOURCES
@@ -324,6 +349,11 @@ target_link_libraries(iDescriptor PRIVATE
     SQLite::SQLite3
 )
 
+if(ENABLE_RECOVERY_DEVICE_SUPPORT)
+    target_link_libraries(iDescriptor PRIVATE ${IRECOVERY_LIBRARY})
+    target_compile_definitions(iDescriptor PRIVATE ENABLE_RECOVERY_DEVICE_SUPPORT)
+endif()
+
 target_include_directories(iDescriptor PRIVATE
     # Put idevice-rs includes FIRST
     ${IDEVICE_CPP_INCLUDE_DIR}
@@ -401,6 +431,15 @@ set_target_properties(iDescriptor PROPERTIES
 )
 
 if (UNIX AND NOT APPLE)
+
+    # Required on Linux to find libirecovery-1.0.so.5 at runtime
+    if (ENABLE_RECOVERY_DEVICE_SUPPORT)
+    set_target_properties(iDescriptor PROPERTIES
+        # Control library search order - system libs first, then /usr/local/lib
+        INSTALL_RPATH "/usr/lib/x86_64-linux-gnu:/usr/lib:/usr/local/lib:$ORIGIN"
+    )
+    endif()
+
 # Add install rules for the project
 # include(GNUInstallDirs)
 

@@ -31,11 +31,8 @@
 #include <QUrl>
 #include <qrencode.h>
 
-PhotoImportDialog::PhotoImportDialog(const QStringList &files,
-                                     bool hasDirectories, QWidget *parent)
-    : QDialog(parent), selectedFiles(files),
-      containsDirectories(hasDirectories), m_httpServer(nullptr),
-      m_mediaPlayer(nullptr)
+PhotoImportDialog::PhotoImportDialog(const QStringList &files, QWidget *parent)
+    : QDialog(parent), selectedFiles(files)
 {
     setupUI();
     setModal(true);
@@ -58,16 +55,6 @@ PhotoImportDialog::~PhotoImportDialog()
 void PhotoImportDialog::setupUI()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-
-    // Warning label for directories
-    if (containsDirectories) {
-        warningLabel =
-            new QLabel("⚠️ Warning: Selected items contain directories. All "
-                       "gallery-compatible files will be included.",
-                       this);
-        warningLabel->setWordWrap(true);
-        mainLayout->addWidget(warningLabel);
-    }
 
     // File list
     QLabel *listLabel = new QLabel(
@@ -230,6 +217,7 @@ void PhotoImportDialog::onServerStarted()
 void PhotoImportDialog::onDownloadProgress(const QString &fileName,
                                            int bytesDownloaded, int totalBytes)
 {
+    // TODO: bring in a progress bar each item
     m_progressLabel->setText(QString("Downloaded: %1 (%2 KB)")
                                  .arg(fileName)
                                  .arg(bytesDownloaded / 1024));

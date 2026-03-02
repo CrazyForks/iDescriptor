@@ -31,7 +31,7 @@ class DeviceInfoWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit DeviceInfoWidget(iDescriptorDevice *device,
+    explicit DeviceInfoWidget(const iDescriptorDevice *device,
                               QWidget *parent = nullptr);
     ~DeviceInfoWidget(); // added destructor
 
@@ -39,7 +39,7 @@ private slots:
     void onBatteryMoreClicked();
 
 private:
-    iDescriptorDevice *m_device;
+    const iDescriptorDevice *m_device;
     QTimer *m_updateTimer;
     void updateBatteryInfo();
     void updateChargingStatusIcon();

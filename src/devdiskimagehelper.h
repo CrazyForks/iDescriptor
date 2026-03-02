@@ -32,7 +32,7 @@ class DevDiskImageHelper : public QDialog
 {
     Q_OBJECT
 public:
-    explicit DevDiskImageHelper(iDescriptorDevice *device,
+    explicit DevDiskImageHelper(const iDescriptorDevice *device,
                                 QWidget *parent = nullptr);
 
     // Start the mounting process
@@ -55,10 +55,10 @@ private:
     void showStatus(const QString &message, bool isError = false);
     void showMountUI();
     void showRetryUI(const QString &errorMessage);
-    void finishWithSuccess();
+    void finishWithSuccess(bool wait = false);
     void finishWithError(const QString &errorMessage);
 
-    iDescriptorDevice *m_device;
+    const iDescriptorDevice *m_device;
 
     QLabel *m_statusLabel;
     QProcessIndicator *m_loadingIndicator;

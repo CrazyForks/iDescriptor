@@ -29,7 +29,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
-DevDiskImageHelper::DevDiskImageHelper(iDescriptorDevice *device,
+DevDiskImageHelper::DevDiskImageHelper(const iDescriptorDevice *device,
                                        QWidget *parent)
     : QDialog(parent), m_device(device)
 {
@@ -119,7 +119,10 @@ void DevDiskImageHelper::start()
                 QString::number(deviceMajorVersion) + ".");
         }
     } else {
-        finishWithSuccess();
+        showStatus("Developer disk image is not available for iOS version " +
+                       QString::number(deviceMajorVersion) +
+                       ". Please use a device with iOS 6 or above.",
+                   true);
         return;
     }
 }
@@ -224,7 +227,7 @@ void DevDiskImageHelper::onImageDownloadFinished(const QString &version,
                                    paths.second.toStdString().c_str());
 
     if (err == nullptr) {
-        return finishWithSuccess();
+        return finishWithSuccess(true);
     }
 
     qDebug() << "onImageDownloadFinished:" << err->code
@@ -265,10 +268,21 @@ void DevDiskImageHelper::showStatus(const QString &message, bool isError)
     show();
 }
 
-void DevDiskImageHelper::finishWithSuccess()
+/*
+    waiting is sometimes required because services
+    may not become available
+    as soon as the img is mounted
+*/
+void DevDiskImageHelper::finishWithSuccess(bool wait)
 {
-    m_loadingIndicator->stop();
-    accept();
+    auto handler = [this]() {
+        m_loadingIndicator->stop();
+        accept();
+    };
+    if (wait) {
+        return QTimer::singleShot(3000, handler);
+    }
+    handler();
 }
 
 void DevDiskImageHelper::finishWithError(const QString &errorMessage)

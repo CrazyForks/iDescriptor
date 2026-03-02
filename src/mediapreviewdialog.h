@@ -22,6 +22,7 @@
 
 #include "iDescriptor-ui.h"
 #include "iDescriptor.h"
+#include "zloadingwidget.h"
 #include <QCoreApplication>
 #include <QDialog>
 #include <QGraphicsPixmapItem>
@@ -37,21 +38,12 @@
 #include <QVideoWidget>
 #include <QtGlobal>
 
-/**
- * @brief A dialog for previewing images and videos from iOS devices
- *
- * Features:
- * - Image viewing with zoom and pan using QGraphicsView
- * - Video streaming with timeline scrubbing support
- * - Asynchronous loading from device
- * - Proper memory management
- */
 class MediaPreviewDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    explicit MediaPreviewDialog(iDescriptorDevice *device,
+    explicit MediaPreviewDialog(const iDescriptorDevice *device,
                                 AfcClientHandle *afcClient,
                                 const QString &filePath,
                                 QWidget *parent = nullptr);
@@ -61,10 +53,11 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
-    bool event(QEvent *event) override; // handle ShortcutOverride
-
+#ifdef __APPLE__
+    bool event(QEvent *event) override;
+#endif
 private slots:
-    void onImageLoaded();
+    void onImageLoaded(const QPixmap &pixmap);
     void onImageLoadFailed();
     void zoomIn();
     void zoomOut();
@@ -96,10 +89,9 @@ private:
     void updateZoomStatus();
     void updateVideoTimeDisplay();
     void formatTime(qint64 milliseconds, QString &timeString);
-    bool isVideoFile(const QString &filePath) const;
 
     // Core data
-    iDescriptorDevice *m_device;
+    const iDescriptorDevice *m_device;
     QString m_filePath;
     bool m_isVideo;
 
@@ -127,10 +119,6 @@ private:
     QLabel *m_volumeLabel;
     QTimer *m_progressTimer;
 
-    // Common components
-    QLabel *m_loadingLabel;
-    QLabel *m_statusLabel;
-
     // Control buttons
     QPushButton *m_zoomInBtn;
     QPushButton *m_zoomOutBtn;
@@ -138,15 +126,16 @@ private:
     QPushButton *m_fitToWindowBtn;
 
     // State
-    double m_zoomFactor;
+    double m_zoomFactor = 1.0;
     QPixmap m_originalPixmap;
 
     // Video state
-    bool m_isRepeatEnabled;
-    bool m_isDraggingTimeline;
-    qint64 m_videoDuration;
+    bool m_isRepeatEnabled = true;
+    bool m_isDraggingTimeline = false;
+    qint64 m_videoDuration = 0;
 
     AfcClientHandle *m_afcClient;
+    ZLoadingWidget *m_loadingWidget;
 };
 
 #endif // MEDIAPREVIEWDIALOG_H

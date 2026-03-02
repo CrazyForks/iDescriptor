@@ -59,8 +59,19 @@ public:
 
     bool isMac() const { return m_isMac; };
     bool isUdid() const { return !m_isMac; }
+    void set(const QString &uniq, bool isMac = false)
+    {
+        m_uniq = uniq;
+        m_isMac = isMac;
+    };
+    void set(const std::string &uniq, bool isMac = false)
+    {
+        m_uniq = QString::fromStdString(uniq);
+        m_isMac = isMac;
+    };
     const QString &get() const { return m_uniq; }
     operator QString() const { return m_uniq; }
+    operator std::string() const { return m_uniq.toStdString(); }
 
 private:
     QString m_uniq;
@@ -139,8 +150,21 @@ public:
 
     static bool isVideoFile(const QString &fileName)
     {
-        /* known iPhone video file extensions */
+        /* known iPhone video file extensions (AVI and MKV is not common but it
+         * may be some from some app)*/
         return fileName.endsWith(".MOV", Qt::CaseInsensitive) ||
+               fileName.endsWith(".MP4", Qt::CaseInsensitive) ||
+               fileName.endsWith(".M4V", Qt::CaseInsensitive) ||
+               fileName.endsWith(".AVI", Qt::CaseInsensitive) ||
+               fileName.endsWith(".MKV", Qt::CaseInsensitive);
+    }
+
+    static bool isGalleryFile(const QString &fileName)
+    {
+        return fileName.endsWith(".JPG", Qt::CaseInsensitive) ||
+               fileName.endsWith(".PNG", Qt::CaseInsensitive) ||
+               fileName.endsWith(".HEIC", Qt::CaseInsensitive) ||
+               fileName.endsWith(".MOV", Qt::CaseInsensitive) ||
                fileName.endsWith(".MP4", Qt::CaseInsensitive) ||
                fileName.endsWith(".M4V", Qt::CaseInsensitive);
     }

@@ -31,15 +31,15 @@ class DeviceMenuWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit DeviceMenuWidget(iDescriptorDevice *device,
+    explicit DeviceMenuWidget(const iDescriptorDevice *device,
                               QWidget *parent = nullptr);
     void switchToTab(const QString &tabName);
     void init();
     ~DeviceMenuWidget();
 
 private:
-    QStackedWidget *stackedWidget; // Pointer to the stacked widget
-    iDescriptorDevice *m_device;   // Pointer to the iDescriptor device
+    QStackedWidget *stackedWidget;
+    const iDescriptorDevice *m_device;
     DeviceInfoWidget *m_deviceInfoWidget;
     InstalledAppsWidget *m_installedAppsWidget;
     GalleryWidget *m_galleryWidget;

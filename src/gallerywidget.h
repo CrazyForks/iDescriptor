@@ -44,7 +44,7 @@ class GalleryWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit GalleryWidget(iDescriptorDevice *device,
+    explicit GalleryWidget(const iDescriptorDevice *device,
                            QWidget *parent = nullptr);
     void load();
     ~GalleryWidget();
@@ -70,7 +70,7 @@ private:
     void onPhotoContextMenu(const QPoint &pos);
     PhotoModel::FilterType getCurrentFilterType() const;
 
-    iDescriptorDevice *m_device;
+    const iDescriptorDevice *m_device;
     bool m_loaded = false;
     QString m_currentAlbumPath;
 

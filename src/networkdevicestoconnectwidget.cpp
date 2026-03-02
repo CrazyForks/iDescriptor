@@ -130,6 +130,17 @@ void NetworkDeviceCard::noPairingFile()
     });
 }
 
+void NetworkDeviceCard::connected()
+{
+    m_connectButton->setText("Connected");
+    m_connectButton->setEnabled(false);
+
+    QTimer::singleShot(10000, this, [this]() {
+        m_connectButton->setText("Connect");
+        m_connectButton->setEnabled(true);
+    });
+}
+
 void NetworkDeviceCard::initStarted()
 {
     m_connectButton->setText("Connecting...");
@@ -168,6 +179,10 @@ NetworkDevicesToConnectWidget::NetworkDevicesToConnectWidget(QWidget *parent)
             &NetworkDevicesToConnectWidget::onDeviceInitFailed);
     connect(AppContext::sharedInstance(), &AppContext::initStarted, this,
             &NetworkDevicesToConnectWidget::onDeviceInitStarted);
+    connect(AppContext::sharedInstance(), &AppContext::deviceAdded, this,
+            &NetworkDevicesToConnectWidget::onDeviceAdded);
+    connect(AppContext::sharedInstance(), &AppContext::deviceAlreadyExists,
+            this, &NetworkDevicesToConnectWidget::onDeviceAlreadyExists);
 }
 
 NetworkDevicesToConnectWidget::~NetworkDevicesToConnectWidget()
@@ -313,20 +328,47 @@ void NetworkDevicesToConnectWidget::onNoPairingFileForWirelessDevice(
 }
 
 // udid or mac address
-void NetworkDevicesToConnectWidget::onDeviceInitFailed(const QString &udid)
+void NetworkDevicesToConnectWidget::onDeviceInitFailed(const QString &uniq)
 {
-    NetworkDeviceCard *deviceCard = m_deviceCards[udid];
+    NetworkDeviceCard *deviceCard = m_deviceCards[uniq];
     if (deviceCard) {
-        qDebug() << "Calling failed() on device card for" << udid;
+        qDebug() << "Calling failed() on device card for" << uniq;
         deviceCard->failed();
     }
 }
 
-void NetworkDevicesToConnectWidget::onDeviceInitStarted(const QString &udid)
+void NetworkDevicesToConnectWidget::onDeviceInitStarted(const QString &uniq)
 {
-    NetworkDeviceCard *deviceCard = m_deviceCards[udid];
+    NetworkDeviceCard *deviceCard = m_deviceCards[uniq];
     if (deviceCard) {
-        qDebug() << "Calling initStarted() on device card for" << udid;
+        qDebug() << "Calling initStarted() on device card for" << uniq;
         deviceCard->initStarted();
     }
+}
+
+void NetworkDevicesToConnectWidget::onDeviceAdded(
+    const iDescriptorDevice *device)
+{
+    NetworkDeviceCard *deviceCard = m_deviceCards[QString::fromStdString(
+        device->deviceInfo.wifiMacAddress)];
+    if (deviceCard) {
+        qDebug() << "Calling connected() on device card for"
+                 << QString::fromStdString(device->deviceInfo.wifiMacAddress);
+        deviceCard->connected();
+        return;
+    }
+    qDebug() << "No device card found for"
+             << QString::fromStdString(device->deviceInfo.wifiMacAddress);
+}
+
+void NetworkDevicesToConnectWidget::onDeviceAlreadyExists(
+    const iDescriptor::Uniq &uniq)
+{
+    NetworkDeviceCard *deviceCard = m_deviceCards[QString(uniq.get())];
+    if (deviceCard) {
+        qDebug() << "Calling connected() on device card for" << uniq.get();
+        deviceCard->connected();
+        return;
+    }
+    qDebug() << "No device card found for" << uniq.get();
 }

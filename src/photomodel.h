@@ -26,10 +26,12 @@
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QFutureWatcher>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QPixmap>
-#include <QSemaphore>
 #include <QSize>
 #include <QStandardPaths>
+#include <QtConcurrent/QtConcurrent>
 
 struct PhotoInfo {
     QString filePath;
@@ -50,7 +52,7 @@ public:
 
     enum FilterType { All, ImagesOnly, VideosOnly };
 
-    explicit PhotoModel(iDescriptorDevice *device, FilterType filterType,
+    explicit PhotoModel(const iDescriptorDevice *device, FilterType filterType,
                         QObject *parent = nullptr);
     ~PhotoModel();
 
@@ -83,20 +85,19 @@ public:
 
 private:
     // Data members
-    iDescriptorDevice *m_device;
+    const iDescriptorDevice *m_device;
     QString m_albumPath;
     QList<PhotoInfo> m_allPhotos; // All photos from device
     QList<PhotoInfo> m_photos;    // Currently filtered/sorted photos
-
-    // Thumbnail management
-    QSize m_thumbnailSize;
 
     // Sorting and filtering
     SortOrder m_sortOrder;
     FilterType m_filterType;
 
+    QMutex m_mutex;
+
     // Helper methods
-    void populatePhotoPaths();
+    bool populatePhotoPaths();
     void applyFilterAndSort();
     void sortPhotos(QList<PhotoInfo> &photos) const;
     bool matchesFilter(const PhotoInfo &info) const;
@@ -107,6 +108,10 @@ private:
 private slots:
     void onThumbnailReady(const QString &path, const QPixmap &pixmap,
                           unsigned int row);
+
+signals:
+    void albumPathSet();
+    void timedOut();
 };
 
 #endif // PHOTOMODEL_H

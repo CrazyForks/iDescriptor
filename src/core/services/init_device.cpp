@@ -21,9 +21,6 @@
 #include "../../iDescriptor.h"
 // #include "../../servicemanager.h"
 #include "../../appcontext.h"
-#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-#include "libirecovery.h"
-#endif
 #include "../../heartbeat.h"
 #include <QDebug>
 
@@ -206,6 +203,7 @@ DeviceInfo fullDeviceInfo(const pugi::xml_document &doc,
     d.firmwareVersion = safeGet("FirmwareVersion");
     d.productVersion = safeGet("ProductVersion");
     d.wifiMacAddress = safeGet("WiFiAddress");
+    d.UniqueDeviceID = safeGet("UniqueDeviceID");
 
     QString q_version = QString::fromStdString(d.productVersion);
     QStringList parts = q_version.split('.');
@@ -549,6 +547,9 @@ void init_idescriptor_device(const iDescriptor::Uniq &uniq,
     if (val)
         plist_print(val);
 
+    afc_client_set_timeout(afc_client,
+                           5000); // Set AFC client timeout to 5 seconds
+
     result.provider = provider;
     result.success = true;
     result.afcClient = afc_client;
@@ -593,64 +594,62 @@ cleanup:
     }
 }
 
-// #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-// iDescriptorInitDeviceResultRecovery
-// init_idescriptor_recovery_device(uint64_t ecid)
-// {
-//     qDebug() << "Initializing iDescriptor recovery device with ECID: " <<
-//     ecid; iDescriptorInitDeviceResultRecovery result = {};
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
+void init_idescriptor_recovery_device(
+    uint64_t ecid, iDescriptorInitDeviceResultRecovery &result)
+{
+    qDebug() << "Initializing iDescriptor recovery device with ECID: " << ecid;
+    result = {};
 
-//     irecv_client_t client = nullptr;
-//     const irecv_device_info *deviceInfo = nullptr;
-//     irecv_device_t device = nullptr;
-//     const DeviceDatabaseInfo *info = nullptr;
+    irecv_client_t client = nullptr;
+    const irecv_device_info *deviceInfo = nullptr;
+    irecv_device_t device = nullptr;
+    const DeviceDatabaseInfo *info = nullptr;
 
-//     irecv_error_t ret = irecv_open_with_ecid_and_attempts(
-//         &client, ecid, RECOVERY_CLIENT_CONNECTION_TRIES);
+    irecv_error_t ret = irecv_open_with_ecid_and_attempts(
+        &client, ecid, RECOVERY_CLIENT_CONNECTION_TRIES);
 
-//     if (ret != IRECV_E_SUCCESS) {
-//         qDebug() << "Failed to open recovery client with ECID:" << ecid
-//                  << "Error:" << ret;
-//         result.error = ret;
-//         goto cleanup;
-//     }
+    if (ret != IRECV_E_SUCCESS) {
+        qDebug() << "Failed to open recovery client with ECID:" << ecid
+                 << "Error:" << ret;
+        result.error = ret;
+        goto cleanup;
+    }
 
-//     ret = irecv_get_mode(client, (int *)&result.mode);
-//     if (ret != IRECV_E_SUCCESS) {
-//         qDebug() << "Failed to get recovery mode. Error:" << ret;
-//         result.error = ret;
-//         goto cleanup;
-//     }
+    ret = irecv_get_mode(client, (int *)&result.mode);
+    if (ret != IRECV_E_SUCCESS) {
+        qDebug() << "Failed to get recovery mode. Error:" << ret;
+        result.error = ret;
+        goto cleanup;
+    }
 
-//     deviceInfo = irecv_get_device_info(client);
-//     if (!deviceInfo) {
-//         qDebug() << "Failed to get device info from recovery client";
-//         result.error = IRECV_E_UNKNOWN_ERROR;
-//         goto cleanup;
-//     }
+    deviceInfo = irecv_get_device_info(client);
+    if (!deviceInfo) {
+        qDebug() << "Failed to get device info from recovery client";
+        result.error = IRECV_E_UNKNOWN_ERROR;
+        goto cleanup;
+    }
 
-//     if (irecv_devices_get_device_by_client(client, &device) ==
-//             IRECV_E_SUCCESS &&
-//         device && device->hardware_model) {
-//         qDebug() << "Recovery device hardware_model: "
-//                  << device->hardware_model;
-//         info =
-//             DeviceDatabase::findByHwModel(std::string(device->hardware_model));
-//     } else {
-//         qDebug() << "Could not resolve hardware_model from client.";
-//     }
+    if (irecv_devices_get_device_by_client(client, &device) ==
+            IRECV_E_SUCCESS &&
+        device && device->hardware_model) {
+        qDebug() << "Recovery device hardware_model: "
+                 << device->hardware_model;
+        info =
+            DeviceDatabase::findByHwModel(std::string(device->hardware_model));
+    } else {
+        qDebug() << "Could not resolve hardware_model from client.";
+    }
 
-//     result.displayName =
-//         info ? (info->displayName ? info->displayName : info->marketingName)
-//              : "Unknown Device";
-//     result.deviceInfo = *deviceInfo;
-//     result.success = true;
+    result.displayName =
+        info ? (info->displayName ? info->displayName : info->marketingName)
+             : "Unknown Device";
+    result.deviceInfo = *deviceInfo;
+    result.success = true;
 
-// cleanup:
-//     if (client) {
-//         irecv_close(client);
-//     }
-
-//     return result;
-// }
-// #endif // ENABLE_RECOVERY_DEVICE_SUPPORT
+cleanup:
+    if (client) {
+        irecv_close(client);
+    }
+}
+#endif // ENABLE_RECOVERY_DEVICE_SUPPORT

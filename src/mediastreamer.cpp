@@ -30,7 +30,7 @@
 #include <QTimer>
 #include <memory>
 
-MediaStreamer::MediaStreamer(iDescriptorDevice *device,
+MediaStreamer::MediaStreamer(const iDescriptorDevice *device,
                              AfcClientHandle *afcClient,
                              const QString &filePath, QObject *parent)
     : QTcpServer(parent), m_device(device), m_afcClient(afcClient),
@@ -63,10 +63,10 @@ QUrl MediaStreamer::getUrl() const
     if (!isListening()) {
         return QUrl();
     }
-    // todo pass folder/filename
+
     return QUrl(QString("http://127.0.0.1:%1/%2")
                     .arg(serverPort())
-                    .arg(QFileInfo(m_filePath).fileName()));
+                    .arg(QUrl::toPercentEncoding(m_filePath)));
 }
 
 bool MediaStreamer::isListening() const { return QTcpServer::isListening(); }
@@ -235,7 +235,6 @@ void MediaStreamer::handleRequest(QTcpSocket *socket,
     response += "\r\n";
 
     socket->write(response);
-    // Remove blocking call - let Qt handle when bytes are actually written
 
     // For HEAD requests, don't send body
     if (request.method == "HEAD") {
@@ -259,14 +258,12 @@ void MediaStreamer::sendErrorResponse(QTcpSocket *socket, int statusCode,
                                     .toUtf8();
 
     socket->write(response);
-    // Remove blocking call
     socket->disconnectFromHost();
 }
 
 void MediaStreamer::streamFileRange(QTcpSocket *socket, qint64 startByte,
                                     qint64 endByte)
 {
-    // Create a new streaming context for this request
     StreamingContext *context = new StreamingContext();
     context->socket = socket;
     context->device = m_device;
@@ -276,12 +273,10 @@ void MediaStreamer::streamFileRange(QTcpSocket *socket, qint64 startByte,
     context->bytesRemaining = endByte - startByte + 1;
     context->afcHandle = nullptr;
 
-    qDebug() << "m_filepath" << m_filePath;
     const QByteArray pathBytes = m_filePath.toUtf8();
 
-    IdeviceFfiError *err_open = // Use distinct variable name
-        ServiceManager::safeAfcFileOpen(m_device, pathBytes.constData(),
-                                        AfcRdOnly, &context->afcHandle);
+    IdeviceFfiError *err_open = ServiceManager::safeAfcFileOpen(
+        m_device, pathBytes.constData(), AfcRdOnly, &context->afcHandle);
 
     if (err_open || context->afcHandle == 0) {
         qWarning() << "Failed to open file on device:" << m_filePath;
@@ -290,15 +285,16 @@ void MediaStreamer::streamFileRange(QTcpSocket *socket, qint64 startByte,
         return;
     }
 
-    // Seek to start position if needed
+    /* TODO: can it be optimized by doing
+       SEEK_END	2	/* Seek from end of file. ???
+    */
     if (startByte > 0) {
-        // FIXME: m_afcClient must be passed as alt afc
         IdeviceFfiError *seek_err = ServiceManager::safeAfcFileSeek(
             m_device, context->afcHandle, startByte, SEEK_SET);
 
         if (seek_err) {
             qWarning() << "Failed to seek in file:" << m_filePath;
-            // FIXME: m_afcClient must be passed as alt afc
+
             IdeviceFfiError *err =
                 ServiceManager::safeAfcFileClose(m_device, context->afcHandle);
             if (err) {
@@ -310,9 +306,6 @@ void MediaStreamer::streamFileRange(QTcpSocket *socket, qint64 startByte,
         }
     }
 
-    qDebug() << "Starting non-blocking stream for range" << startByte << "-"
-             << endByte << "(" << context->bytesRemaining << "bytes)";
-
     // Store context as socket property for cleanup
     socket->setProperty("streamingContext",
                         QVariant::fromValue(static_cast<void *>(context)));
@@ -321,15 +314,16 @@ void MediaStreamer::streamFileRange(QTcpSocket *socket, qint64 startByte,
     connect(socket, &QTcpSocket::bytesWritten, this,
             [this, context](qint64 bytes) {
                 Q_UNUSED(bytes)
+
                 // Check if context is still valid
                 QTcpSocket *senderSocket = qobject_cast<QTcpSocket *>(sender());
                 if (!senderSocket ||
                     senderSocket->property("streamingContext").isNull()) {
-                    return; // Context already cleaned up
+                    return;
                 }
+
                 // Continue streaming when socket buffer has space
-                if (context->socket->bytesToWrite() <
-                    32768) { // Keep buffer below 32KB
+                if (context->socket->bytesToWrite() < 50000) {
                     streamNextChunk(context);
                 }
             });
@@ -339,7 +333,7 @@ void MediaStreamer::streamFileRange(QTcpSocket *socket, qint64 startByte,
         QTcpSocket *senderSocket = qobject_cast<QTcpSocket *>(sender());
         if (!senderSocket ||
             senderSocket->property("streamingContext").isNull()) {
-            return; // Already cleaned up
+            return;
         }
         cleanupStreamingContext(context);
     });
@@ -421,7 +415,7 @@ void MediaStreamer::streamNextChunk(StreamingContext *context)
         return;
     }
 
-    const int CHUNK_SIZE = 256 * 1024;
+    const int CHUNK_SIZE = 64 * 1024;
     const uint32_t bytesToRead = static_cast<uint32_t>(
         qMin(static_cast<qint64>(CHUNK_SIZE), context->bytesRemaining));
 
@@ -441,9 +435,10 @@ void MediaStreamer::streamNextChunk(StreamingContext *context)
     if (bytesRead == 0 && bytesToRead > 0) {
         qWarning() << "AFC read returned 0 bytes but expected to read:"
                    << bytesToRead;
-        if (chunkData) {
-            afc_file_read_data_free(chunkData, 0);
-        }
+        // FIXME: in such situation, freeing shouldn't be safe ?
+        // if (chunkData) {
+        //     afc_file_read_data_free(chunkData, 0);
+        // }
         cleanupStreamingContext(context);
         return;
     }
@@ -475,7 +470,7 @@ void MediaStreamer::streamNextChunk(StreamingContext *context)
         return;
     }
 
-    if (context->socket->bytesToWrite() >= 1024 * 1024) {
+    if (context->socket->bytesToWrite() >= 50000) {
         // Wait for bytesWritten signal
         return;
     } else {
@@ -505,9 +500,7 @@ void MediaStreamer::cleanupStreamingContext(StreamingContext *context)
     }
 
     if (context->afcHandle != 0) {
-        // FIXME: m_afcClient must be passed as alt afc
-        ServiceManager::safeAfcFileClose(context->device, context->afcHandle
-                                         /*m_afcClient*/);
+        ServiceManager::safeAfcFileClose(context->device, context->afcHandle);
         context->afcHandle = 0;
     }
 
@@ -517,7 +510,7 @@ void MediaStreamer::cleanupStreamingContext(StreamingContext *context)
         disconnect(context->socket, &QTcpSocket::disconnected, this, nullptr);
 
         context->socket->disconnectFromHost();
-        context->socket = nullptr; // Prevent further access
+        context->socket = nullptr;
     }
 
     qDebug() << "Streaming context cleaned up for"

@@ -39,7 +39,7 @@ class FileExplorerWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit FileExplorerWidget(iDescriptorDevice *device,
+    explicit FileExplorerWidget(const iDescriptorDevice *device,
                                 QWidget *parent = nullptr);
 
 private slots:
@@ -50,7 +50,7 @@ private:
     QStackedWidget *m_stackedWidget;
     AfcClientHandle *currentAfcClient;
     QTreeWidget *m_sidebarTree;
-    iDescriptorDevice *m_device;
+    const iDescriptorDevice *m_device;
 
     // Tree items
     QTreeWidgetItem *m_defaultAfcItem;

@@ -47,10 +47,7 @@ QByteArray read_afc_file_to_byte_array(const iDescriptorDevice *device,
         ServiceManager::safeAfcFileClose(device, handle); // Close handle
         return QByteArray();
     }
-    // Note: afc_file_info_free will be called later if the function returns
-    // successfully or when returning early after the file size check.
 
-    qDebug() << "File size of" << path << "is" << info.size;
     size_t fileSize = info.size;
     if (fileSize == 0) {
         ServiceManager::safeAfcFileClose(device, handle);
@@ -75,10 +72,8 @@ QByteArray read_afc_file_to_byte_array(const iDescriptorDevice *device,
         return QByteArray();
     }
 
-    // Only append and free `chunkData` if `afc_file_read` was successful
     buffer.append(reinterpret_cast<const char *>(chunkData), bytesRead);
-    afc_file_read_data_free(chunkData,
-                            bytesRead); // Free memory owned by Rust FFI
+    afc_file_read_data_free(chunkData, bytesRead);
 
     ServiceManager::safeAfcFileClose(device, handle);
 

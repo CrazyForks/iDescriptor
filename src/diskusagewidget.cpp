@@ -33,7 +33,8 @@ extern "C" {
 
 using namespace iDescriptor;
 
-DiskUsageWidget::DiskUsageWidget(iDescriptorDevice *device, QWidget *parent)
+DiskUsageWidget::DiskUsageWidget(const iDescriptorDevice *device,
+                                 QWidget *parent)
     : QWidget(parent), m_device(device), m_state(Loading), m_totalCapacity(0),
       m_systemUsage(0), m_appsUsage(0), m_mediaUsage(0), m_othersUsage(0),
       m_freeSpace(0)
@@ -501,11 +502,11 @@ void DiskUsageWidget::fetchData()
         /*
         on older devices if Photos.sqlite is high in size and the device is
         connected wirelessly it takes ~5 minutes to read the entire file maybe
-        skip on wireless connections on old devices (iPhone 6s in this case)?
+        skip on wireless connections on old devices than iPhone10,1 (iPhone 8)
         */
         if (m_device->deviceInfo.is_iPhone && m_device->deviceInfo.isWireless &&
             !iDescriptor::Utils::isProductTypeNewer(
-                m_device->deviceInfo.rawProductType, "iPhone8,4")) {
+                m_device->deviceInfo.rawProductType, "iPhone10,1")) {
             qDebug() << "Skipping gallery usage calculation on older "
                         "wireless device.";
             result["galleryUsage"] = QVariant::fromValue(uint64_t(0));

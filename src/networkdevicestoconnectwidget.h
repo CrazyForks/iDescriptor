@@ -49,6 +49,7 @@ public:
     void failed();
     void noPairingFile();
     void initStarted();
+    void connected();
 };
 
 class NetworkDevicesToConnectWidget : public QWidget
@@ -65,6 +66,8 @@ private slots:
     void onNoPairingFileForWirelessDevice(const QString &macAddress);
     void onDeviceInitFailed(const QString &udid);
     void onDeviceInitStarted(const QString &udid);
+    void onDeviceAdded(const iDescriptorDevice *device);
+    void onDeviceAlreadyExists(const iDescriptor::Uniq &uniq);
 
 private:
     void setupUI();

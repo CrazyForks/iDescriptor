@@ -48,7 +48,8 @@ public:
     ExportManager(const ExportManager &) = delete;
     ExportManager &operator=(const ExportManager &) = delete;
 
-    QUuid startExport(iDescriptorDevice *device, const QList<ExportItem> &items,
+    QUuid startExport(const iDescriptorDevice *device,
+                      const QList<ExportItem> &items,
                       const QString &destinationPath,
                       std::optional<AfcClientHandle *> altAfc = std::nullopt);
 

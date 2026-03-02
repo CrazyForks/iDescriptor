@@ -57,6 +57,8 @@
 #define COLOR_HYPERLINK QColor("#FF7FFFD4")
 #endif
 
+#define THUMBNAIL_SIZE QSize(128, 128)
+
 inline QString mergeStyles(QWidget *widget, const QString &newStyles)
 {
     if (!widget) {

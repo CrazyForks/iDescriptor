@@ -46,7 +46,7 @@ class AfcExplorerWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit AfcExplorerWidget(iDescriptorDevice *device = nullptr,
+    explicit AfcExplorerWidget(const iDescriptorDevice *device = nullptr,
                                bool favEnabled = false,
                                AfcClientHandle *afcClient = nullptr,
                                QString root = "/", QWidget *parent = nullptr);
@@ -87,7 +87,7 @@ private:
     ZIconWidget *m_homeButton;
     ZIconWidget *m_upButton;
     ZIconWidget *m_enterButton;
-    iDescriptorDevice *m_device;
+    const iDescriptorDevice *m_device;
     bool m_favEnabled;
     AfcClientHandle *m_afc;
     QString m_errorMessage;

@@ -10,6 +10,10 @@
       "add-ld-path": "."
     }
   },
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.rust-stable",
+    "org.freedesktop.Sdk.Extension.llvm20"
+  ],
   "cleanup-commands": ["mkdir -p ${FLATPAK_DEST}/lib/ffmpeg"],
   "command": "iDescriptor",
   "finish-args": [
@@ -19,20 +23,8 @@
     "--share=network",
     "--device=all",
     "--socket=system-bus",
-    "--filesystem=/run/usbmuxd:rw",
-    "--filesystem=/run/udev:ro",
-    "--filesystem=/dev:ro",
-    "--filesystem=/sys/bus:ro",
-    "--filesystem=/sys/class:ro",
-    "--filesystem=/sys/devices:ro",
+    "--filesystem=/run/usbmuxd",
     "--system-talk-name=org.freedesktop.Avahi",
-    "--talk-name=org.libimobiledevice.usbmuxd",
-    "--system-talk-name=org.libimobiledevice.usbmuxd",
-    "--system-talk-name=org.freedesktop.UDisks2",
-    "--system-talk-name=org.freedesktop.login1",
-    "--system-talk-name=org.freedesktop.NetworkManager",
-    "--system-talk-name=org.freedesktop.UPower",
-    "--system-talk-name=org.freedesktop.systemd1",
     "--talk-name=org.freedesktop.Platform.ffmpeg-full",
     "--env=QT_MEDIA_BACKEND=ffmpeg",
     "--env=AVAHI_COMPAT_NOWARN=1"
@@ -90,31 +82,10 @@
     {
       "name": "libplist",
       "buildsystem": "autotools",
-      "config-opts": ["--without-cython"],
       "sources": [
         {
           "type": "git",
           "url": "https://github.com/libimobiledevice/libplist.git"
-        }
-      ]
-    },
-    {
-      "name": "libimobiledevice-glue",
-      "buildsystem": "autotools",
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/libimobiledevice/libimobiledevice-glue.git"
-        }
-      ]
-    },
-    {
-      "name": "libtatsu",
-      "buildsystem": "autotools",
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/libimobiledevice/libtatsu.git"
         }
       ]
     },
@@ -131,26 +102,6 @@
       ],
       "post-install": [
         "install -Dm644 COPYING ${FLATPAK_DEST}/share/licenses/libusb/COPYING"
-      ]
-    },
-    {
-      "name": "libusbmuxd",
-      "buildsystem": "autotools",
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/libimobiledevice/libusbmuxd.git"
-        }
-      ]
-    },
-    {
-      "name": "libimobiledevice",
-      "buildsystem": "autotools",
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/libimobiledevice/libimobiledevice.git"
-        }
       ]
     },
     {
@@ -201,16 +152,6 @@
         {
           "type": "git",
           "url": "https://github.com/lathiat/avahi.git"
-        }
-      ]
-    },
-    {
-      "name": "libirecovery",
-      "buildsystem": "autotools",
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/libimobiledevice/libirecovery.git"
         }
       ]
     },
@@ -271,22 +212,36 @@
     },
     {
       "name": "iDescriptor",
-      "buildsystem": "cmake-ninja",
+      "buildsystem": "simple",
       "build-options": {
+        "append-path": "/usr/lib/sdk/rust-stable/bin",
+        "env": {
+          "CARGO_HOME": "/run/build/iDescriptor/cargo",
+          "CARGO_NET_OFFLINE": "true",
+          "RUST_BACKTRACE": "1",
+          "CUSTOM_LIB_PATH": "/app/lib",
+          "CUSTOM_INCLUDE_PATH": "/app/include",
+          "CUSTOM_PKGCONFIG_PATH": "/app/lib/pkgconfig",
+          "GO_EXECUTABLE": "/app/sdk/golang/bin/go",
+          "FLATPAK_BUILD": "ON"
+        },
         "build-args": ["--share=network"]
       },
-      "config-opts": [
-        "-DCUSTOM_LIB_PATH=/app/lib",
-        "-DCUSTOM_INCLUDE_PATH=/app/include",
-        "-DCUSTOM_PKGCONFIG_PATH=/app/lib/pkgconfig",
-        "-DGO_EXECUTABLE=/app/sdk/golang/bin/go",
-        "-DFLATPAK_BUILD=ON"
+      "build-commands": [
+        "cargo --offline fetch --manifest-path lib/idevice-rs/Cargo.toml --verbose",
+        "cargo build --offline --release --all-features --manifest-path lib/idevice-rs/Cargo.toml",
+        "cmake -B build -DGO_EXECUTABLE=$GO_EXECUTABLE .",
+        "cmake --build build --config Release",
+        "install -Dm0755 build/iDescriptor ${FLATPAK_DEST}/bin/iDescriptor"
       ],
       "sources": [
         {
           "type": "dir",
           "path": "."
-        }
+        },
+        "cargo-sources.idevice-rs.json",
+        "cargo-sources.idevice-rs.idevice.json",
+        "cargo-sources.idevice-rs.cpp.plist_ffi.json"
       ]
     }
   ]

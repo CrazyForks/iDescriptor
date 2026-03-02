@@ -34,40 +34,27 @@
 #include <QTimer>
 #include <QVideoFrame>
 #include <QVideoSink>
-#include <QtConcurrent/QtConcurrent>
 
-PhotoModel::PhotoModel(iDescriptorDevice *device, FilterType filterType,
+PhotoModel::PhotoModel(const iDescriptorDevice *device, FilterType filterType,
                        QObject *parent)
-    : QAbstractListModel(parent), m_device(device), m_thumbnailSize(120, 120),
-      m_sortOrder(NewestFirst), m_filterType(filterType)
+    : QAbstractListModel(parent), m_device(device), m_sortOrder(NewestFirst),
+      m_filterType(filterType)
 {
-    connect(&ImageLoader::sharedInstance(), &ImageLoader::thumbnailReady, this,
-            &PhotoModel::onThumbnailReady);
 }
 
 void PhotoModel::clear()
 {
-    blockSignals(true);
-
-    // // Clean up any active watchers
-    // for (auto *watcher : m_activeLoaders.values()) {
-    //     if (watcher) {
-    //         watcher->disconnect();
-    //         watcher->cancel();
-    //         // watcher->waitForFinished();
-    //         watcher->deleteLater();
-    //     }
-    // }
-    // m_activeLoaders.clear();
-    // m_loadingPaths.clear();
-    // m_thumbnailCache.clear();
+    QMutexLocker locker(&m_mutex);
+    disconnect(&ImageLoader::sharedInstance(), &ImageLoader::thumbnailReady,
+               this, &PhotoModel::onThumbnailReady);
 
     beginResetModel();
     m_photos.clear();
     m_allPhotos.clear();
     endResetModel();
 
-    blockSignals(false);
+    qDebug() << "Cleared PhotoModel data";
+    ImageLoader::sharedInstance().clear();
 }
 
 PhotoModel::~PhotoModel()
@@ -112,8 +99,7 @@ QVariant PhotoModel::data(const QModelIndex &index, int role) const
             }
         }
 
-        imgloader.requestThumbnail(m_device, info.filePath, index.row(),
-                                   index.row());
+        imgloader.requestThumbnail(m_device, info.filePath, index.row());
 
         if (iDescriptor::Utils::isVideoFile(info.fileName)) {
             return QIcon(":/resources/icons/video-x-generic.png");
@@ -134,19 +120,33 @@ QVariant PhotoModel::data(const QModelIndex &index, int role) const
 void PhotoModel::onThumbnailReady(const QString &path, const QPixmap &pixmap,
                                   unsigned int row)
 {
-    if (m_photos[row].filePath == path) {
-        QModelIndex idx = createIndex(row, 0);
-        emit dataChanged(idx, idx, {Qt::DecorationRole});
+    // check bounds
+    if (row < m_photos.size()) {
+        const PhotoInfo &photo = m_photos.at(row);
+        if (photo.filePath == path) {
+            QModelIndex idx = createIndex(row, 0);
+            emit dataChanged(idx, idx, {Qt::DecorationRole});
+        }
+    } else {
+        // FIXME: happens when we filter down to videos only
+        qDebug() << "Out of bounds in PhotoModel::onThumbnailReady";
     }
 }
 
-void PhotoModel::populatePhotoPaths()
+bool isTimeoutError(IdeviceFfiError *err)
 {
-    // TODO:beginResetModel called on PhotoModel(0x600002d12a40) without calling
-    // endResetModel first
+    return err && err->code == TimeoutErrorCode;
+}
+
+bool PhotoModel::populatePhotoPaths()
+{
+    // FIXME:DEADLOCK?
+    // QMutexLocker locker(&m_mutex);
+    connect(&ImageLoader::sharedInstance(), &ImageLoader::thumbnailReady, this,
+            &PhotoModel::onThumbnailReady);
     if (m_albumPath.isEmpty()) {
         qDebug() << "No album path set, skipping population";
-        return;
+        return false;
     }
 
     m_allPhotos.clear();
@@ -160,9 +160,13 @@ void PhotoModel::populatePhotoPaths()
         ServiceManager::safeAfcGetFileInfo(m_device, albumPathCStr, &albumInfo);
     if (err) {
         qDebug() << "Album path does not exist or cannot be accessed:"
-                 << m_albumPath << "Error:" << err->message;
+                 << m_albumPath << "Error:" << err->message
+                 << "Code:" << err->code;
+        if (isTimeoutError(err)) {
+            emit timedOut();
+        }
         idevice_error_free(err);
-        return;
+        return false;
     }
     // FIXME: should we continue if albumInfo is null?
     if (albumInfo.size) {
@@ -182,27 +186,23 @@ void PhotoModel::populatePhotoPaths()
     if (err) {
         qDebug() << "Failed to read photo directory:" << photoDir
                  << "Error:" << err->message;
+        if (isTimeoutError(err)) {
+            emit timedOut();
+        }
         idevice_error_free(err);
-        return;
+        return false;
     }
 
     if (files) {
         for (int i = 0; files[i]; i++) {
             QString fileName = QString::fromUtf8(files[i]);
-            if (fileName.endsWith(".JPG", Qt::CaseInsensitive) ||
-                fileName.endsWith(".PNG", Qt::CaseInsensitive) ||
-                fileName.endsWith(".HEIC", Qt::CaseInsensitive) ||
-                fileName.endsWith(".MOV", Qt::CaseInsensitive) ||
-                fileName.endsWith(".MP4", Qt::CaseInsensitive) ||
-                fileName.endsWith(".M4V", Qt::CaseInsensitive)) {
-
+            if (iDescriptor::Utils::isGalleryFile(fileName)) {
                 PhotoInfo info;
                 info.filePath = m_albumPath + "/" + fileName;
                 info.fileName = fileName;
                 info.thumbnailRequested = false;
                 info.fileType = determineFileType(fileName);
                 info.dateTime = extractDateTimeFromFile(info.filePath);
-
                 m_allPhotos.append(info);
             }
         }
@@ -214,6 +214,7 @@ void PhotoModel::populatePhotoPaths()
 
     qDebug() << "Loaded" << m_allPhotos.size() << "media files from device";
     qDebug() << "After filtering:" << m_photos.size() << "items shown";
+    return true;
 }
 
 // Sorting and filtering methods
@@ -235,6 +236,7 @@ void PhotoModel::setFilterType(FilterType filter)
 
 void PhotoModel::applyFilterAndSort()
 {
+    QMutexLocker locker(&m_mutex);
     beginResetModel();
 
     // Filter photos
@@ -330,15 +332,15 @@ QStringList PhotoModel::getFilteredFilePaths() const
 // Helper methods
 QDateTime PhotoModel::extractDateTimeFromFile(const QString &filePath) const
 {
-    AfcFileInfo *info = nullptr;
+    AfcFileInfo info = {};
     IdeviceFfiError *err = ServiceManager::safeAfcGetFileInfo(
-        m_device, filePath.toUtf8().constData(), info);
-    if (!err && info) {
-        uint64_t creation_seconds = info->creation;
+        m_device, filePath.toUtf8().constData(), &info);
+    if (!err && info.creation) {
+        uint64_t creation_seconds = info.creation;
         QDateTime dateTime =
             QDateTime::fromSecsSinceEpoch(creation_seconds, Qt::UTC);
 
-        // afc_file_info_free(info);
+        afc_file_info_free(&info);
         if (dateTime.isValid()) {
             return dateTime;
         }
@@ -362,7 +364,24 @@ void PhotoModel::setAlbumPath(const QString &albumPath)
     clear();
 
     m_albumPath = albumPath;
-    populatePhotoPaths();
+    QFutureWatcher<bool> *futureWatcher = new QFutureWatcher<bool>(this);
+    QFuture<bool> future =
+        QtConcurrent::run([this]() { return populatePhotoPaths(); });
+    futureWatcher->setFuture(future);
+    connect(futureWatcher, &QFutureWatcher<bool>::finished, this,
+            [this, futureWatcher]() {
+                futureWatcher->deleteLater();
+                bool success = futureWatcher->result();
+                if (success) {
+                    qDebug() << "Finished populating photo paths for album:"
+                             << m_albumPath;
+                    emit albumPathSet();
+                } else {
+                    // qDebug() << "Failed to populate photo paths for album:"
+                    //          << m_albumPath;
+                    // emit albumPathFailed();
+                }
+            });
 }
-
+// TODO:REMOVE
 void PhotoModel::refreshPhotos() { populatePhotoPaths(); }

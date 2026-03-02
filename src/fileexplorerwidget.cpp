@@ -42,7 +42,7 @@
 #include <QTreeWidget>
 #include <QVariant>
 
-FileExplorerWidget::FileExplorerWidget(iDescriptorDevice *device,
+FileExplorerWidget::FileExplorerWidget(const iDescriptorDevice *device,
                                        QWidget *parent)
     : QWidget(parent), m_device(device)
 {

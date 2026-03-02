@@ -35,7 +35,7 @@ class DiskUsageWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit DiskUsageWidget(iDescriptorDevice *device,
+    explicit DiskUsageWidget(const iDescriptorDevice *device,
                              QWidget *parent = nullptr);
 
 private:
@@ -45,7 +45,7 @@ private:
 
     enum State { Loading, Ready, Error };
 
-    iDescriptorDevice *m_device;
+    const iDescriptorDevice *m_device;
     State m_state;
     QString m_errorMessage;
 

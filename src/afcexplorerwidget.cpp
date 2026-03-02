@@ -44,7 +44,8 @@
 #include <QTreeWidget>
 #include <QVariant>
 
-AfcExplorerWidget::AfcExplorerWidget(iDescriptorDevice *device, bool favEnabled,
+AfcExplorerWidget::AfcExplorerWidget(const iDescriptorDevice *device,
+                                     bool favEnabled,
                                      AfcClientHandle *afcClient, QString root,
                                      QWidget *parent)
     : QWidget(parent), m_device(device), m_favEnabled(favEnabled),

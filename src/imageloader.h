@@ -3,19 +3,20 @@
 
 #include "iDescriptor.h"
 #include <QCache>
+#include <QHash>
 #include <QImage>
+#include <QMutex>
 #include <QObject>
 #include <QSet>
 #include <QString>
 #include <QThreadPool>
 
+class ImageTask;
+
 class ImageLoader : public QObject
 {
     Q_OBJECT
 public:
-    enum LoadPriority { Low = 0, Medium = 50, High = 100 };
-    Q_ENUM(LoadPriority)
-
     explicit ImageLoader(QObject *parent = nullptr);
     static ImageLoader &sharedInstance()
     {
@@ -23,7 +24,11 @@ public:
         return instance;
     }
     void requestThumbnail(const iDescriptorDevice *device, const QString &path,
-                          int priority, unsigned int row = 0);
+                          unsigned int row = 0);
+    void
+    requestImageWithCallback(const iDescriptorDevice *device,
+                             const QString &path, int priority,
+                             std::function<void(const QPixmap &)> callback);
     void cancelThumbnail(const QString &path);
     bool isLoading(const QString &path);
     void clear();
@@ -46,7 +51,8 @@ private slots:
 
 private:
     QThreadPool m_pool;
-    QSet<QString> m_pending;
+    QHash<QString, ImageTask *> m_pendingTasks;
+    QMutex m_mutex;
 };
 
 #endif // IMAGELOADER_H

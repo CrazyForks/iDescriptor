@@ -15,6 +15,7 @@ extern "C" {
 
 ImageLoader::ImageLoader(QObject *parent) : QObject(parent)
 {
+    // TODO: maybe finetune to hardware ?
     m_pool.setMaxThreadCount(10);
     // 350 MB cache for thumbnails
     m_cache.setMaxCost(350 * 1024 * 1024);
@@ -22,51 +23,144 @@ ImageLoader::ImageLoader(QObject *parent) : QObject(parent)
 
 bool ImageLoader::isLoading(const QString &path)
 {
-    return m_pending.contains(path);
+    QMutexLocker locker(&m_mutex);
+    return m_pendingTasks.contains(path);
 }
 
 void ImageLoader::requestThumbnail(const iDescriptorDevice *device,
-                                   const QString &path, int priority,
-                                   unsigned int row)
+                                   const QString &path, unsigned int row)
 {
     if (auto *cached = m_cache.object(path)) {
         emit thumbnailReady(path, *cached, row);
         return;
     }
 
-    if (m_pending.contains(path))
-        return;
+    {
+        QMutexLocker locker(&m_mutex);
+        if (m_pendingTasks.contains(path))
+            return;
+    }
 
-    m_pending.insert(path);
+    auto *task = new ImageTask(device, path, row);
 
-    // FIXME: qsize
-    auto *task = new ImageTask(device, path, QSize(128, 128), row);
+    {
+        QMutexLocker locker(&m_mutex);
+        m_pendingTasks[path] = task;
+    }
 
     connect(task, &ImageTask::finished, this, &ImageLoader::onTaskFinished,
             Qt::QueuedConnection);
+
+    // Use row as priority
+    m_pool.start(task, row);
+}
+
+/*
+    this method should not load from cache
+    because cached images are already scaled down
+    we need the original image
+*/
+void ImageLoader::requestImageWithCallback(
+    const iDescriptorDevice *device, const QString &path, int priority,
+    std::function<void(const QPixmap &)> callback)
+{
+
+    /*
+        FIXME: priority is passed as row
+        nothing dangerous but a bit hacky, should be handled better
+    */                                                 //scale=false
+    auto *task = new ImageTask(device, path, priority, false);
+
+    /*
+        TODO: should we do this ?
+        this function is meant for the media preview dialog,
+        which only loads a image at a time
+        and not really related to the thumbnails in the photomodel
+    */
+    // m_pendingTasks[path] = task;
+
+    connect(
+        task, &ImageTask::finished, this,
+        [this, path, callback](const QString &, const QPixmap &pixmap,
+                               unsigned int row) { callback(pixmap); },
+        Qt::QueuedConnection);
 
     m_pool.start(task, priority);
 }
 
 void ImageLoader::cancelThumbnail(const QString &path)
 {
-    m_pending.remove(path);
+    qDebug() << "Attempting to cancel thumbnail loading for" << path;
+
+    QMutexLocker locker(&m_mutex);
+
+    if (!m_pendingTasks.contains(path)) {
+        return;
+    }
+
+    ImageTask *task = m_pendingTasks.value(path);
+    if (task && m_pool.tryTake(task)) {
+        qDebug() << "Cancelled thumbnail loading for" << path;
+        m_pendingTasks.remove(path);
+        delete task;
+    } else {
+        m_pendingTasks.remove(path);
+    }
 }
 
 void ImageLoader::clear()
 {
-    m_pending.clear();
+    qDebug() << "Clearing ImageLoader cache and pending tasks";
+
+    m_pool.clear();
+
+    {
+        QMutexLocker locker(&m_mutex);
+
+        for (auto it = m_pendingTasks.begin(); it != m_pendingTasks.end();) {
+            ImageTask *task = it.value();
+            if (task && m_pool.tryTake(task)) {
+                qDebug() << "Cancelled pending task";
+                delete task;
+            }
+            it = m_pendingTasks.erase(it);
+        }
+    }
+
+    /*
+     TODO: This could make the UI unresponsive but
+     maybe a good approch to handle
+     async cancellation properly(wireless)
+     Wait for any running tasks to complete
+     */
+    // m_pool.waitForDone();
+
+    {
+        QMutexLocker locker(&m_mutex);
+        m_pendingTasks.clear();
+    }
+
     m_cache.clear();
 }
 
 void ImageLoader::onTaskFinished(const QString &path, const QPixmap &pixmap,
                                  unsigned int row)
 {
-    // Stale?
-    if (!m_pending.contains(path))
-        return;
+    ImageTask *task = nullptr;
 
-    m_pending.remove(path);
+    {
+        QMutexLocker locker(&m_mutex);
+
+        if (!m_pendingTasks.contains(path)) {
+            return;
+        }
+
+        task = m_pendingTasks.take(path);
+    }
+
+    if (task) {
+        delete task;
+    }
 
     // Cache
     m_cache.insert(path, new QPixmap(pixmap));
@@ -74,18 +168,56 @@ void ImageLoader::onTaskFinished(const QString &path, const QPixmap &pixmap,
     emit thumbnailReady(path, pixmap, row);
 }
 
-// Static function that runs in worker thread
-QPixmap ImageLoader::loadThumbnailFromDevice(const iDescriptorDevice *device,
-                                             const QString &filePath,
-                                             const QSize &size)
+// almost a copy of loadThumbnailFromDevice but without any scaling logic
+QPixmap ImageLoader::loadImage(const iDescriptorDevice *device,
+                               const QString &filePath)
 {
-    // Load from device using ServiceManager
     QByteArray imageData = ServiceManager::safeReadAfcFileToByteArray(
         device, filePath.toUtf8().constData());
 
     if (imageData.isEmpty()) {
         qDebug() << "Could not read from device:" << filePath;
-        return {}; // Return empty pixmap on error
+        return {};
+    }
+
+    if (filePath.endsWith(".HEIC", Qt::CaseInsensitive)) {
+        QPixmap img = load_heic(imageData);
+        return img.isNull() ? QPixmap() : img;
+    }
+
+    QBuffer buffer(&imageData);
+    buffer.open(QIODevice::ReadOnly);
+
+    QImageReader reader(&buffer);
+    if (reader.canRead()) {
+        QImage image = reader.read();
+        if (!image.isNull()) {
+            return QPixmap::fromImage(image);
+        }
+        qDebug() << "QImageReader failed to decode" << filePath
+                 << "Error:" << reader.errorString();
+    }
+
+    // Fallback for formats QImageReader might struggle with
+    QPixmap pixmap;
+    if (pixmap.loadFromData(imageData)) {
+        return pixmap;
+    }
+
+    qDebug() << "Could not decode image data for:" << filePath;
+    return {};
+}
+
+QPixmap ImageLoader::loadThumbnailFromDevice(const iDescriptorDevice *device,
+                                             const QString &filePath,
+                                             const QSize &size)
+{
+    QByteArray imageData = ServiceManager::safeReadAfcFileToByteArray(
+        device, filePath.toUtf8().constData());
+
+    if (imageData.isEmpty()) {
+        qDebug() << "Could not read from device:" << filePath;
+        return {};
     }
 
     if (filePath.endsWith(".HEIC", Qt::CaseInsensitive)) {
@@ -95,14 +227,11 @@ QPixmap ImageLoader::loadThumbnailFromDevice(const iDescriptorDevice *device,
                                          Qt::SmoothTransformation);
     }
 
-    // Use QImageReader for efficient, low-memory scaled loading
     QBuffer buffer(&imageData);
     buffer.open(QIODevice::ReadOnly);
 
     QImageReader reader(&buffer);
     if (reader.canRead()) {
-        // This is the key optimization: it decodes a smaller image directly,
-        // saving a massive amount of memory.
         reader.setScaledSize(size);
         QImage image = reader.read();
         if (!image.isNull()) {
@@ -146,10 +275,8 @@ ImageLoader::generateVideoThumbnailFFmpeg(const iDescriptorDevice *device,
 
     // Get file size
     AfcFileInfo info = {};
-    IdeviceFfiError
-        *err_info = // Use distinct variable name for the error from GetFileInfo
-        ServiceManager::safeAfcGetFileInfo(
-            device, filePath.toUtf8().constData(), &info);
+    IdeviceFfiError *err_info = ServiceManager::safeAfcGetFileInfo(
+        device, filePath.toUtf8().constData(), &info);
 
     uint64_t fileSize = 0;
     if (err_info) {
@@ -157,12 +284,11 @@ ImageLoader::generateVideoThumbnailFFmpeg(const iDescriptorDevice *device,
                    << "Error:" << err_info->message;
         idevice_error_free(err_info);
         ServiceManager::safeAfcFileClose(device, fileHandle);
-        afc_file_info_free(&info); // Free internal strings of info
         return {};
     }
 
     fileSize = info.size;
-    afc_file_info_free(&info); // Free internal strings of info after use
+    afc_file_info_free(&info);
 
     if (fileSize == 0) {
         ServiceManager::safeAfcFileClose(device, fileHandle);
@@ -189,7 +315,7 @@ ImageLoader::generateVideoThumbnailFFmpeg(const iDescriptorDevice *device,
     StreamContext *streamCtx =
         new StreamContext{device, fileHandle, fileSize, 0};
 
-    // Custom read function that reads from device on-demand
+    // Custom read function
     auto readPacket = [](void *opaque, uint8_t *buf, int bufSize) -> int {
         StreamContext *ctx = static_cast<StreamContext *>(opaque);
 
@@ -201,10 +327,8 @@ ImageLoader::generateVideoThumbnailFFmpeg(const iDescriptorDevice *device,
             std::min(static_cast<uint32_t>(bufSize),
                      static_cast<uint32_t>(ctx->fileSize - ctx->currentPos));
         size_t bytesRead = 0;
-        uint8_t *read_data_ptr =
-            nullptr; // Pointer to store the data allocated by safeAfcFileRead
+        uint8_t *read_data_ptr = nullptr;
 
-        // Call safeAfcFileRead to get the data into a newly allocated buffer
         IdeviceFfiError *err = ServiceManager::safeAfcFileRead(
             ctx->device, ctx->fileHandle, &read_data_ptr, toRead, &bytesRead);
 
@@ -238,9 +362,7 @@ ImageLoader::generateVideoThumbnailFFmpeg(const iDescriptorDevice *device,
         // `buf`
         if (read_data_ptr) {
             memcpy(buf, read_data_ptr, bytesRead);
-            afc_file_read_data_free(
-                read_data_ptr,
-                bytesRead); // Free the memory allocated by safeAfcFileRead
+            afc_file_read_data_free(read_data_ptr, bytesRead);
         } else {
             qWarning() << "AFC readPacket: read_data_ptr was null but "
                           "bytesRead > 0. This is unexpected.";
@@ -285,7 +407,7 @@ ImageLoader::generateVideoThumbnailFFmpeg(const iDescriptorDevice *device,
         if (err) {
             qDebug() << "AFC seek error:" << err->message
                      << "code:" << err->code;
-            // idevice_error_free(err);
+            idevice_error_free(err);
             return -1;
         }
 
@@ -444,6 +566,12 @@ ImageLoader::generateVideoThumbnailFFmpeg(const iDescriptorDevice *device,
                     QImage imgCopy = img.copy();
 
                     // Scale to requested size
+                    /*
+                        TODO: scaling might become optional
+                        if we ever needed the raw frame,
+                        might need to abstract the main logic to get the frame
+                        and handle scaling separately
+                    */
                     thumbnail = QPixmap::fromImage(
                         imgCopy.scaled(requestedSize, Qt::KeepAspectRatio,
                                        Qt::SmoothTransformation));
@@ -471,31 +599,4 @@ ImageLoader::generateVideoThumbnailFFmpeg(const iDescriptorDevice *device,
     delete streamCtx;
 
     return thumbnail;
-}
-
-// todo make sure this is also a task used in mediapreviewdialog.cpp
-QPixmap ImageLoader::loadImage(const iDescriptorDevice *device,
-                               const QString &filePath)
-{
-    QByteArray imageData = ServiceManager::safeReadAfcFileToByteArray(
-        device, filePath.toUtf8().constData());
-
-    if (imageData.isEmpty()) {
-        qDebug() << "Could not read from device:" << filePath;
-        return QPixmap(); // Return empty pixmap on error
-    }
-
-    if (filePath.endsWith(".HEIC")) {
-        qDebug() << "Loading HEIC image from data for:" << filePath;
-        QPixmap img = load_heic(imageData);
-        return img.isNull() ? QPixmap() : img;
-    }
-
-    QPixmap original;
-    if (!original.loadFromData(imageData)) {
-        qDebug() << "Could not decode image data for:" << filePath;
-        return QPixmap();
-    }
-
-    return original;
 }

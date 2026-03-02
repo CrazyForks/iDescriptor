@@ -44,9 +44,9 @@ class ToolboxWidget : public QWidget
     Q_OBJECT
 public:
     explicit ToolboxWidget(QWidget *parent = nullptr);
-    static void restartDevice(iDescriptorDevice *device);
-    static void shutdownDevice(iDescriptorDevice *device);
-    static void _enterRecoveryMode(iDescriptorDevice *device);
+    static void restartDevice(const iDescriptorDevice *device);
+    static void shutdownDevice(const iDescriptorDevice *device);
+    static void enterRecoveryMode(const iDescriptorDevice *device);
     static ToolboxWidget *sharedInstance();
     void restartAirPlayWidget();
 private slots:

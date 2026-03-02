@@ -184,7 +184,7 @@ void OpenSSHTerminalWidget::clearDeviceButtons()
     }
 }
 
-void OpenSSHTerminalWidget::addWiredDevice(iDescriptorDevice *device)
+void OpenSSHTerminalWidget::addWiredDevice(const iDescriptorDevice *device)
 {
     QString deviceName = QString::fromStdString(device->deviceInfo.deviceName);
     QString udid = QString::fromStdString(device->udid);
@@ -192,8 +192,9 @@ void OpenSSHTerminalWidget::addWiredDevice(iDescriptorDevice *device)
 
     QRadioButton *radioButton = new QRadioButton(displayText);
     radioButton->setProperty("deviceType", "wired");
-    radioButton->setProperty("devicePointer",
-                             QVariant::fromValue(static_cast<void *>(device)));
+    radioButton->setProperty(
+        "devicePointer",
+        QVariant::fromValue(static_cast<const void *>(device)));
     radioButton->setProperty("udid", udid);
 
     m_deviceButtonGroup->addButton(radioButton);
@@ -214,7 +215,7 @@ void OpenSSHTerminalWidget::addWirelessDevice(const NetworkDevice &device)
     m_wirelessDevicesLayout->addWidget(radioButton);
 }
 
-void OpenSSHTerminalWidget::onWiredDeviceAdded(iDescriptorDevice *device)
+void OpenSSHTerminalWidget::onWiredDeviceAdded(const iDescriptorDevice *device)
 {
     addWiredDevice(device);
 }

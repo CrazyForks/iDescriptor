@@ -50,7 +50,7 @@
     https://github.com/ScottKjr3347/iOS_Local_PL_Photos.sqlite_Queries
 */
 
-GalleryWidget::GalleryWidget(iDescriptorDevice *device, QWidget *parent)
+GalleryWidget::GalleryWidget(const iDescriptorDevice *device, QWidget *parent)
     : QWidget{parent}, m_device(device), m_model(nullptr),
       m_albumSelectionWidget(nullptr), m_albumListView(nullptr),
       m_photoGalleryWidget(nullptr), m_listView(nullptr), m_backButton(nullptr)
@@ -479,6 +479,18 @@ void GalleryWidget::onAlbumSelected(const QString &albumPath)
         m_model = new PhotoModel(m_device, getCurrentFilterType(), this);
         m_listView->setModel(m_model);
 
+        connect(m_model, &PhotoModel::albumPathSet, this, [this]() {
+            // Switch to photo gallery view once album is loaded
+            m_loadingWidget->switchToWidget(m_photoGalleryWidget);
+            // Enable controls and show back button
+            setControlsEnabled(true);
+            m_backButton->show();
+        });
+
+        connect(m_model, &PhotoModel::timedOut, this, [this]() {
+            m_loadingWidget->showError("Timed out loading album");
+        });
+
         // Update export button states based on selection
         connect(m_listView->selectionModel(),
                 &QItemSelectionModel::selectionChanged, this, [this]() {
@@ -488,25 +500,14 @@ void GalleryWidget::onAlbumSelected(const QString &albumPath)
                 });
     }
 
-    // connect(m_model, &PhotoModel::thumbnailNeedsToBeLoaded, m_model,
-    //         &PhotoModel::requestThumbnail, Qt::QueuedConnection);
     // Set album path and load photos
     m_model->setAlbumPath(albumPath);
 
-    // Switch to photo gallery view
-    m_loadingWidget->switchToWidget(m_photoGalleryWidget);
-    // Enable controls and show back button
-    setControlsEnabled(true);
-    m_backButton->show();
+    m_loadingWidget->showLoading();
 }
 
 void GalleryWidget::onBackToAlbums()
 {
-    if (m_model) {
-        // disconnect(m_model, &PhotoModel::thumbnailNeedsToBeLoaded, m_model,
-        //            &PhotoModel::requestThumbnail);
-    }
-
     // Switch back to album selection view
     m_loadingWidget->switchToWidget(m_albumSelectionWidget);
 

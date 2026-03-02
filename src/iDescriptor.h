@@ -36,6 +36,7 @@
 #include <idevice++/heartbeat.hpp>
 #include <idevice++/installation_proxy.hpp>
 #include <idevice++/lockdown.hpp>
+#include <idevice++/lockdown_location_simulation.hpp>
 #include <idevice++/provider.hpp>
 #include <idevice++/readwrite.hpp>
 #include <idevice++/rsd.hpp>
@@ -68,11 +69,16 @@
     ((((maj) & 0xFF) << 16) | (((min) & 0xFF) << 8) | ((patch) & 0xFF))
 #include "devicemonitor.h"
 #include "iDescriptor-utils.h"
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
+#include <libirecovery.h>
+#endif
 
 #define DeviceLockedMountErrorCode -21
 #define NotFoundErrorCode -14
 #define ServiceNotFoundErrorCode -15
 #define PairingDialogResponsePending -28
+#define InvalidServiceErrorCode -59
+#define TimeoutErrorCode -71
 
 #define DISK_IMAGE_TYPE_DEVELOPER "Developer"
 
@@ -214,6 +220,8 @@ struct DeviceInfo {
     bool isWireless = false;
     // empty on USB devices
     std::string ipAddress;
+    /* same as udid on iDescriptorDevice */
+    std::string UniqueDeviceID;
 };
 
 struct iDescriptorDevice {
@@ -242,33 +250,34 @@ struct iDescriptorInitDeviceResult {
     std::shared_ptr<DiagnosticsRelay> diagRelay;
     QThread *heartbeatThread;
 };
-// #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-// struct iDescriptorRecoveryDevice {
-//     uint64_t ecid;
-//     irecv_mode mode;
-//     uint32_t cpid;
-//     uint32_t bdid;
-//     std::string displayName;
-//     std::recursive_mutex *mutex;
-// };
-// #endif
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
+struct iDescriptorRecoveryDevice {
+    uint64_t ecid;
+    irecv_mode mode;
+    uint32_t cpid;
+    uint32_t bdid;
+    std::string displayName;
+    std::recursive_mutex mutex;
+};
+struct iDescriptorInitDeviceResultRecovery {
+    irecv_client_t client = nullptr;
+    irecv_device_info deviceInfo;
+    irecv_error_t error;
+    bool success = false;
+    irecv_mode mode = IRECV_K_RECOVERY_MODE_1;
+    const char *displayName = nullptr;
+};
+
+std::string parse_recovery_mode(irecv_mode productType);
+
+void init_idescriptor_recovery_device(uint64_t ecid,
+                                      iDescriptorInitDeviceResultRecovery &res);
+#endif
 
 struct TakeScreenshotResult {
     bool success = false;
     QImage img;
 };
-
-// #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-// struct iDescriptorInitDeviceResultRecovery {
-//     irecv_client_t client = nullptr;
-//     irecv_device_info deviceInfo;
-//     irecv_error_t error;
-//     bool success = false;
-//     irecv_mode mode = IRECV_K_RECOVERY_MODE_1;
-//     const char *displayName = nullptr;
-// };
-
-// #endif
 
 void warn(const QString &message, const QString &title = "Warning",
           QWidget *parent = nullptr);
@@ -402,14 +411,7 @@ public:
     }
 };
 
-// afc_error_t safe_afc_read_directory(afc_client_t afcClient, idevice_t device,
-//                                     const char *path, char ***dirs);
-
 std::string parse_product_type(const std::string &productType);
-
-// #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-// std::string parse_recovery_mode(irecv_mode productType);
-// #endif
 
 struct MediaEntry {
     std::string name;
@@ -440,14 +442,6 @@ void init_idescriptor_device(const iDescriptor::Uniq &uniq,
                              iDescriptorInitDeviceResult &result,
                              const WirelessInitArgs &wirelessArgs = {"", ""});
 
-// #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-// iDescriptorInitDeviceResultRecovery
-// init_idescriptor_recovery_device(uint64_t ecid);
-// #endif
-// bool set_location(idevice_t device, char *lat, char *lon);
-
-// bool shutdown(idevice_t device);
-
 IdeviceFfiError *mount_dev_image(const iDescriptorDevice *device,
                                  const char *image_file,
                                  const char *signature_file);
@@ -466,8 +460,6 @@ struct MountedImageResult {
 MountedImageInfo _get_mounted_image(const iDescriptorDevice *device);
 
 void mounted_image_info_free(MountedImageInfo &info);
-
-// bool restart(std::string udid);
 
 enum class ImageCompatibility {
     Compatible,      // Exact match or known compatible version

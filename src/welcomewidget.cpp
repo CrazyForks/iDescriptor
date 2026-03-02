@@ -87,8 +87,7 @@ void WelcomeWidget::setupUI()
             []() { QDesktopServices::openUrl(QUrl(REPO_URL)); });
 
     QPalette githubPalette = m_githubLabel->palette();
-    githubPalette.setColor(QPalette::WindowText,
-                           COLOR_HYPERLINK); // Apple blue
+    githubPalette.setColor(QPalette::WindowText, COLOR_HYPERLINK);
     m_githubLabel->setPalette(githubPalette);
 
     m_mainLayout->addWidget(m_githubLabel, 0, Qt::AlignCenter);

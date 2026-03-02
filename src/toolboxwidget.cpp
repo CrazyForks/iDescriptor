@@ -456,16 +456,7 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
         liveScreen->show();
     } break;
     case iDescriptorTool::RecoveryMode: {
-        // Handle entering recovery mode
-        // bool success = _enterRecoveryMode(device);
-        // QMessageBox msgBox;
-        // msgBox.setWindowTitle("Recovery Mode");
-        // if (success) {
-        //     msgBox.setText("Successfully entered recovery mode.");
-        // } else {
-        //     msgBox.setText("Failed to enter recovery mode.");
-        // }
-        // msgBox.exec();
+        enterRecoveryMode(device);
     } break;
     case iDescriptorTool::MountDevImage: {
         DevDiskImageHelper *devDiskImageHelper =
@@ -547,8 +538,6 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
 #endif
     case iDescriptorTool::CableInfoWidget: {
         CableInfoWidget *cableInfoWidget = new CableInfoWidget(device);
-        cableInfoWidget->setAttribute(Qt::WA_DeleteOnClose);
-        cableInfoWidget->resize(600, 400);
         cableInfoWidget->show();
     } break;
     case iDescriptorTool::NetworkDevices: {
@@ -569,7 +558,7 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
     }
 }
 
-void ToolboxWidget::restartDevice(iDescriptorDevice *device)
+void ToolboxWidget::restartDevice(const iDescriptorDevice *device)
 {
     QMessageBox msgBox;
     msgBox.setWindowTitle("Restart Device");
@@ -598,7 +587,7 @@ void ToolboxWidget::restartDevice(iDescriptorDevice *device)
     }
 }
 
-void ToolboxWidget::shutdownDevice(iDescriptorDevice *device)
+void ToolboxWidget::shutdownDevice(const iDescriptorDevice *device)
 {
 
     QMessageBox msgBox;
@@ -629,7 +618,7 @@ void ToolboxWidget::shutdownDevice(iDescriptorDevice *device)
     }
 }
 
-void ToolboxWidget::_enterRecoveryMode(iDescriptorDevice *device)
+void ToolboxWidget::enterRecoveryMode(const iDescriptorDevice *device)
 {
     QMessageBox msgBox;
     msgBox.setWindowTitle("Enter Recovery Mode");
@@ -645,18 +634,16 @@ void ToolboxWidget::_enterRecoveryMode(iDescriptorDevice *device)
         return;
     }
 
-    // auto res = device->diagRelay->enterRecovery();
-    // if (res.is_err()) {
-    //     QMessageBox::warning(
-    //         nullptr, "Enter Recovery Mode Failed",
-    //         "Failed to enter recovery mode: " +
-    //             QString::fromStdString(res.unwrap_err().message));
-    // } else {
-    //     QMessageBox::information(nullptr, "Enter Recovery Mode Initiated",
-    //                              "Device will enter recovery mode once
-    //                              unplugged.");
-    //     qDebug() << "Entering recovery mode";
-    // }
+    IdeviceFfiError *error = lockdownd_enter_recovery(device->lockdown);
+    if (error != nullptr) {
+        QMessageBox::warning(nullptr, "Enter Recovery Mode Failed",
+                             "Failed to enter recovery mode: " +
+                                 QString::fromStdString(error->message));
+        idevice_error_free(error);
+    } else {
+        QMessageBox::information(nullptr, "Enter Recovery Mode Initiated",
+                                 "Device will enter recovery mode.");
+    }
 }
 
 void ToolboxWidget::restartAirPlayWidget()

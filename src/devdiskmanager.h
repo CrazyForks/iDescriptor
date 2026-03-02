@@ -49,7 +49,7 @@ public:
 
     // Mount operations
 
-    bool mountImage(const QString &version, iDescriptorDevice *device);
+    bool mountImage(const QString &version, const iDescriptorDevice *device);
     bool unmountImage();
     std::pair<QString, QString> getPathsForVersion(const QString &version);
 
@@ -58,8 +58,8 @@ public:
                            const char *mounted_sig, uint64_t mounted_sig_len);
 
     QByteArray getImageListData() const { return m_imageListJsonData; }
-    bool mountCompatibleImage(iDescriptorDevice *device);
-    bool downloadCompatibleImage(iDescriptorDevice *device,
+    bool mountCompatibleImage(const iDescriptorDevice *device);
+    bool downloadCompatibleImage(const iDescriptorDevice *device,
                                  std::function<void(bool)> callback);
 
 signals:

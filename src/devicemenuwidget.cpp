@@ -31,7 +31,8 @@
 #include <QStackedWidget>
 #include <QVBoxLayout>
 
-DeviceMenuWidget::DeviceMenuWidget(iDescriptorDevice *device, QWidget *parent)
+DeviceMenuWidget::DeviceMenuWidget(const iDescriptorDevice *device,
+                                   QWidget *parent)
     : QWidget{parent}, m_device(device)
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);

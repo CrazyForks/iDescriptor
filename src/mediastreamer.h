@@ -30,38 +30,17 @@ QT_BEGIN_NAMESPACE
 class QTcpSocket;
 QT_END_NAMESPACE
 
-/**
- * @brief A lightweight HTTP server for streaming media files from iOS devices
- *
- * This class implements an HTTP server that supports:
- * - Basic HTTP GET requests
- * - HTTP Range requests for video scrubbing
- * - Streaming from AFC (Apple File Conduit) without loading entire file into
- * memory
- * - Thread-safe operation
- *
- * The server automatically shuts down when the client disconnects.
- */
 class MediaStreamer : public QTcpServer
 {
     Q_OBJECT
 
 public:
-    explicit MediaStreamer(iDescriptorDevice *device,
+    explicit MediaStreamer(const iDescriptorDevice *device,
                            AfcClientHandle *afcClient, const QString &filePath,
                            QObject *parent = nullptr);
     ~MediaStreamer();
 
-    /**
-     * @brief Get the URL that clients should use to connect to this server
-     * @return URL in format http://127.0.0.1:port
-     */
     QUrl getUrl() const;
-
-    /**
-     * @brief Check if the server started successfully
-     * @return true if server is listening, false otherwise
-     */
     bool isListening() const;
 
 protected:
@@ -83,7 +62,7 @@ private:
 
     struct StreamingContext {
         QTcpSocket *socket;
-        iDescriptorDevice *device;
+        const iDescriptorDevice *device;
         QString filePath;
         qint64 startByte;
         qint64 endByte;
@@ -102,7 +81,7 @@ private:
     QString getMimeType() const;
 
     // Core data
-    iDescriptorDevice *m_device;
+    const iDescriptorDevice *m_device;
     QString m_filePath;
 
     // File info cache

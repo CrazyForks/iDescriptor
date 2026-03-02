@@ -36,11 +36,9 @@
 #include <unistd.h>
 
 #include "appcontext.h"
-#include "settingsmanager.h"
-// #include "devicemonitor.h"
-// #include "Toast.h"
 #include "networkdevicemanager.h"
 #include "networkdeviceswidget.h"
+#include "settingsmanager.h"
 #include "statusballoon.h"
 #include <QApplication>
 #include <QDesktopServices>
@@ -51,7 +49,29 @@
 #include "platform/windows/win_common.h"
 #endif
 
-using namespace IdeviceFFI;
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
+void handleCallbackRecovery(const irecv_device_event_t *event, void *userData)
+{
+
+    switch (event->type) {
+    case IRECV_DEVICE_ADD:
+        qDebug() << "Recovery device added: ";
+        QMetaObject::invokeMethod(AppContext::sharedInstance(),
+                                  "addRecoveryDevice", Qt::QueuedConnection,
+                                  Q_ARG(uint64_t, event->device_info->ecid));
+        break;
+    case IRECV_DEVICE_REMOVE:
+        qDebug() << "Recovery device removed: ";
+        QMetaObject::invokeMethod(AppContext::sharedInstance(),
+                                  "removeRecoveryDevice", Qt::QueuedConnection,
+                                  Q_ARG(uint64_t, event->device_info->ecid));
+        break;
+    default:
+        printf("Unhandled recovery event: %d\n", event->type);
+    }
+}
+irecv_device_event_context_t context;
+#endif
 
 MainWindow *MainWindow::sharedInstance()
 {
@@ -134,6 +154,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     StatusBalloon *statusBalloon = StatusBalloon::sharedInstance();
 
     statusLayout->addWidget(statusBalloon->getButton());
+
+    ZIconWidget *welcomeMenu = new ZIconWidget(
+        QIcon(":/resources/icons/LetsIconsHorizontalDownLeftMainLight.png"),
+        "Switch to Welcome Menu");
+    connect(welcomeMenu, &ZIconWidget::clicked, this, [this, welcomeMenu]() {
+        if (m_mainStackedWidget->currentIndex() != 0) {
+            welcomeMenu->setToolTip("Switch to Connected Devices");
+            return m_mainStackedWidget->setCurrentIndex(0);
+        }
+        welcomeMenu->setToolTip("Switch to Welcome Menu");
+        m_mainStackedWidget->setCurrentIndex(1);
+    });
+
+    statusLayout->addWidget(welcomeMenu);
     statusLayout->addStretch(1);
 
     statusLayout->setContentsMargins(0, 0, 0, 0);
@@ -174,19 +208,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     }
 #endif
 
-    // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-    //     irecv_error_t res_recovery =
-    //         irecv_device_event_subscribe(&context, handleCallbackRecovery,
-    //         nullptr);
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
+    irecv_error_t res_recovery =
+        irecv_device_event_subscribe(&context, handleCallbackRecovery, nullptr);
 
-    //     if (res_recovery != IRECV_E_SUCCESS) {
-    //         qDebug() << "ERROR: Unable to subscribe to recovery device
-    //         events. "
-    //                     "Error code:"
-    //                  << res_recovery;
-    //     }
-    //     qDebug() << "Subscribed to recovery device events successfully.";
-    // #endif
+    if (res_recovery != IRECV_E_SUCCESS) {
+        qDebug() << "ERROR: Unable to subscribe to recovery device events. "
+                    "Error code:"
+                 << res_recovery;
+    }
+    qDebug() << "Subscribed to recovery device events successfully.";
+#endif
 
     //     idevice_error_t res = idevice_event_subscribe(handleCallback,
     //     nullptr); if (res != IDEVICE_E_SUCCESS) {
@@ -195,7 +227,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     //                  << res;
     //     }
     //     qDebug() << "Subscribed to device events successfully.";
-    //     createMenus();
+    createMenus();
 
     //     UpdateProcedure updateProcedure;
     //     bool packageManagerManaged = false;
@@ -285,7 +317,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     //             m_updater->checkForUpdates();
     //         });
 
-    // Usage in main thread:
     m_deviceMonitor = new DeviceMonitorThread(this);
     connect(
         m_deviceMonitor, &DeviceMonitorThread::deviceEvent, this,

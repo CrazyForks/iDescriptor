@@ -52,7 +52,7 @@ ExportManager::~ExportManager()
     m_activeJobs.clear();
 }
 
-QUuid ExportManager::startExport(iDescriptorDevice *device,
+QUuid ExportManager::startExport(const iDescriptorDevice *device,
                                  const QList<ExportItem> &items,
                                  const QString &destinationPath,
                                  std::optional<AfcClientHandle *> altAfc)

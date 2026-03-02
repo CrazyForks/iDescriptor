@@ -322,7 +322,7 @@ bool DevDiskManager::isImageDownloaded(const QString &version,
     return QFile::exists(dmgPath) && QFile::exists(sigPath);
 }
 
-bool DevDiskManager::downloadCompatibleImage(iDescriptorDevice *device,
+bool DevDiskManager::downloadCompatibleImage(const iDescriptorDevice *device,
                                              std::function<void(bool)> callback)
 {
     QString path = SettingsManager::sharedInstance()->mkDevDiskImgPath();
@@ -403,7 +403,7 @@ bool DevDiskManager::downloadCompatibleImage(iDescriptorDevice *device,
 }
 
 // FIXME:DOES NOT CHECK IF THERE IS ALREADY AN IMAGE MOUNTED
-bool DevDiskManager::mountCompatibleImage(iDescriptorDevice *device)
+bool DevDiskManager::mountCompatibleImage(const iDescriptorDevice *device)
 {
     QString path = SettingsManager::sharedInstance()->mkDevDiskImgPath();
 
@@ -493,7 +493,7 @@ bool DevDiskManager::mountCompatibleImage(iDescriptorDevice *device)
 }
 
 bool DevDiskManager::mountImage(const QString &version,
-                                iDescriptorDevice *device)
+                                const iDescriptorDevice *device)
 {
     const QString downloadPath =
         SettingsManager::sharedInstance()->devdiskimgpath();

@@ -25,6 +25,7 @@
 #include "iDescriptor.h"
 #include "infolabel.h"
 #include "privateinfolabel.h"
+#include "toolboxwidget.h"
 #include <QApplication>
 #include <QDebug>
 #include <QGraphicsDropShadowEffect>
@@ -44,7 +45,8 @@
 #include <QVBoxLayout>
 #include <QtCore>
 
-DeviceInfoWidget::DeviceInfoWidget(iDescriptorDevice *device, QWidget *parent)
+DeviceInfoWidget::DeviceInfoWidget(const iDescriptorDevice *device,
+                                   QWidget *parent)
     : QWidget(parent), m_device(device)
 {
     // Main layout with horizontal orientation
@@ -77,22 +79,22 @@ DeviceInfoWidget::DeviceInfoWidget(iDescriptorDevice *device, QWidget *parent)
         QIcon(":/resources/icons/IcOutlinePowerSettingsNew.png"), "Shutdown",
         1.0, this);
     shutdownBtn->setIconSize(QSize(20, 20));
-    // connect(shutdownBtn, &ZIconWidget::clicked, this,
-    //         [device]() { ToolboxWidget::shutdownDevice(device); });
+    connect(shutdownBtn, &ZIconWidget::clicked, this,
+            [device]() { ToolboxWidget::shutdownDevice(device); });
 
     ZIconWidget *restartBtn =
         new ZIconWidget(QIcon(":/resources/icons/IcTwotoneRestartAlt.png"),
                         "Restart", 1.0, this);
     restartBtn->setIconSize(QSize(20, 20));
-    // connect(restartBtn, &ZIconWidget::clicked, this,
-    //         [device]() { ToolboxWidget::restartDevice(device); });
+    connect(restartBtn, &ZIconWidget::clicked, this,
+            [device]() { ToolboxWidget::restartDevice(device); });
 
     ZIconWidget *recoveryBtn =
         new ZIconWidget(QIcon(":/resources/icons/HugeiconsWrench01.png"),
                         "Recovery", 1.0, this);
     recoveryBtn->setIconSize(QSize(20, 20));
-    // connect(recoveryBtn, &ZIconWidget::clicked, this,
-    //         [device]() { ToolboxWidget::_enterRecoveryMode(device); });
+    connect(recoveryBtn, &ZIconWidget::clicked, this,
+            [device]() { ToolboxWidget::enterRecoveryMode(device); });
 
     actionsLayout->addWidget(shutdownBtn);
     actionsLayout->addWidget(restartBtn);

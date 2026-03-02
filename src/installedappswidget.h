@@ -43,7 +43,6 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-// Custom App Tab Widget
 class AppTabWidget : public QGroupBox
 {
     Q_OBJECT
@@ -75,7 +74,7 @@ protected:
     };
 
 private:
-    void setupUI();
+    void setupUI(const QPixmap &icon);
 
     QString m_appName;
     QString m_bundleId;
@@ -93,7 +92,7 @@ class InstalledAppsWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit InstalledAppsWidget(iDescriptorDevice *device,
+    explicit InstalledAppsWidget(const iDescriptorDevice *device,
                                  QWidget *parent = nullptr);
     ~InstalledAppsWidget();
 
@@ -120,7 +119,7 @@ private:
     void loadAppContainer(const QString &bundleId);
     void cleanupHouseArrestClients();
 
-    iDescriptorDevice *m_device;
+    const iDescriptorDevice *m_device;
     QHBoxLayout *m_mainLayout;
     QStackedWidget *m_stackedWidget;
     QWidget *m_loadingWidget;
@@ -144,6 +143,7 @@ private:
     // App data storage
     QList<AppTabWidget *> m_appTabs;
     AppTabWidget *m_selectedTab = nullptr;
+    SpringBoardServicesClientHandle *m_springboardClient = nullptr;
 };
 
 #endif // INSTALLEDAPPSWIDGET_H

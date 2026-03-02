@@ -47,7 +47,7 @@ public:
     ~OpenSSHTerminalWidget();
 private slots:
     void onOpenSSHTerminal();
-    void onWiredDeviceAdded(iDescriptorDevice *device);
+    void onWiredDeviceAdded(const iDescriptorDevice *device);
     void onWiredDeviceRemoved(const std::string &udid);
     void onWirelessDeviceAdded(const NetworkDevice &device);
     void onWirelessDeviceRemoved(const QString &deviceName);
@@ -57,7 +57,7 @@ private:
     void setupDeviceSelectionUI(QVBoxLayout *layout);
     void updateDeviceList();
     void clearDeviceButtons();
-    void addWiredDevice(iDescriptorDevice *device);
+    void addWiredDevice(const iDescriptorDevice *device);
     void addWirelessDevice(const NetworkDevice &device);
     void resetSelection();
 
@@ -82,8 +82,7 @@ private:
     iDescriptorDevice *m_selectedWiredDevice = nullptr;
     NetworkDevice m_selectedNetworkDevice;
 
-    // Legacy device pointer (kept for compatibility)
-    iDescriptorDevice *m_device = nullptr;
+    const iDescriptorDevice *m_device = nullptr;
 
     // SSH components
     ssh_session m_sshSession;

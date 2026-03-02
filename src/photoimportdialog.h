@@ -25,20 +25,20 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
+#include <QMediaPlayer>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QStringList>
 #include <QVBoxLayout>
-#include <QStackedWidget>
 #include <QVideoWidget>
-#include <QMediaPlayer>
 
 class PhotoImportDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    explicit PhotoImportDialog(const QStringList &files, bool hasDirectories,
+    explicit PhotoImportDialog(const QStringList &files,
                                QWidget *parent = nullptr);
     ~PhotoImportDialog();
 
@@ -52,10 +52,8 @@ private slots:
 
 private:
     QStringList selectedFiles;
-    bool containsDirectories;
 
     QListWidget *fileList;
-    QLabel *warningLabel;
     QLabel *qrCodeLabel;
     QStackedWidget *m_instructionStack;
     QLabel *m_instructionLabel;

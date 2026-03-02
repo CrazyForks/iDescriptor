@@ -1,6 +1,7 @@
 #ifndef IMAGETASK_H
 #define IMAGETASK_H
 
+#include "iDescriptor-ui.h"
 #include "iDescriptor.h"
 #include <QImage>
 #include <QObject>
@@ -15,11 +16,10 @@ class ImageTask : public QObject, public QRunnable
     Q_OBJECT
 public:
     ImageTask(const iDescriptorDevice *device, const QString &path,
-              const QSize &thumbnailSize, unsigned int row)
-        : m_device(device), m_path(path), m_thumbnailSize(thumbnailSize),
-          m_row(row)
+              unsigned int row, bool scale = true)
+        : m_device(device), m_path(path), m_isThumbnail(scale), m_row(row)
     {
-        setAutoDelete(true);
+        setAutoDelete(false);
     }
 
 signals:
@@ -32,20 +32,26 @@ protected:
 
         if (isVideo) {
             QPixmap thumbnail = ImageLoader::generateVideoThumbnailFFmpeg(
-                m_device, m_path, m_thumbnailSize);
+                m_device, m_path, THUMBNAIL_SIZE);
 
             emit finished(m_path, thumbnail, m_row);
         } else {
-            QPixmap image = ImageLoader::loadThumbnailFromDevice(
-                m_device, m_path, m_thumbnailSize);
-            emit finished(m_path, image, m_row);
+            if (m_isThumbnail) {
+                QPixmap image = ImageLoader::loadThumbnailFromDevice(
+                    m_device, m_path, THUMBNAIL_SIZE);
+                emit finished(m_path, image, m_row);
+            } else {
+                qDebug() << "Loading full image for:" << m_path;
+                QPixmap image = ImageLoader::loadImage(m_device, m_path);
+                emit finished(m_path, image, m_row);
+            }
         }
     }
 
 private:
     const iDescriptorDevice *m_device;
     QString m_path;
-    QSize m_thumbnailSize;
+    bool m_isThumbnail;
     unsigned int m_row;
 };
 

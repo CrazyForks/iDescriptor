@@ -47,20 +47,12 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QtGlobal>
 
-MediaPreviewDialog::MediaPreviewDialog(iDescriptorDevice *device,
+MediaPreviewDialog::MediaPreviewDialog(const iDescriptorDevice *device,
                                        AfcClientHandle *afcClient,
                                        const QString &filePath, QWidget *parent)
     : QDialog(parent), m_device(device), m_filePath(filePath),
-      m_isVideo(isVideoFile(filePath)), m_mainLayout(nullptr),
-      m_controlsLayout(nullptr), m_imageView(nullptr), m_imageScene(nullptr),
-      m_pixmapItem(nullptr), m_videoWidget(nullptr), m_mediaPlayer(nullptr),
-      m_videoControlsLayout(nullptr), m_playPauseBtn(nullptr),
-      m_stopBtn(nullptr), m_repeatBtn(nullptr), m_timelineSlider(nullptr),
-      m_timeLabel(nullptr), m_volumeSlider(nullptr), m_volumeLabel(nullptr),
-      m_progressTimer(nullptr), m_loadingLabel(nullptr), m_statusLabel(nullptr),
-      m_zoomInBtn(nullptr), m_zoomOutBtn(nullptr), m_zoomResetBtn(nullptr),
-      m_fitToWindowBtn(nullptr), m_zoomFactor(1.0), m_isRepeatEnabled(true),
-      m_isDraggingTimeline(false), m_videoDuration(0), m_afcClient(afcClient)
+      m_isVideo(iDescriptor::Utils::isVideoFile(filePath)),
+      m_afcClient(afcClient)
 {
     setWindowTitle(QFileInfo(filePath).fileName() + " - iDescriptor");
 
@@ -97,28 +89,14 @@ void MediaPreviewDialog::setupUI()
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
 
-    // Loading label
-    m_loadingLabel = new QLabel("Loading...", this);
-    m_loadingLabel->setAlignment(Qt::AlignCenter);
-    m_loadingLabel->setStyleSheet(
-        "QLabel { font-size: 16px; color: #666; padding: 20px; }");
-    m_mainLayout->addWidget(m_loadingLabel);
+    m_loadingWidget = new ZLoadingWidget();
+    m_mainLayout->addWidget(m_loadingWidget);
 
     if (m_isVideo) {
         setupVideoView();
     } else {
         setupImageView();
     }
-
-    // Status bar
-    // more margin because of border radius on macOS
-    m_statusLabel = new QLabel(this);
-#ifdef Q_OS_MAC
-    m_statusLabel->setStyleSheet("QLabel { margin-left: 15px; }");
-#else
-    m_statusLabel->setStyleSheet("QLabel { margin-left: 5px; }");
-#endif
-    m_mainLayout->addWidget(m_statusLabel);
 }
 
 void MediaPreviewDialog::setupImageView()
@@ -129,7 +107,7 @@ void MediaPreviewDialog::setupImageView()
     m_imageView->setDragMode(QGraphicsView::ScrollHandDrag);
     m_imageView->setRenderHint(QPainter::Antialiasing);
     m_imageView->setVisible(false);
-    m_mainLayout->addWidget(m_imageView);
+    m_loadingWidget->setupContentWidget(m_imageView);
 
     // Controls layout
     m_controlsLayout = new QHBoxLayout();
@@ -166,7 +144,7 @@ void MediaPreviewDialog::setupVideoView()
     m_videoWidget->setVisible(false);
     m_videoWidget->setSizePolicy(QSizePolicy::Expanding,
                                  QSizePolicy::Expanding);
-    m_mainLayout->addWidget(m_videoWidget, 1); // Give it stretch factor 1
+    m_loadingWidget->setupContentWidget(m_videoWidget);
 
     // Media player
     m_mediaPlayer = new QMediaPlayer(this);
@@ -189,13 +167,10 @@ void MediaPreviewDialog::setupVideoView()
             &MediaPreviewDialog::onMediaPlayerStateChanged);
     connect(m_mediaPlayer, &QMediaPlayer::errorOccurred, this,
             [this](QMediaPlayer::Error error, const QString &errorString) {
-                qDebug() << "MediaPlayer Error:" << error << errorString;
-                m_statusLabel->setText("Error: " + errorString);
-                m_loadingLabel->setText("Error: " + errorString);
-                m_loadingLabel->show();
-                m_videoWidget->hide();
+                m_loadingWidget->showError("Error playing video: " +
+                                           errorString);
             });
-    // Setup progress timer for smooth updates
+
     m_progressTimer = new QTimer(this);
     connect(m_progressTimer, &QTimer::timeout, this,
             &MediaPreviewDialog::updateVideoProgress);
@@ -211,22 +186,17 @@ void MediaPreviewDialog::loadMedia()
 
 void MediaPreviewDialog::loadImage()
 {
-    auto future = QtConcurrent::run(
-        [this]() { return ImageLoader::loadImage(m_device, m_filePath); });
-
-    auto *watcher = new QFutureWatcher<QPixmap>(this);
-    connect(watcher, &QFutureWatcher<QPixmap>::finished, this,
-            [this, watcher]() {
-                QPixmap pixmap = watcher->result();
-                if (!pixmap.isNull()) {
-                    m_originalPixmap = pixmap;
-                    onImageLoaded();
-                } else {
-                    onImageLoadFailed();
-                }
-                watcher->deleteLater();
-            });
-    watcher->setFuture(future);
+    auto callback = [this](const QPixmap &pixmap) {
+        if (!pixmap.isNull()) {
+            onImageLoaded(pixmap);
+        } else {
+            onImageLoadFailed();
+        }
+    };
+    // 99999 is so that it gets the highest priority in the queue
+    unsigned int priority = 99999;
+    ImageLoader::sharedInstance().requestImageWithCallback(m_device, m_filePath,
+                                                           priority, callback);
 }
 
 void MediaPreviewDialog::loadVideo()
@@ -238,20 +208,22 @@ void MediaPreviewDialog::loadVideo()
         m_device, m_afcClient, m_filePath);
     qDebug() << "Streaming video from URL:" << streamUrl;
     if (streamUrl.isEmpty()) {
-        m_statusLabel->setText("Failed to start video stream");
+        // TODO: connect to retry signal to attempt restarting the stream
+        m_loadingWidget->showError("Failed to start video stream");
         return;
     }
 
     m_mediaPlayer->setSource(streamUrl);
     m_mediaPlayer->play();
-    m_loadingLabel->hide();
-    m_statusLabel->setText(
-        QString("Playing: %1").arg(QFileInfo(m_filePath).fileName()));
+    m_loadingWidget->stop();
+    // m_statusLabel->setText(
+    //     QString("Playing: %1").arg(QFileInfo(m_filePath).fileName()));
 }
 
-void MediaPreviewDialog::onImageLoaded()
+void MediaPreviewDialog::onImageLoaded(const QPixmap &pixmap)
 {
-    m_loadingLabel->hide();
+    m_originalPixmap = pixmap;
+
     m_imageView->setVisible(true);
 
     // Add pixmap to scene
@@ -259,19 +231,22 @@ void MediaPreviewDialog::onImageLoaded()
     m_imageScene->setSceneRect(m_originalPixmap.rect());
 
     // Fit to window initially
-    fitToWindow();
-
+    // TODO:why QTimer::singleShot is required here ?
+    // fitToWindow();
+    QTimer::singleShot(0, this, &MediaPreviewDialog::fitToWindow);
+    m_loadingWidget->stop();
     // Update status
-    m_statusLabel->setText(QString("Image: %1 (%2x%3)")
-                               .arg(QFileInfo(m_filePath).fileName())
-                               .arg(m_originalPixmap.width())
-                               .arg(m_originalPixmap.height()));
+    // m_statusLabel->setText(QString("Image: %1 (%2x%3)")
+    //                            .arg(QFileInfo(m_filePath).fileName())
+    //                            .arg(m_originalPixmap.width())
+    //                            .arg(m_originalPixmap.height()));
 }
 
 void MediaPreviewDialog::onImageLoadFailed()
 {
-    m_loadingLabel->setText("Failed to load image");
-    m_statusLabel->setText("Error loading image");
+    // TODO: connect to retry signal to attempt reloading the image
+    m_loadingWidget->showError("Failed to load image");
+    // m_statusLabel->setText("Error loading image");
 }
 
 void MediaPreviewDialog::wheelEvent(QWheelEvent *event)
@@ -425,33 +400,15 @@ void MediaPreviewDialog::zoom(double factor)
     updateZoomStatus();
 }
 
-// void MediaPreviewDialog::updateZoomStatus()
-// {
-//     if (!m_isVideo && !m_originalPixmap.isNull()) {
-//         m_statusLabel->setText(QString("Image: %1 (%2x%3) - Zoom: %4%")
-//                                    .arg(QFileInfo(m_filePath).fileName())
-//                                    .arg(m_originalPixmap.width())
-//                                    .arg(m_originalPixmap.height())
-//                                    .arg(qRound(m_zoomFactor * 100)));
-//     }
-// }
-
 void MediaPreviewDialog::updateZoomStatus()
 {
     if (!m_isVideo && !m_originalPixmap.isNull()) {
-        m_statusLabel->setText(QString("Image: %1 (%2x%3) - Zoom: %4%")
-                                   .arg(QFileInfo(m_filePath).fileName())
-                                   .arg(m_originalPixmap.width())
-                                   .arg(m_originalPixmap.height())
-                                   .arg(qRound(m_zoomFactor * 100)));
+        // m_statusLabel->setText(QString("Image: %1 (%2x%3) - Zoom: %4%")
+        //                            .arg(QFileInfo(m_filePath).fileName())
+        //                            .arg(m_originalPixmap.width())
+        //                            .arg(m_originalPixmap.height())
+        //                            .arg(qRound(m_zoomFactor * 100)));
     }
-}
-
-bool MediaPreviewDialog::isVideoFile(const QString &filePath) const
-{
-    const QString lower = filePath.toLower();
-    return lower.endsWith(".mov") || lower.endsWith(".mp4") ||
-           lower.endsWith(".avi") || lower.endsWith(".m4v");
 }
 
 void MediaPreviewDialog::setupVideoControls()
@@ -525,7 +482,7 @@ void MediaPreviewDialog::setupVideoControls()
     m_videoControlsLayout->addWidget(m_playPauseBtn);
     m_videoControlsLayout->addWidget(m_stopBtn);
     m_videoControlsLayout->addWidget(m_repeatBtn);
-    m_videoControlsLayout->addWidget(m_timelineSlider, 1); // Stretch factor 1
+    m_videoControlsLayout->addWidget(m_timelineSlider, 1);
     m_videoControlsLayout->addWidget(m_timeLabel);
     m_videoControlsLayout->addWidget(m_volumeLabel);
     m_videoControlsLayout->addWidget(m_volumeSlider);
@@ -563,8 +520,6 @@ void MediaPreviewDialog::onRepeatToggled(bool enabled)
     m_repeatBtn->setStyleSheet(
         enabled ? "QPushButton { background-color: #4CAF50; color: white; }"
                 : "");
-
-    qDebug() << "Repeat mode:" << (enabled ? "ON" : "OFF");
 }
 
 void MediaPreviewDialog::onTimelinePressed()
@@ -665,9 +620,9 @@ void MediaPreviewDialog::onMediaPlayerDurationChanged(qint64 duration)
     if (duration > 0) {
         QString durationStr;
         formatTime(duration, durationStr);
-        m_statusLabel->setText(QString("Video: %1 - Duration: %2")
-                                   .arg(QFileInfo(m_filePath).fileName())
-                                   .arg(durationStr));
+        // m_statusLabel->setText(QString("Video: %1 - Duration: %2")
+        //                            .arg(QFileInfo(m_filePath).fileName())
+        //                            .arg(durationStr));
     }
 }
 
@@ -742,10 +697,11 @@ void MediaPreviewDialog::onVolumeChanged(int value)
     }
 }
 
+#ifdef __APPLE__
 bool MediaPreviewDialog::event(QEvent *event)
 {
-    // FIXME: lets implement this on all dialogs
-    // catch platform Close (Cmd+W on macOS)
+    // TODO: implement this on all dialogs
+    // catch platform close (Cmd+W on macOS)
     if (event->type() == QEvent::ShortcutOverride) {
         if (auto *ke = dynamic_cast<QKeyEvent *>(event)) {
             const Qt::KeyboardModifiers mods = ke->modifiers();
@@ -755,12 +711,8 @@ bool MediaPreviewDialog::event(QEvent *event)
                 close();
                 return true;
             }
-            if (ke->key() == Qt::Key_Escape) {
-                ke->accept();
-                close();
-                return true;
-            }
         }
     }
     return QDialog::event(event);
 }
+#endif

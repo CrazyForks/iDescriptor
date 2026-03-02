@@ -223,96 +223,102 @@ IdeviceFfiError *ServiceManager::exportFileToPath(
     std::atomic<bool> *cancelRequested)
 {
     qDebug()
-        << "[serviceManager::exportFileToPath] Exporting file from device path:"
+        << "[ServiceManager::exportFileToPath] Exporting file from device path:"
         << device_path << "to local path:" << local_path;
+
+    // FIXME : use execute afc op
     return executeOperation<IdeviceFfiError *>(
         device,
         [device, device_path, local_path, progressCallback,
          cancelRequested]() -> IdeviceFfiError * {
             AfcFileHandle *afcHandle = nullptr;
-            qDebug() << "Opening file on device:" << device_path;
-            IdeviceFfiError *err_open = safeAfcFileOpen(
-                device, device_path, AfcFopenMode::AfcRdOnly, &afcHandle);
+            IdeviceFfiError *err =
+                afc_file_open(device->afcClient, device_path,
+                              AfcFopenMode::AfcRdOnly, &afcHandle);
 
-            if (err_open != nullptr) {
+            if (err != nullptr) {
                 qDebug() << "Failed to open file on device:" << device_path
-                         << "Error Code:" << err_open->code
-                         << "Message:" << err_open->message;
-                return err_open;
+                         << "Error Code:" << err->code
+                         << "Message:" << err->message;
+                return err;
             }
             qDebug() << "File opened on device successfully";
 
             FILE *out = fopen(local_path, "wb");
             if (!out) {
                 qDebug() << "Failed to open local file:" << local_path;
-                IdeviceFfiError *err_close =
-                    safeAfcFileClose(device, afcHandle);
+                IdeviceFfiError *err_close = afc_file_close(afcHandle);
                 if (err_close != nullptr) {
-                    // idevice_error_free(err_close);
+                    idevice_error_free(err_close);
                 }
-                return new IdeviceFfiError{1, "FAILED_TO_OPEN_LOCAL_FILE"};
+                return new IdeviceFfiError{1, "Failed to open local file"};
             }
-            qDebug() << "Local file opened successfully";
 
-            const size_t CHUNK_SIZE = 256 * 1024; // 256KB chunks
+            // 256KB chunks
+            const size_t CHUNK_SIZE = 256 * 1024;
             uint8_t *chunkData = nullptr;
             size_t bytesRead = 0;
             qint64 totalBytesRead = 0;
 
             // Get file size for progress
             AfcFileInfo fileInfo;
-            IdeviceFfiError *info_err =
-                safeAfcGetFileInfo(device, device_path, &fileInfo);
+            err = afc_get_file_info(device->afcClient, device_path, &fileInfo);
             qint64 totalFileSize = 0;
-            if (info_err == nullptr) {
-                totalFileSize = fileInfo.size;
-                // afc_file_info_free(&fileInfo);
-            } else {
-                // idevice_error_free(info_err);
-            }
+            if (err != nullptr)
+                return err;
 
-            IdeviceFfiError *read_err = nullptr;
-            // Read file in chunks
+            totalFileSize = fileInfo.size;
+            afc_file_info_free(&fileInfo);
+
             while (true) {
                 // Check for cancellation
                 if (cancelRequested && cancelRequested->load()) {
                     fclose(out);
-                    safeAfcFileClose(device, afcHandle);
-                    return new IdeviceFfiError{1, "OPERATION_CANCELLED"};
+                    err = afc_file_close(afcHandle);
+                    if (err != nullptr) {
+                        idevice_error_free(err);
+                    }
+                    // FIXME: we need error codes
+                    return new IdeviceFfiError{1, "Transfer cancelled"};
                 }
 
-                read_err = safeAfcFileRead(device, afcHandle, &chunkData,
-                                           CHUNK_SIZE, &bytesRead);
+                err = afc_file_read(afcHandle, &chunkData, CHUNK_SIZE,
+                                    &bytesRead);
 
-                if (read_err != nullptr) {
-                    qDebug() << "Error reading file:" << read_err->message;
+                if (err != nullptr) {
+                    qDebug() << "Error reading file:" << err->message;
                     fclose(out);
-                    safeAfcFileClose(device, afcHandle);
-                    return read_err;
+                    IdeviceFfiError *err_close = afc_file_close(afcHandle);
+                    if (err_close != nullptr) {
+                        idevice_error_free(err_close);
+                    }
+                    return err;
                 }
 
                 if (bytesRead == 0) {
-                    // End of file reached
+                    // End of file
                     break;
                 }
 
-                // Write chunk to local file
+                // Write chunk
                 size_t written = fwrite(chunkData, 1, bytesRead, out);
 
-                // Free the memory allocated by afc_file_read
                 afc_file_read_data_free(chunkData, bytesRead);
                 chunkData = nullptr;
 
                 if (written != bytesRead) {
                     qDebug() << "Failed to write all bytes to local file";
                     fclose(out);
-                    safeAfcFileClose(device, afcHandle);
-                    return new IdeviceFfiError{1, "WRITE_ERROR"};
+                    IdeviceFfiError *err_close = afc_file_close(afcHandle);
+                    if (err_close != nullptr) {
+                        idevice_error_free(err_close);
+                    }
+                    return new IdeviceFfiError{1,
+                                               "Failed to write to local file"};
                 }
 
                 totalBytesRead += bytesRead;
 
-                // Report progress
                 if (progressCallback) {
                     progressCallback(totalBytesRead, totalFileSize);
                 }
@@ -320,13 +326,13 @@ IdeviceFfiError *ServiceManager::exportFileToPath(
 
             fclose(out);
 
-            IdeviceFfiError *err_close = safeAfcFileClose(device, afcHandle);
+            IdeviceFfiError *err_close = afc_file_close(afcHandle);
             if (err_close != nullptr) {
                 qDebug() << "Failed to close AFC file:" << err_close->message;
                 return err_close;
             }
 
-            return nullptr; // Success
+            return nullptr;
         });
 }
 

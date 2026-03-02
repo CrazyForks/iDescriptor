@@ -25,6 +25,7 @@
 #include "networkdevicemanager.h"
 #include <QDebug>
 #include <QMessageBox>
+#include <QThreadPool>
 #include <QTimer>
 #include <QUuid>
 #include <thread>
@@ -98,11 +99,13 @@ void AppContext::cachePairedDevices()
     auto conn = UsbmuxdConnection::default_new(0);
     if (conn.is_err()) {
         qDebug() << "ERROR: Failed to connect to usbmuxd!";
+        return;
     }
 
     auto devices = conn.unwrap().get_devices();
     if (devices.is_err()) {
         qDebug() << "ERROR: Failed to get device list!";
+        return;
     }
 
     for (const auto &device : devices.unwrap()) {
@@ -190,6 +193,12 @@ void AppContext::addDevice(iDescriptor::Uniq uniq,
 {
 
     emit initStarted(uniq);
+
+    if (auto device = getDevice(uniq)) {
+        emit deviceAlreadyExists(uniq);
+        return;
+    }
+
     try {
         auto initResult = std::make_shared<iDescriptorInitDeviceResult>();
 
@@ -237,7 +246,7 @@ void AppContext::addDevice(iDescriptor::Uniq uniq,
         watcher->setFuture(future);
         connect(
             watcher, &QFutureWatcher<void>::finished, this,
-            [this, uniq, initResult, addType, conn_type, watcher]() {
+            [this, uniq, initResult, addType, conn_type, watcher]() mutable {
                 watcher->deleteLater();
                 qDebug() << "init_idescriptor_device success ?: "
                          << initResult->success;
@@ -245,6 +254,9 @@ void AppContext::addDevice(iDescriptor::Uniq uniq,
                 if (!initResult->success) {
                     qDebug() << "Failed to initialize device with" << uniq;
                     emit initFailed(uniq);
+                    // TODO:it could also be password protected, so check for
+                    // that Initialization failed, cleaning up resources.
+                    // PasswordProtected
                     if (initResult->error && initResult->error->code ==
                                                  PairingDialogResponsePending) {
                         if (addType == AddType::Regular) {
@@ -266,7 +278,8 @@ void AppContext::addDevice(iDescriptor::Uniq uniq,
                                     }
                                 });
                             // FIXME: free properly and move to a better place
-                            QtConcurrent::run([uniq, this]() {
+                            QThreadPool::globalInstance()->start([uniq,
+                                                                  this]() {
                                 UsbmuxdConnectionHandle *usbmuxd_conn = nullptr;
                                 UsbmuxdAddrHandle *addr_handle = nullptr;
                                 IdeviceProviderHandle *provider = nullptr;
@@ -433,6 +446,16 @@ void AppContext::addDevice(iDescriptor::Uniq uniq,
                 }
                 qDebug() << "Device initialized: " << uniq;
 
+                /*
+                   We need this because wireless devices get initialized
+                   with Mac addresses. Even though a Mac address is unique, we
+                   are better off using the "UDID" as the unique identifier.
+                   This is only required for wireless devices, Usb devices
+                   already use the UDID but it doesn't hurt to set it for them
+                   as well
+                */
+                uniq.set(initResult->deviceInfo.UniqueDeviceID, false);
+
                 iDescriptorDevice *device = new iDescriptorDevice{
                     .udid = uniq.get().toStdString(),
                     .conn_type = conn_type,
@@ -444,8 +467,10 @@ void AppContext::addDevice(iDescriptor::Uniq uniq,
                     .diagRelay = initResult->diagRelay,
                     .heartbeatThread = initResult->heartbeatThread};
                 m_devices[device->udid] = device;
-                if (addType == AddType::Regular) {
-                    qDebug() << "Regular device added: " << uniq;
+                if (addType == AddType::Wireless ||
+                    addType == AddType::UpgradeToWireless ||
+                    addType == AddType::Regular) {
+                    qDebug() << "Wireless device added: " << uniq;
                     // SettingsManager::sharedInstance()->doIfEnabled(
                     //     SettingsManager::Setting::AutoRaiseWindow, []() {
                     //         if (MainWindow *mainWindow =
@@ -477,12 +502,6 @@ int AppContext::getConnectedDeviceCount() const
     // #endif
 }
 
-/*
-    FIXME:
-    on macOS, sometimes you get wireless disconnects even though we are not
-    listening for wireless devices it does not have any to do with us, but
-   it still happens so be aware of that
-    */
 void AppContext::removeDevice(QString _udid)
 {
     const std::string udid = _udid.toStdString();
@@ -513,7 +532,11 @@ void AppContext::removeDevice(QString _udid)
                        device->deviceInfo.isWireless);
     emit deviceChange();
 
+    qDebug() << "Waiting to acquire lock for device cleanup: "
+             << QString::fromStdString(udid);
     std::lock_guard<std::recursive_mutex> lock(device->mutex);
+    qDebug() << "Acquired lock, cleaning up device: "
+             << QString::fromStdString(udid);
 
     // FIXME: implement proper cleanup
     if (device->afcClient)
@@ -524,7 +547,7 @@ void AppContext::removeDevice(QString _udid)
 
     if (device->heartbeatThread) {
         device->heartbeatThread->requestInterruption();
-        device->heartbeatThread->wait();
+        // device->heartbeatThread->wait();
         delete device->heartbeatThread;
     }
 
@@ -534,30 +557,29 @@ void AppContext::removeDevice(QString _udid)
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
 void AppContext::removeRecoveryDevice(uint64_t ecid)
 {
-    // if (!m_recoveryDevices.contains(ecid)) {
-    //     qDebug() << "Device with ECID " + QString::number(ecid) +
-    //                     " not found. Please report this issue.";
-    //     return;
-    // }
+    if (!m_recoveryDevices.contains(ecid)) {
+        qDebug() << "Device with ECID " + QString::number(ecid) +
+                        " not found. Please report this issue.";
+        return;
+    }
 
-    // qDebug() << "Removing recovery device with ECID:" << ecid;
+    qDebug() << "Removing recovery device with ECID:" << ecid;
 
-    // // Fix use-after-free: get pointer before removing from map
-    // iDescriptorRecoveryDevice *deviceInfo =
-    // m_recoveryDevices.value(ecid); m_recoveryDevices.remove(ecid);
+    iDescriptorRecoveryDevice *deviceInfo = m_recoveryDevices.value(ecid);
+    m_recoveryDevices.remove(ecid);
 
-    // emit recoveryDeviceRemoved(ecid);
+    emit recoveryDeviceRemoved(ecid);
+    // TODO: do we need this ?
     // emit deviceChange();
 
-    // std::lock_guard<std::recursive_mutex> lock(*deviceInfo->mutex);
-    // delete deviceInfo->mutex;
-    // delete deviceInfo;
+    std::lock_guard<std::recursive_mutex> lock(deviceInfo->mutex);
+    delete deviceInfo;
 }
 #endif
 
-iDescriptorDevice *AppContext::getDevice(const std::string &udid)
+iDescriptorDevice *AppContext::getDevice(const std::string &uniq)
 {
-    return m_devices.value(udid, nullptr);
+    return m_devices.value(uniq, nullptr);
 }
 
 QList<iDescriptorDevice *> AppContext::getAllDevices()
@@ -565,12 +587,12 @@ QList<iDescriptorDevice *> AppContext::getAllDevices()
     return m_devices.values();
 }
 
-// #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-// QList<iDescriptorRecoveryDevice *> AppContext::getAllRecoveryDevices()
-// {
-//     // return m_recoveryDevices.values();
-// }
-// #endif
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
+QList<iDescriptorRecoveryDevice *> AppContext::getAllRecoveryDevices()
+{
+    return m_recoveryDevices.values();
+}
+#endif
 
 // Returns whether there are any devices connected (regular or recovery)
 bool AppContext::noDevicesConnected() const
@@ -586,27 +608,35 @@ bool AppContext::noDevicesConnected() const
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
 void AppContext::addRecoveryDevice(uint64_t ecid)
 {
-    // iDescriptorInitDeviceResultRecovery res =
-    //     init_idescriptor_recovery_device(ecid);
+    auto res = std::make_shared<iDescriptorInitDeviceResultRecovery>();
 
-    // if (!res.success) {
-    //     qDebug() << "Failed to initialize recovery device with ECID: "
-    //              << QString::number(ecid);
-    //     qDebug() << "Error code: " << res.error;
-    //     return;
-    // }
+    QFuture<void> future = QtConcurrent::run(
+        [this, ecid, res]() { init_idescriptor_recovery_device(ecid, *res); });
+    QFutureWatcher<void> *watcher = new QFutureWatcher<void>();
+    watcher->setFuture(future);
+    connect(watcher, &QFutureWatcher<void>::finished, this,
+            [this, ecid, res, watcher]() {
+                watcher->deleteLater();
+                if (!res->success) {
+                    qDebug()
+                        << "Failed to initialize recovery device with ECID: "
+                        << QString::number(ecid);
+                    qDebug() << "Error code: " << res->error;
+                    return;
+                }
 
-    // iDescriptorRecoveryDevice *recoveryDevice = new
-    // iDescriptorRecoveryDevice(); recoveryDevice->ecid =
-    // res.deviceInfo.ecid; recoveryDevice->mode = res.mode;
-    // recoveryDevice->cpid = res.deviceInfo.cpid;
-    // recoveryDevice->bdid = res.deviceInfo.bdid;
-    // recoveryDevice->displayName = res.displayName;
-    // recoveryDevice->mutex = new std::recursive_mutex();
+                iDescriptorRecoveryDevice *recoveryDevice =
+                    new iDescriptorRecoveryDevice();
+                recoveryDevice->ecid = res->deviceInfo.ecid;
+                recoveryDevice->mode = res->mode;
+                recoveryDevice->cpid = res->deviceInfo.cpid;
+                recoveryDevice->bdid = res->deviceInfo.bdid;
+                recoveryDevice->displayName = res->displayName;
 
-    // m_recoveryDevices[res.deviceInfo.ecid] = recoveryDevice;
-    // emit recoveryDeviceAdded(recoveryDevice);
-    // emit deviceChange();
+                m_recoveryDevices[res->deviceInfo.ecid] = recoveryDevice;
+                emit recoveryDeviceAdded(recoveryDevice);
+                emit deviceChange();
+            });
 }
 #endif
 
@@ -631,21 +661,16 @@ AppContext::~AppContext()
         }
     }
 
-    // #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-    //     for (auto recoveryDevice : m_recoveryDevices) {
-    //         emit recoveryDeviceRemoved(recoveryDevice->ecid);
-    //         delete recoveryDevice->mutex;
-    //         delete recoveryDevice;
-    //     }
-    // #endif
+#ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
+    for (auto recoveryDevice : m_recoveryDevices) {
+        emit recoveryDeviceRemoved(recoveryDevice->ecid);
+        delete recoveryDevice;
+    }
+#endif
 }
 
 void AppContext::setCurrentDeviceSelection(const DeviceSelection &selection)
 {
-    qDebug() << "New selection -"
-             << " Type:" << selection.type
-             << " UDID:" << QString::fromStdString(selection.udid)
-             << " ECID:" << selection.ecid << " Section:" << selection.section;
     if (m_currentSelection.type == selection.type &&
         m_currentSelection.udid == selection.udid &&
         m_currentSelection.ecid == selection.ecid &&

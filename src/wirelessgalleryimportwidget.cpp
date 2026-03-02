@@ -190,7 +190,7 @@ void WirelessGalleryImportWidget::onImportPhotos()
         return;
     }
 
-    PhotoImportDialog dialog(m_selectedFiles, false, this);
+    PhotoImportDialog dialog(m_selectedFiles, this);
     dialog.exec();
 }
 

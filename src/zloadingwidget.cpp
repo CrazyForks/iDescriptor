@@ -22,7 +22,13 @@ ZLoadingWidget::ZLoadingWidget(bool start, QWidget *parent)
     loadingLayout->addWidget(m_loadingIndicator);
     loadingLayout->addStretch();
 
-    addWidget(loadingWidget); // Loading widget at index 0
+    m_errorWidget = new ZLoadingErrorWidget(this);
+    connect(static_cast<ZLoadingErrorWidget *>(m_errorWidget),
+            &ZLoadingErrorWidget::retryClicked, this,
+            [this]() { emit retryClicked(); });
+
+    addWidget(loadingWidget);
+    addWidget(m_errorWidget);
 }
 
 void ZLoadingWidget::setupContentWidget(QWidget *contentWidget)
@@ -41,28 +47,20 @@ void ZLoadingWidget::setupContentWidget(QLayout *contentLayout)
 
 void ZLoadingWidget::setupErrorWidget(QWidget *errorWidget)
 {
+    if (m_errorWidget) {
+        m_errorWidget->deleteLater();
+    }
     m_errorWidget = errorWidget;
     addWidget(m_errorWidget);
 }
 
 void ZLoadingWidget::setupErrorWidget(QLayout *errorLayout)
 {
+    if (m_errorWidget) {
+        m_errorWidget->deleteLater();
+    }
     m_errorWidget = new QWidget();
     m_errorWidget->setLayout(errorLayout);
-
-    addWidget(m_errorWidget);
-}
-
-void ZLoadingWidget::setupErrorWidget(const QString &errorMessage)
-{
-    m_errorWidget = new QWidget();
-    QVBoxLayout *errorLayout = new QVBoxLayout(m_errorWidget);
-    errorLayout->setAlignment(Qt::AlignCenter);
-
-    QLabel *errorLabel = new QLabel(errorMessage);
-    errorLabel->setAlignment(Qt::AlignCenter);
-    errorLabel->setStyleSheet("QLabel { color: red; }");
-    errorLayout->addWidget(errorLabel);
 
     addWidget(m_errorWidget);
 }
@@ -76,6 +74,9 @@ void ZLoadingWidget::switchToWidget(QWidget *widget)
 {
     int index = indexOf(widget);
     if (index != -1) {
+        if (m_loadingIndicator) {
+            m_loadingIndicator->stop();
+        }
         setCurrentIndex(index);
     }
 }
@@ -85,9 +86,8 @@ void ZLoadingWidget::stop(bool showContent)
     if (m_loadingIndicator) {
         m_loadingIndicator->stop();
     }
-    if (showContent) {
-        // FIXME: dont use hardcoded index
-        setCurrentIndex(1);
+    if (showContent && m_contentWidget) {
+        switchToWidget(m_contentWidget);
     }
 }
 
@@ -99,13 +99,26 @@ void ZLoadingWidget::showError()
     }
 }
 
+void ZLoadingWidget::showError(const QString &errorMessage)
+{
+    m_loadingIndicator->stop();
+    if (m_errorWidget) {
+        // FIXME: can be handled better
+        // maybe subclass ZLoadingWidget for custom error widget?
+        if (auto errorWidget =
+                qobject_cast<ZLoadingErrorWidget *>(m_errorWidget)) {
+            errorWidget->setText(errorMessage);
+        }
+        setCurrentWidget(m_errorWidget);
+    }
+}
+
 void ZLoadingWidget::showLoading()
 {
     if (m_loadingIndicator) {
         m_loadingIndicator->start();
     }
-    // FIXME: dont use hardcoded index
-    setCurrentIndex(0);
+    setCurrentWidget(m_loadingIndicator->parentWidget());
 }
 
 ZLoadingWidget::~ZLoadingWidget()

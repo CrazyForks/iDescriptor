@@ -30,7 +30,7 @@ MediaStreamerManager *MediaStreamerManager::sharedInstance()
     return &instance;
 }
 
-QUrl MediaStreamerManager::getStreamUrl(iDescriptorDevice *device,
+QUrl MediaStreamerManager::getStreamUrl(const iDescriptorDevice *device,
                                         AfcClientHandle *afcClient,
                                         const QString &filePath)
 {
@@ -65,7 +65,7 @@ QUrl MediaStreamerManager::getStreamUrl(iDescriptorDevice *device,
         return QUrl();
     }
 
-    // Store the streamer info
+    // FIXME: device pointer can become dangling if device is disconnected
     StreamerInfo info;
     info.streamer = streamer;
     info.device = device;
