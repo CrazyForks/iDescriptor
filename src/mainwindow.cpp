@@ -313,7 +313,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 #endif
 
     QString lastAppVersion = SettingsManager::sharedInstance()->appVersion();
-    bool shouldShowReleaseChangelog = true;
+    bool shouldShowReleaseChangelog = lastAppVersion != APP_VERSION;
     SettingsManager::sharedInstance()->setAppVersion(APP_VERSION);
 
     if (shouldShowReleaseChangelog) {
