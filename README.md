@@ -36,6 +36,8 @@
 
 ## Download
 
+### DO NOT DOWNLOAD FROM ANY WEBSITE CLAIMING TO BE US WE ONLY HAVE https://idescriptor.github.io AND RELEASES WILL BE MADE FROM THIS REPO ONLY
+
 <p align="center">
   <a href="https://github.com/iDescriptor/iDescriptor/releases/latest">
     <img src="https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"/>
