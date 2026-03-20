@@ -76,7 +76,6 @@ private:
     QGroupBox *m_infoWidget;
     QGridLayout *m_infoLayout;
     ZLoadingWidget *m_loadingWidget;
-    QLabel *m_errorLabel;
 
     // Data
     iDescriptorDevice *m_device;

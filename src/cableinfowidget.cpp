@@ -34,11 +34,13 @@ CableInfoWidget::CableInfoWidget(iDescriptorDevice *device, QWidget *parent)
     : Tool(parent), m_device(device), m_response(nullptr)
 {
     setupUI();
+    setAttribute(Qt::WA_DeleteOnClose);
+    resize(600, 400);
+
     connect(AppContext::sharedInstance(), &AppContext::deviceRemoved, this,
             [this](const std::string &udid) {
                 if (m_device->udid == udid) {
                     this->close();
-                    this->deleteLater();
                 }
             });
     QTimer::singleShot(200, this, &CableInfoWidget::initCableInfo);
@@ -48,9 +50,11 @@ void CableInfoWidget::setupUI()
 {
     setWindowTitle("Cable Information - iDescriptor");
 
-    setMinimumSize(500, 400);
+    QVBoxLayout *rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
 
-    m_mainLayout = new QVBoxLayout();
+    QWidget *contentContainer = new QWidget(this);
+    m_mainLayout = new QVBoxLayout(contentContainer);
     m_mainLayout->setSpacing(20);
     m_mainLayout->setContentsMargins(20, 20, 20, 20);
 
@@ -85,38 +89,21 @@ void CableInfoWidget::setupUI()
     m_mainLayout->addWidget(m_descriptionLabel);
     m_mainLayout->addWidget(m_infoWidget);
     m_mainLayout->addStretch();
+
     m_loadingWidget = new ZLoadingWidget(true, this);
-    m_loadingWidget->setupContentWidget(m_mainLayout);
+    rootLayout->addWidget(m_loadingWidget);
+    m_loadingWidget->setupContentWidget(contentContainer);
 
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->addWidget(m_loadingWidget);
-
-    QVBoxLayout *errorLayout = new QVBoxLayout();
-    m_errorLabel = new QLabel();
-    m_errorLabel->setAlignment(Qt::AlignCenter);
-    errorLayout->addStretch();
-    errorLayout->addWidget(m_errorLabel);
-
-    QPushButton *retryButton = new QPushButton("Retry");
-    retryButton->setMaximumWidth(retryButton->sizeHint().width());
-    connect(retryButton, &QPushButton::clicked, this, [this]() {
+    connect(m_loadingWidget, &ZLoadingWidget::retryClicked, this, [this]() {
         m_loadingWidget->showLoading();
         QTimer::singleShot(200, this, &CableInfoWidget::initCableInfo);
     });
-    errorLayout->addWidget(retryButton, 0, Qt::AlignHCenter);
-    errorLayout->addStretch();
-
-    m_loadingWidget->setupErrorWidget(errorLayout);
 }
 
 void CableInfoWidget::initCableInfo()
 {
     if (!m_device) {
-        m_errorLabel->setText("Something went wrong (no device ?)");
-        m_errorLabel->setStyleSheet(
-            "QLabel { color: #dc3545; font-size: 18px; font-weight: bold; }");
-        m_loadingWidget->showError();
+        m_loadingWidget->showError("Something went wrong (no device ?)");
         return;
     }
 
@@ -136,7 +123,6 @@ void CableInfoWidget::analyzeCableInfo()
     if (!m_response) {
         return;
     }
-    plist_print(m_response);
     PlistNavigator ioreg(m_response);
 
     if (!ioreg.valid()) {
@@ -235,10 +221,9 @@ void CableInfoWidget::updateUI()
     }
 
     if (!m_cableInfo.isConnected) {
-        m_errorLabel->setText(
+        m_loadingWidget->showError(
             QString("%1 does not seem to be connected to any cable.")
                 .arg(QString::fromStdString(m_device->deviceInfo.productType)));
-        m_loadingWidget->showError();
         return;
     }
 
