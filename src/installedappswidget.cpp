@@ -144,7 +144,6 @@ void AppTabWidget::updateStyles()
     }
     // prevent infinite loop
     if (style != styleSheet()) {
-        qDebug() << "Style" << style;
         setStyleSheet(style);
     }
 }
@@ -564,7 +563,6 @@ void InstalledAppsWidget::selectAppTab(AppTabWidget *tab)
     QString bundleId = tab->getBundleId();
 
     // Load app container data
-    // FIXME: handle quickly repeated selections
     loadAppContainer(bundleId);
 }
 
@@ -596,10 +594,12 @@ void InstalledAppsWidget::filterApps(const QString &searchText)
 */
 void InstalledAppsWidget::loadAppContainer(const QString &bundleId)
 {
-    if (!m_device) {
+    if (!m_device || m_loadingContainer) {
         return;
     }
+    m_loadingContainer = true;
 
+    disableTabs(true);
     // Clean up previous house arrest clients before creating new ones
     cleanupHouseArrestClients();
 
@@ -654,19 +654,20 @@ void InstalledAppsWidget::loadAppContainer(const QString &bundleId)
                              << QString::fromUtf8(err->message);
                     result["error"] = QString("Error vending documents: %1")
                                           .arg(QString::fromUtf8(err->message));
-                    // FIXME:Crashes here, needs investigation
-                    // can houseArrestClient be nullptr here?
-                    // house_arrest_client_free(houseArrestClient);
+                    // DO NOT call house_arrest_client_free(houseArrestClient)
+                    // here: vend_documents already took ownership and freed it.
                     return result;
                 }
 
                 char **dirs = nullptr;
                 size_t count = 0;
 
+                // vend_documents takes ownership of the house arrest client, so
+                // we don't free it here
+                houseArrestClient = nullptr;
+
                 result["afcClient"] =
                     QVariant::fromValue(reinterpret_cast<void *>(afcClient));
-                result["houseArrestClient"] = QVariant::fromValue(
-                    reinterpret_cast<void *>(houseArrestClient));
                 result["success"] = true;
 
             } catch (const std::exception &e) {
@@ -674,8 +675,6 @@ void InstalledAppsWidget::loadAppContainer(const QString &bundleId)
                          << e.what();
                 if (afcClient)
                     afc_client_free(afcClient);
-                if (houseArrestClient)
-                    house_arrest_client_free(houseArrestClient);
 
                 result["error"] = QString("Exception: %1").arg(e.what());
             }
@@ -690,8 +689,6 @@ void InstalledAppsWidget::onContainerDataReady()
 {
     QVariantMap result = m_containerWatcher->result();
 
-    // todo
-    // Clear loading state
     QLayoutItem *item;
     while ((item = m_containerLayout->takeAt(0)) != nullptr) {
         if (item->widget()) {
@@ -699,6 +696,9 @@ void InstalledAppsWidget::onContainerDataReady()
         }
         delete item;
     }
+
+    m_loadingContainer = false;
+    disableTabs(false);
 
     if (!result.value("success", false).toBool()) {
         qDebug() << "Error loading app container:"
@@ -713,8 +713,6 @@ void InstalledAppsWidget::onContainerDataReady()
     // variables
     m_houseArrestAfcClient = reinterpret_cast<AfcClientHandle *>(
         result.value("afcClient").value<void *>());
-    m_houseArrestClient = reinterpret_cast<HouseArrestClientHandle *>(
-        result.value("houseArrestClient").value<void *>());
 
     if (!m_houseArrestAfcClient) {
         QLabel *errorLabel =
@@ -740,15 +738,8 @@ void InstalledAppsWidget::onFileSharingFilterChanged(bool enabled)
 void InstalledAppsWidget::cleanupHouseArrestClients()
 {
     if (m_houseArrestAfcClient) {
-        // FIXME: create an issue afc_client_free crashes
-        //  afc_client_free(m_houseArrestAfcClient);
+        afc_client_free(m_houseArrestAfcClient);
         m_houseArrestAfcClient = nullptr;
-    }
-
-    if (m_houseArrestClient) {
-        // FIXME: crash
-        // house_arrest_client_free(m_houseArrestClient);
-        m_houseArrestClient = nullptr;
     }
 }
 
@@ -823,4 +814,11 @@ void InstalledAppsWidget::createRightPanel()
     contentLayout->addWidget(m_containerWidget);
 
     m_splitter->addWidget(rightContentWidget);
+}
+
+void InstalledAppsWidget::disableTabs(bool disable)
+{
+    for (AppTabWidget *tab : m_appTabs) {
+        tab->setEnabled(!disable);
+    }
 }

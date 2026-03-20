@@ -118,6 +118,7 @@ private:
     void filterApps(const QString &searchText);
     void loadAppContainer(const QString &bundleId);
     void cleanupHouseArrestClients();
+    void disableTabs(bool disable);
 
     const iDescriptorDevice *m_device;
     QHBoxLayout *m_mainLayout;
@@ -138,12 +139,12 @@ private:
     QFutureWatcher<QVariantMap> *m_watcher;
     QFutureWatcher<QVariantMap> *m_containerWatcher;
     QSplitter *m_splitter;
-    HouseArrestClientHandle *m_houseArrestClient = nullptr;
     AfcClientHandle *m_houseArrestAfcClient = nullptr;
     // App data storage
     QList<AppTabWidget *> m_appTabs;
     AppTabWidget *m_selectedTab = nullptr;
     SpringBoardServicesClientHandle *m_springboardClient = nullptr;
+    bool m_loadingContainer = false;
 };
 
 #endif // INSTALLEDAPPSWIDGET_H
