@@ -5,6 +5,7 @@ AppDir
 *.AppImage
 build-dir
 .flatpak-builder
+.flatpak-builder/build
 *.o
 *.obj
 *.so
@@ -14,3 +15,4 @@ devdiskimgs
 .qt
 .qtcreator
 CMakeFiles
+src/rust/target
