@@ -52,7 +52,7 @@ else ()
 endif()
 
 find_package(PkgConfig REQUIRED)
-find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets Network QuickControls2 SerialPort Positioning Location QuickWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets Network QuickControls2 SerialPort Positioning Location QuickWidgets) 
 find_package(SQLite3 REQUIRED)
 # Add QTermWidget
 # Prefer CMake-native qtermwidget6, fallback to pkg-config if needed
@@ -319,38 +319,6 @@ add_dependencies(idevice_cpp idevice_rs_build)
 
 
 set(RUST_CODEBASE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/rust)
-set(RUST_CODEBASE_LIB_PATH ${RUST_CODEBASE_SOURCE_DIR}/target/debug/librust_codebase.a)
-
-
-if (APPLE)
-    add_custom_command(
-        OUTPUT ${RUST_CODEBASE_LIB_PATH}
-        COMMAND ${CMAKE_COMMAND} -E env
-                "PATH=$ENV{HOME}/.cargo/bin:/usr/local/bin:$ENV{PATH}"
-                "RUSTC=/usr/local/bin/rustc"
-                ${CARGO_EXECUTABLE} build --manifest-path ${RUST_CODEBASE_SOURCE_DIR}/Cargo.toml
-        WORKING_DIRECTORY ${RUST_CODEBASE_SOURCE_DIR}
-        COMMENT "Building Rust codebase"
-        VERBATIM
-    )
-else()
-    add_custom_command(
-        OUTPUT ${RUST_CODEBASE_LIB_PATH}
-        COMMAND ${CARGO_EXECUTABLE} build --manifest-path ${RUST_CODEBASE_SOURCE_DIR}/Cargo.toml
-        WORKING_DIRECTORY ${RUST_CODEBASE_SOURCE_DIR}
-        COMMENT "Building Rust codebase"
-        VERBATIM
-    )
-endif()
-
-add_custom_target(rust_codebase_build DEPENDS ${RUST_CODEBASE_LIB_PATH})
-
-add_library(rust_codebase STATIC IMPORTED GLOBAL)
-set_target_properties(rust_codebase PROPERTIES
-    IMPORTED_LOCATION "${RUST_CODEBASE_LIB_PATH}"
-)
-
-add_dependencies(rust_codebase rust_codebase_build)
 
 target_link_libraries(iDescriptor PRIVATE
     Qt6::Widgets
@@ -381,8 +349,7 @@ target_link_libraries(iDescriptor PRIVATE
     ZUpdater
     # ZToast
     ${IDEVICE_IMPLEMENTATION_LIBS}
-    SQLite::SQLite3
-    rust_codebase
+    SQLite3::SQLite3
 )
 
 if(ENABLE_RECOVERY_DEVICE_SUPPORT)

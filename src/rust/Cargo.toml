@@ -1,11 +1,10 @@
 [package]
-name = "rust_codebase"
+name = "idescriptor_rust_codebase"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "rust_codebase"
-crate-type = ["staticlib"]
+name = "idescriptor_rust_codebase"
 
 [dependencies]
 tokio = { version = "1", features = ["rt", "time", "sync", "macros"] }
