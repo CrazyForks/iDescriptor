@@ -165,9 +165,15 @@ NetworkDevicesToConnectWidget::NetworkDevicesToConnectWidget(QWidget *parent)
 
     updateDeviceList();
 
+    // in case the backend fails to find pairing file
     connect(AppContext::sharedInstance()->core, &CXX::Core::no_pairing_file,
             this,
             &NetworkDevicesToConnectWidget::onNoPairingFileForWirelessDevice);
+
+    connect(AppContext::sharedInstance(),
+            &AppContext::noPairingFileForWirelessDevice, this,
+            &NetworkDevicesToConnectWidget::onNoPairingFileForWirelessDevice);
+
     connect(AppContext::sharedInstance()->core, &CXX::Core::init_failed, this,
             &NetworkDevicesToConnectWidget::onDeviceInitFailed);
     connect(AppContext::sharedInstance(), &AppContext::initStarted, this,

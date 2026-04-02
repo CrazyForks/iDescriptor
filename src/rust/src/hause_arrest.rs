@@ -1,14 +1,12 @@
 use crate::{APP_DEVICE_STATE, RUNTIME, VIDEO_STREAMS, afc, run_sync, utils};
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QMap, QMapPair_QString_QVariant, QString};
-use idevice::{
-    afc::{AfcClient, opcode::AfcFopenMode},
-};
+use idevice::afc::{AfcClient, opcode::AfcFopenMode};
 use std::pin::Pin;
 use std::sync::Arc;
 
 use tokio::{
-    io::{AsyncReadExt},
+    io::AsyncReadExt,
     net::TcpListener,
     sync::{Mutex, oneshot},
 };
@@ -239,11 +237,11 @@ impl qobject::HauseArrest {
 
     fn start_video_stream(&self, file_path: &QString) -> QString {
         let afc_opt = self.rust().afc_handle.clone();
-  
-         let Some(afc) = afc_opt else {
-                eprintln!("HouseArrest: AfcClient not initialized");
-                return QString::default();
-          };
+
+        let Some(afc) = afc_opt else {
+            eprintln!("HouseArrest: AfcClient not initialized");
+            return QString::default();
+        };
 
         let udid_str = self.udid.to_string();
         let path_str = file_path.to_string();

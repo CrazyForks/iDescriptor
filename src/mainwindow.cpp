@@ -411,29 +411,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
                 return;
             }
-            qDebug() << "Trying to add network device with MAC:"
-                     << device.macAddress;
-
-            QString pairing_file =
-                AppContext::sharedInstance()->getCachedPairingFile(
-                    device.macAddress);
-
-            if (pairing_file.isEmpty()) {
-                qDebug() << "No pairing file cached for device with MAC:"
-                         << device.macAddress
-                         << "Emitting noPairingFileForWirelessDevice event";
-                AppContext::sharedInstance()
-                    ->emitNoPairingFileForWirelessDevice(device.macAddress);
-                return;
-            }
-
-            qDebug() << "Found cached pairing file for device with MAC:"
-                     << device.macAddress << "IP:" << device.address
-                     << "Initializing wireless connection";
-            AppContext::sharedInstance()->core->init_wireless_device(
-                device.address, LOCKDOWN_PATH + QString("/") + pairing_file,
-                device.macAddress);
-            AppContext::sharedInstance()->emitInitStarted(device.macAddress);
+            AppContext::sharedInstance()->tryToConnectToNetworkDevice(device);
         });
 }
 

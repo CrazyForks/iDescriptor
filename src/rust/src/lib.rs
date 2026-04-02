@@ -18,8 +18,8 @@ use std::future::Future;
 use std::sync::mpsc;
 use std::thread;
 use tokio::runtime::{Builder, Runtime};
-use tokio::task::JoinHandle;
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 
 use core::pin::Pin;
 use cxx_qt::Threading;
@@ -27,16 +27,14 @@ use cxx_qt_lib::{QMap, QMapPair_QString_QVariant, QString, QVariant};
 
 use crate::qobject::Core;
 use once_cell::sync::Lazy;
-use plist::{Value};
-mod afc_services;
-mod image_loader;
-mod service_manager;
-mod screenshot;
-mod utils;
-mod hause_arrest;
+use plist::Value;
 mod afc;
+mod afc_services;
+mod hause_arrest;
 mod io_manager;
-
+mod screenshot;
+mod service_manager;
+mod utils;
 
 const POSSIBLE_ROOT: &str = "../../../../";
 const APP_LABEL: &str = "iDescriptor";
@@ -79,7 +77,6 @@ static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
 
 static VIDEO_STREAMS: Lazy<std::sync::Mutex<HashMap<String, oneshot::Sender<()>>>> =
     Lazy::new(|| std::sync::Mutex::new(HashMap::new()));
-
 
 pub fn run_sync<F, R>(fut: F) -> R
 where
@@ -145,7 +142,7 @@ mod qobject {
 pub struct RCore;
 
 impl qobject::Core {
-    fn init(self: Pin<&mut Self>)  {
+    fn init(self: Pin<&mut Self>) {
         self.listen();
     }
 
@@ -396,8 +393,11 @@ impl qobject::Core {
                                                 emit_connected(qt_thread.clone(), udid).await;
                                             });
                                         }
+                                        /* DISCONNECTED */
                                         Ok(UsbmuxdListenEvent::Disconnected(device_id)) => {
                                             if let Some(udid) = device_map.remove(&device_id) {
+                                                clean_device_from_app_state(&udid).await;
+
                                                 let qt_thread = qt_t.clone();
                                                 qt_thread
                                                     .queue(move |Core_qobj| {
@@ -506,8 +506,9 @@ impl qobject::Core {
     fn get_pairing_files(self: Pin<&mut Self>) -> QMap<QMapPair_QString_QVariant> {
         let mut map = QMap::<QMapPair_QString_QVariant>::default();
 
-        let paths =
-            match std::fs::read_dir(get_lockdown_path()) {
+        #[cfg(not(target_os = "macos"))]
+        {
+            let paths = match std::fs::read_dir(utils::get_lockdown_path()) {
                 Ok(iter) => iter
                     .filter_map(|entry| {
                         let entry = entry.ok()?;
@@ -518,49 +519,75 @@ impl qobject::Core {
                 Err(_) => Vec::new(),
             };
 
-        paths.into_iter().for_each(|path| {
-            if let Ok(pf) = PairingFile::read_from_file(&path) {
-                if let Some(fname) = path.file_name().and_then(|s| s.to_str()) {
+            paths.into_iter().for_each(|path| {
+                if let Ok(pf) = PairingFile::read_from_file(&path) {
+                    let abs = path.canonicalize().unwrap_or(path);
+                    let abs_str = abs.to_string_lossy().to_string();
+
                     map.insert(
                         QString::from(pf.wifi_mac_address),
-                        QVariant::from(&QString::from(fname)),
+                        QVariant::from(&QString::from(abs_str)),
                     );
                 }
+            });
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let entries: Vec<(String, String)> = run_sync(async {
+                let mut out = Vec::new();
+
+                if let Ok(mut uc) = UsbmuxdConnection::default().await {
+                    if let Ok(devs) = uc.get_devices().await {
+                        for dev in devs {
+                            if let Ok(pair_rec) = uc.get_pair_record(&dev.udid).await {
+                                out.push((
+                                    pair_rec.wifi_mac_address.clone(),
+                                    format!("{}.plist", dev.udid),
+                                ));
+                            }
+                        }
+                    }
+                }
+
+                out
+            });
+
+            let base = utils::get_lockdown_path();
+
+            // turn $UDID.plist into /var/db/lockdown/UDID.plist
+            for (wifi_mac, file_name) in entries {
+                let full_path = base.join(&file_name);
+                let full_path_str = full_path.to_string_lossy().into_owned();
+
+                map.insert(
+                    QString::from(wifi_mac),
+                    QVariant::from(&QString::from(full_path_str)),
+                );
             }
-        });
+        }
 
         map
     }
     fn remove_device(self: Pin<&mut Self>, udid: &QString) {
         let udid_str = udid.to_string();
         RUNTIME.spawn(async move {
-            let mut state = APP_DEVICE_STATE.lock().await;
-            if let Some(svc) = state.remove(&udid_str) {
-                let streams = svc.video_streams.lock().await;
-                for (_path, flag) in streams.iter() {
-                    flag.store(true, Ordering::Relaxed);
-                }
-                println!("Removed device with UDID {}", udid_str);
-            } else {
-                eprintln!(
-                    "Attempted to remove non-existent device with UDID {}",
-                    udid_str
-                );
-            }
+            clean_device_from_app_state(&udid_str).await;
         });
     }
 }
 
-fn get_lockdown_path() -> String {
-    #[cfg(target_os = "linux")]
-    return "/var/lib/lockdown".to_string();
-
-    #[cfg(target_os = "macos")]
-    return "/var/db/lockdown".to_string();
-
-    #[cfg(target_os = "windows")]
-    return std::env::var("PROGRAMDATA").unwrap_or_else(|_| "C:\\ProgramData".to_string())
-        + "/Apple/Lockdown";
+async fn clean_device_from_app_state(udid: &str) {
+    let mut state = APP_DEVICE_STATE.lock().await;
+    if let Some(svc) = state.remove(udid) {
+        let streams = svc.video_streams.lock().await;
+        for (_path, flag) in streams.iter() {
+            flag.store(true, Ordering::Relaxed);
+        }
+        println!("Removed device with UDID {}", udid);
+    } else {
+        eprintln!("Attempted to remove non-existent device with UDID {}", udid);
+    }
 }
 
 //FIXME: dont spawn hb if init fails
@@ -603,9 +630,7 @@ async fn init_idescriptor_device<
     }
     eprintln!("init_idescriptor_device: Lockdown session started.");
 
-    eprintln!(
-        "init_idescriptor_device: Attempting to get default values from Lockdown."
-    );
+    eprintln!("init_idescriptor_device: Attempting to get default values from Lockdown.");
     let mut def_vals = match lc.get_value(None, None).await {
         Ok(v) => v,
         Err(e) => {
@@ -627,9 +652,7 @@ async fn init_idescriptor_device<
     }
 
     if is_wireless {
-        eprintln!(
-            "init_idescriptor_device: Attempting to connect to HeartbeatClient."
-        );
+        eprintln!("init_idescriptor_device: Attempting to connect to HeartbeatClient.");
         hb = match heartbeat::HeartbeatClient::connect(&provider_for_hb).await {
             Ok(h) => Some(h),
             Err(e) => {
@@ -660,7 +683,7 @@ async fn init_idescriptor_device<
                         eprintln!("heartbeat:  get_marco failed (fail count: {fails}): {e:?}");
                         if fails >= 3 {
                             eprintln!("heartbeat: too many failures for  giving up");
-                            APP_DEVICE_STATE.lock().await.remove(&udid_for_hb);
+                            clean_device_from_app_state(&udid_for_hb).await;
 
                             let udid_for_event = udid_for_hb.clone();
                             let _ = qt_thread_for_hb.queue(move |Core_qobj| {
@@ -682,7 +705,7 @@ async fn init_idescriptor_device<
                     eprintln!("heartbeat:  send_polo failed (fail count: {fails}): {e:?}");
                     if fails >= 3 {
                         eprintln!("heartbeat: too many failures for , giving up");
-                        APP_DEVICE_STATE.lock().await.remove(&udid_for_hb);
+                        clean_device_from_app_state(&udid_for_hb).await;
 
                         let udid_for_event = udid_for_hb.clone();
                         let _ = qt_thread_for_hb.queue(move |Core_qobj| {
@@ -699,11 +722,9 @@ async fn init_idescriptor_device<
                 }
                 eprintln!("heartbeat:  Polo sent successfully.");
                 interval += 5;
-                // tokio::time::sleep(std::time::Duration::from_secs(interval + 5)).await;
             }
 
-            eprintln!("heartbeat: heartbeat task for  ended.");
-            // loop exits → task ends
+            eprintln!("heartbeat: heartbeat task ended.");
         }));
     }
 
@@ -729,9 +750,7 @@ async fn init_idescriptor_device<
         }
     };
 
-    eprintln!(
-        "init_idescriptor_device: Attempting to connect to AFC client."
-    );
+    eprintln!("init_idescriptor_device: Attempting to connect to AFC client.");
     let mut afc_client = match AfcClient::connect(&provider).await {
         Ok(c) => c,
         Err(e) => {
@@ -741,9 +760,7 @@ async fn init_idescriptor_device<
     };
     eprintln!("init_idescriptor_device: Connected to AfcClient.");
 
-    eprintln!(
-        "init_idescriptor_device: Attempting to connect to DiagnosticsRelayClient."
-    );
+    eprintln!("init_idescriptor_device: Attempting to connect to DiagnosticsRelayClient.");
     let mut diag_relay = match DiagnosticsRelayClient::connect(&provider).await {
         Ok(c) => c,
         Err(e) => {
@@ -754,7 +771,7 @@ async fn init_idescriptor_device<
     eprintln!("init_idescriptor_device: Connected to DiagnosticsRelayClient.");
     // afc_client.set_timeout(Some(5000)).await;
 
-    let afc2 = match   AfcClient::new_afc2(&provider).await {
+    let afc2 = match AfcClient::new_afc2(&provider).await {
         Ok(c) => Some(Arc::new(Mutex::new(c))),
         Err(e) => {
             eprintln!("AfcClient::new_afc2 failed: {e:?}");
@@ -829,9 +846,7 @@ async fn init_idescriptor_device<
 
     let mut buf = Vec::new();
     if def_vals.to_writer_xml(&mut buf).is_err() {
-        eprintln!(
-            "init_idescriptor_device: Failed to serialize default values to XML."
-        );
+        eprintln!("init_idescriptor_device: Failed to serialize default values to XML.");
         return None;
     }
     let info = String::from_utf8(buf).ok()?;

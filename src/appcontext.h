@@ -57,8 +57,6 @@ public:
     const DeviceSelection &getCurrentDeviceSelection() const;
     const iDescriptorDevice *
     getDeviceByMacAddress(const QString &macAddress) const;
-    void emitNoPairingFileForWirelessDevice(const QString &udid);
-    void emitInitStarted(const QString &macAddress);
 
 private:
     QMap<QString, std::shared_ptr<iDescriptorDevice>> m_devices;

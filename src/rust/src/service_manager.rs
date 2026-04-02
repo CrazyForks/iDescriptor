@@ -1,25 +1,23 @@
+use crate::{APP_DEVICE_STATE, RUNTIME, utils};
 use cxx_qt::Threading;
-use cxx_qt_lib::{
-    QByteArray, QList, QMap, QMapPair_QString_QVariant, QString, QVariant,
-};
-use idevice::{
-    IdeviceService, RsdService, amfi, dvt::{
-        location_simulation::LocationSimulationClient, remote_server::RemoteServerClient
-    }, installation_proxy::InstallationProxyClient, mobile_image_mounter::ImageMounter, provider::IdeviceProvider, rsd::RsdHandshake, simulate_location::LocationSimulationService, springboardservices::SpringBoardServicesClient,
-};
+use cxx_qt_lib::{QByteArray, QList, QMap, QMapPair_QString_QVariant, QString, QVariant};
 use idevice::afc::opcode::AfcFopenMode;
 use idevice::services::core_device_proxy::CoreDeviceProxy;
-use crate::{APP_DEVICE_STATE, RUNTIME, utils};
-use plist::{ Value};
-
-use serde_json;
-use std::{
-    io::{Read},
-    pin::Pin,
-    time::Duration,
+use idevice::{
+    IdeviceService, RsdService, amfi,
+    dvt::{location_simulation::LocationSimulationClient, remote_server::RemoteServerClient},
+    installation_proxy::InstallationProxyClient,
+    mobile_image_mounter::ImageMounter,
+    provider::IdeviceProvider,
+    rsd::RsdHandshake,
+    simulate_location::LocationSimulationService,
+    springboardservices::SpringBoardServicesClient,
 };
-use plist_macro::plist;
+use plist::Value;
 
+use plist_macro::plist;
+use serde_json;
+use std::{io::Read, pin::Pin, time::Duration};
 
 #[cxx_qt::bridge(namespace = "CXX")]
 mod qobject {
@@ -64,7 +62,6 @@ mod qobject {
         #[qinvokable]
         fn set_location(&self, latitude: &QString, longitude: &QString) -> i32;
 
-
         #[qinvokable]
         fn fetch_app_icon(&self, bundle_id: QString);
 
@@ -72,7 +69,10 @@ mod qobject {
         fn cable_info_retrieved(self: Pin<&mut ServiceManager>, info: QString);
 
         #[qsignal]
-        fn mobilegestalt_info_retrieved(self: Pin<&mut ServiceManager>, info: QMap_QString_QVariant);
+        fn mobilegestalt_info_retrieved(
+            self: Pin<&mut ServiceManager>,
+            info: QMap_QString_QVariant,
+        );
 
         #[qsignal]
         fn dev_image_mounted(self: Pin<&mut ServiceManager>, success: bool);
@@ -81,24 +81,35 @@ mod qobject {
         fn developer_mode_option_revealed(self: Pin<&mut ServiceManager>, success: bool);
 
         #[qsignal]
-        fn mounted_image_retrieved(self: Pin<&mut ServiceManager>, sig: QByteArray, sig_length: u64);
+        fn mounted_image_retrieved(
+            self: Pin<&mut ServiceManager>,
+            sig: QByteArray,
+            sig_length: u64,
+        );
 
         #[qsignal]
         fn installed_apps_retrieved(self: Pin<&mut ServiceManager>, apps: &QMap_QString_QVariant);
 
         #[qsignal]
-        fn app_icon_loaded(self: Pin<&mut ServiceManager>, bundle_id: QString, icon_data: QByteArray);
-
+        fn app_icon_loaded(
+            self: Pin<&mut ServiceManager>,
+            bundle_id: QString,
+            icon_data: QByteArray,
+        );
 
         #[qsignal]
         fn battery_info_updated(self: Pin<&mut ServiceManager>, info: &QString);
-
 
         #[qinvokable]
         fn fetch_disk_usage(&self, skip_gallery_usage: bool);
 
         #[qsignal]
-        fn disk_usage_retrieved(self: Pin<&mut ServiceManager>, success: bool, apps_usage: u64, gallery_usage: u64);
+        fn disk_usage_retrieved(
+            self: Pin<&mut ServiceManager>,
+            success: bool,
+            apps_usage: u64,
+            gallery_usage: u64,
+        );
     }
 
     impl cxx_qt::Threading for ServiceManager {}
@@ -130,28 +141,29 @@ impl cxx_qt::Constructor<(QString, u32)> for qobject::ServiceManager {
         RServiceManager {
             udid: args.0,
             ios_version: args.1,
-        } 
+        }
     }
 
-     fn initialize(self: Pin<&mut Self>, _arguments: Self::InitializeArguments) {  
-        let udid_for_log = self.get_udid().to_string();  
-        println!("ServiceServiceManager::ServiceManager::initialize called for UDID: {udid_for_log}");  
-        self.start_update_battery_info_interval();  
-    }  
+    fn initialize(self: Pin<&mut Self>, _arguments: Self::InitializeArguments) {
+        let udid_for_log = self.get_udid().to_string();
+        println!(
+            "ServiceServiceManager::ServiceManager::initialize called for UDID: {udid_for_log}"
+        );
+        self.start_update_battery_info_interval();
+    }
 }
 
 impl qobject::ServiceManager {
-
-    pub fn start_update_battery_info_interval(self: Pin<&mut Self>) {  
-        let qt_thread = self.qt_thread();  
+    pub fn start_update_battery_info_interval(self: Pin<&mut Self>) {
+        let qt_thread = self.qt_thread();
         let udid = self.get_udid().to_string();
         println!("Starting battery info update interval for device {udid}");
-        RUNTIME.spawn(async move {  
-            let mut interval = tokio::time::interval(Duration::from_secs(30));  
-              
-            loop {  
-                interval.tick().await;  
-                
+        RUNTIME.spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(30));
+
+            loop {
+                interval.tick().await;
+
                 let maybe_device = APP_DEVICE_STATE.lock().await.get(udid.as_str()).cloned();
 
                 let device = match maybe_device {
@@ -162,21 +174,27 @@ impl qobject::ServiceManager {
                     }
                 };
 
-                println!("start_update_battery_info_interval: Fetching battery info for device {udid}");
+                println!(
+                    "start_update_battery_info_interval: Fetching battery info for device {udid}"
+                );
 
-                utils::get_battery_info(&mut *device.diag.lock().await).await.map(|info| {
-                    let mut buf = Vec::new();
-                    if Value::Dictionary(info).to_writer_xml(&mut buf).is_ok() {
-                        if let Ok(s) = String::from_utf8(buf) {
-                            qt_thread.queue(move |t| {
-                                t.battery_info_updated(&QString::from(s));
-                            }).ok();
+                utils::get_battery_info(&mut *device.diag.lock().await)
+                    .await
+                    .map(|info| {
+                        let mut buf = Vec::new();
+                        if Value::Dictionary(info).to_writer_xml(&mut buf).is_ok() {
+                            if let Ok(s) = String::from_utf8(buf) {
+                                qt_thread
+                                    .queue(move |t| {
+                                        t.battery_info_updated(&QString::from(s));
+                                    })
+                                    .ok();
+                            }
                         }
-                    }
-                });
-            }  
-        });  
-    }  
+                    });
+            }
+        });
+    }
 
     fn get_udid(&self) -> &QString {
         use cxx_qt::CxxQtType;
@@ -638,7 +656,6 @@ impl qobject::ServiceManager {
         });
     }
 
-
     fn fetch_app_icon(&self, bundle_id: QString) {
         let udid = self.get_udid().to_string();
         let qt_t = self.qt_thread();
@@ -684,11 +701,10 @@ impl qobject::ServiceManager {
         });
     }
 
-
     fn set_location(&self, latitude: &QString, longitude: &QString) -> i32 {
         let udid = self.get_udid().to_string();
         let ios_version = self.get_ios_version();
-        
+
         /*
             FIXME: use RUNTIME.spawn in the future
         */
@@ -866,16 +882,15 @@ async fn set_device_location_rsd(
     longitude: f64,
 ) -> Result<(), idevice::IdeviceError> {
     let rsd_port = proxy.handshake.server_rsd_port;
-    let adapter = proxy.create_software_tunnel()?;  
-    let mut adapter = adapter.to_async_handle();  
-    let stream = adapter.connect(rsd_port).await?;  
-  
-    let mut handshake = RsdHandshake::new(stream).await?;  
-  
-    let mut remote_server =  
-        RemoteServerClient::connect_rsd(&mut adapter, &mut handshake).await?;  
-    remote_server.read_message(0).await?;  
-  
-    let mut location_client = LocationSimulationClient::new(&mut remote_server).await?;  
-    location_client.set(latitude, longitude).await  
+    let adapter = proxy.create_software_tunnel()?;
+    let mut adapter = adapter.to_async_handle();
+    let stream = adapter.connect(rsd_port).await?;
+
+    let mut handshake = RsdHandshake::new(stream).await?;
+
+    let mut remote_server = RemoteServerClient::connect_rsd(&mut adapter, &mut handshake).await?;
+    remote_server.read_message(0).await?;
+
+    let mut location_client = LocationSimulationClient::new(&mut remote_server).await?;
+    location_client.set(latitude, longitude).await
 }

@@ -38,7 +38,27 @@ AppContext::AppContext(QObject *parent) : QObject{parent}
 void AppContext::cachePairedDevices()
 {
 
+#ifndef __APPLE__
     m_pairingFileCache = core->get_pairing_files();
+#else
+    QMap<QString, QString> maybeStalePairingFiles =
+        SettingsManager::sharedInstance()->getAllIdeviceDefaultPairingFiles();
+
+    for (const QString &mac : maybeStalePairingFiles.keys()) {
+        const QString path = maybeStalePairingFiles.value(mac);
+        qDebug() << "Using pairing file" << path << "for MAC:" << mac
+                 << "cached from settings";
+        m_pairingFileCache[mac] = QVariant(path);
+    }
+    QMap<QString, QVariant> fresh = core->get_pairing_files();
+    for (const QString &mac : fresh.keys()) {
+        const QString path = fresh.value(mac).toString();
+        qDebug() << "Using fresh pairing file" << path << "for MAC:" << mac
+                 << "from backend";
+        m_pairingFileCache[mac] = QVariant(path);
+    }
+
+#endif
 }
 
 void AppContext::addDevice(iDescriptor::Uniq uniq,
@@ -361,22 +381,11 @@ void AppContext::tryToConnectToNetworkDevice(const NetworkDevice &device)
         qDebug() << "No pairing file cached for device with MAC:"
                  << device.macAddress
                  << "Emitting noPairingFileForWirelessDevice event";
-        emitNoPairingFileForWirelessDevice(device.macAddress);
+        emit noPairingFileForWirelessDevice(device.macAddress);
         return;
     }
-    core->init_wireless_device(device.address,
-                               LOCKDOWN_PATH + QString("/") + pairing_file,
-                               device.macAddress);
-}
-
-void AppContext::emitNoPairingFileForWirelessDevice(const QString &udid)
-{
-    emit noPairingFileForWirelessDevice(udid);
-}
-
-void AppContext::emitInitStarted(const QString &macAddress)
-{
-    emit initStarted(macAddress);
+    core->init_wireless_device(device.address, pairing_file, device.macAddress);
+    emit initStarted(device.macAddress);
 }
 
 void AppContext::handlePairing(iDescriptor::Uniq uniq, bool timeout)

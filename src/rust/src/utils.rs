@@ -8,6 +8,7 @@ use idevice::{
 use plist::Dictionary as PlistDictionary;
 use plist_macro::plist;
 use rusqlite::Connection;
+use std::path::PathBuf;
 
 pub async fn get_battery_info(diag: &mut DiagnosticsRelayClient) -> Option<PlistDictionary> {
     match diag.ioregistry(None, None, Some("IOPMPowerSource")).await {
@@ -117,4 +118,31 @@ pub fn query_gallery_usage(db_bytes: &mut Vec<u8>) -> Result<u64, rusqlite::Erro
 
     println!("Gallery usage calculated: {} bytes", size);
     Ok(size as u64)
+}
+
+pub fn get_lockdown_path() -> PathBuf {
+    if let Ok(val) = std::env::var("USBMUXD_PAIRING_FILES_LOCATION") {
+        if !val.is_empty() {
+            eprintln!("Pulling pairing files from USBMUXD_PAIRING_FILES_LOCATION: {val}");
+            return PathBuf::from(val);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        PathBuf::from("/var/lib/lockdown")
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        PathBuf::from("/var/db/lockdown")
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let base = std::env::var_os("PROGRAMDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"));
+        base.join("Apple").join("Lockdown")
+    }
 }
