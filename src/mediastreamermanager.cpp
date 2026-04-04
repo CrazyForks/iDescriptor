@@ -31,12 +31,15 @@ MediaStreamerManager *MediaStreamerManager::sharedInstance()
 
 QUrl MediaStreamerManager::getStreamUrl(
     const std::shared_ptr<iDescriptorDevice> device,
-    std::optional<std::shared_ptr<CXX::HauseArrest>> hause_arrest,
+    std::optional<std::shared_ptr<CXX::HauseArrest>> hause_arrest, bool useAfc2,
     const QString &filePath)
 {
     QString rustUrl;
 
-    if (hause_arrest.has_value() && hause_arrest.value()) {
+    if (useAfc2) {
+        qDebug() << "Requesting stream URL using Afc2Backend for:" << filePath;
+        rustUrl = device->afc2_backend->start_video_stream(filePath);
+    } else if (hause_arrest.has_value() && hause_arrest.value()) {
         qDebug() << "Requesting stream URL using HauseArrest for:" << filePath;
         rustUrl = hause_arrest.value()->start_video_stream(filePath);
     } else {

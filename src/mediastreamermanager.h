@@ -35,7 +35,7 @@ public:
     QUrl
     getStreamUrl(const std::shared_ptr<iDescriptorDevice> device,
                  std::optional<std::shared_ptr<CXX::HauseArrest>> hause_arrest,
-                 const QString &filePath);
+                 bool useAfc2, const QString &filePath);
 
     void releaseStreamer(const QString &filePath);
 
