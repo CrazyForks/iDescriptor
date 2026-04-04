@@ -314,7 +314,7 @@ void fullDeviceInfo(const pugi::xml_document &doc, DeviceInfo &d)
              : "Unknown Device";
     d.marketingName = info ? info->marketingName : "Unknown Device";
     d.rawProductType = rawProductType;
-    d.jailbroken = safeGet("Jailbroken") == "true";
+    d.jailbroken = safeGetBool("Jailbroken");
     d.is_iPhone = safeGet("DeviceClass") == "iPhone";
     d.serialNumber = safeGet("SerialNumber");
     d.mobileEquipmentIdentifier = safeGet("MobileEquipmentIdentifier");
