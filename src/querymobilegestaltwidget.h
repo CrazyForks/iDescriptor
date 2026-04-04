@@ -50,6 +50,18 @@ private slots:
     void onSelectAllClicked();
     void onClearAllClicked();
 
+public:
+    static bool
+    canOpenForDevice(const std::shared_ptr<iDescriptorDevice> device)
+    {
+        // FIXME: not tested on iOS 17,18 but it's deprecated on iOS 26
+        // assuming it won't work
+        if (device->deviceInfo.parsedDeviceVersion.major > 16) {
+            return false;
+        }
+        return true;
+    }
+
 private:
     void setupUI();
     void populateKeys();

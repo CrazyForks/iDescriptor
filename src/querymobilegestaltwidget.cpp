@@ -30,15 +30,6 @@ QueryMobileGestaltWidget::QueryMobileGestaltWidget(
     const std::shared_ptr<iDescriptorDevice> device, QWidget *parent)
     : Tool(parent), m_device(device)
 {
-    // FIXME: not tested on iOS 17,18 but it's deprecated on iOS 26
-    // i am assuming it won't work
-    if (m_device->deviceInfo.parsedDeviceVersion.major > 16) {
-        QMessageBox::warning(this, "Unsupported iOS Version",
-                             "Apple deprecated this protocol for Devices "
-                             "running iOS 17 or later");
-        QTimer::singleShot(0, this, &QWidget::close);
-        return;
-    }
     setupUI();
     populateKeys();
 }

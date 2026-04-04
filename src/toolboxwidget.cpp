@@ -455,12 +455,18 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
         enterRecoveryMode(device);
     } break;
     case iDescriptorTool::MountDevImage: {
+
+        if (!DevDiskImageHelper::canMountForDevice(device)) {
+            QMessageBox::warning(this, "Unsupported iOS Version",
+                                 "You don't need to mount a developer disk "
+                                 "image on devices running iOS 17 or later");
+            return;
+        }
         DevDiskImageHelper *devDiskImageHelper =
             new DevDiskImageHelper(device, this);
 
         connect(devDiskImageHelper, &DevDiskImageHelper::mountingCompleted,
                 this, [this, devDiskImageHelper](bool success) {
-                    devDiskImageHelper->deleteLater();
                     if (success) {
                         QMessageBox::information(
                             this, "Success",
@@ -485,6 +491,13 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
         shutdownDevice(device);
     } break;
     case iDescriptorTool::QueryMobileGestalt: {
+        if (!QueryMobileGestaltWidget::canOpenForDevice(device)) {
+            QMessageBox::warning(this, "Unsupported iOS Version",
+                                 "Apple deprecated this protocol for Devices "
+                                 "running iOS 17 or later");
+            return;
+        }
+
         QueryMobileGestaltWidget *queryMobileGestaltWidget =
             new QueryMobileGestaltWidget(device);
         queryMobileGestaltWidget->setAttribute(Qt::WA_DeleteOnClose);
@@ -519,8 +532,6 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
     case iDescriptorTool::iFuse: {
         if (!m_ifuseWidget) {
             m_ifuseWidget = new iFuseWidget(device);
-            qDebug() << "Created iFuseWidget"
-                     << device->deviceInfo.productType.c_str();
             m_ifuseWidget->setAttribute(Qt::WA_DeleteOnClose);
             connect(m_ifuseWidget, &QObject::destroyed, this,
                     [this]() { m_ifuseWidget = nullptr; });
@@ -566,84 +577,68 @@ void ToolboxWidget::restartDevice(
     int ret = msgBox.exec();
     if (ret != QMessageBox::Yes)
         return;
-    if (!device || device->udid.isEmpty()) {
-        return;
+
+    bool res = device->service_manager->restart();
+
+    if (res) {
+        QMessageBox::information(nullptr, "Restart Initiated",
+                                 "Device will restart shortly...");
+        qDebug() << "Restarting device";
+    } else {
+        QMessageBox::warning(nullptr, "Restart Failed",
+                             "Failed to restart device.");
     }
-
-    // // FIXME: move to servicemanager
-    // auto res = device->diagRelay->restart();
-
-    // if (res.is_err()) {
-    //     QMessageBox::warning(
-    //         nullptr, "Restart Failed",
-    //         "Failed to restart device: " +
-    //             QString::fromStdString(res.unwrap_err().message));
-    // } else {
-    //     QMessageBox::information(nullptr, "Restart Initiated",
-    //                              "Device will restart once unplugged.");
-    //     qDebug() << "Restarting device";
-    // }
 }
 
 void ToolboxWidget::shutdownDevice(
     const std::shared_ptr<iDescriptorDevice> device)
 {
 
-    // QMessageBox msgBox;
-    // msgBox.setWindowTitle("Shutdown Device");
-    // msgBox.setText("Are you sure you want to shutdown the device?");
-    // msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    // msgBox.setDefaultButton(QMessageBox::No);
+    QMessageBox msgBox;
+    msgBox.setWindowTitle("Shutdown Device");
+    msgBox.setText("Are you sure you want to shutdown the device?");
+    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    msgBox.setDefaultButton(QMessageBox::No);
 
-    // int ret = msgBox.exec();
-    // if (ret != QMessageBox::Yes)
-    //     return;
-    // if (!device || device->udid.empty()) {
-    //     return;
-    // }
+    int ret = msgBox.exec();
+    if (ret != QMessageBox::Yes)
+        return;
 
-    // // FIXME: move to servicemanager
-    // auto res = device->diagRelay->shutdown();
+    bool res = device->service_manager->shutdown();
 
-    // if (res.is_err()) {
-    //     QMessageBox::warning(
-    //         nullptr, "Shutdown Failed",
-    //         "Failed to shutdown device: " +
-    //             QString::fromStdString(res.unwrap_err().message));
-    // } else {
-    //     QMessageBox::information(nullptr, "Shutdown Initiated",
-    //                              "Device will shutdown once unplugged.");
-    //     qDebug() << "Shutting down device";
-    // }
+    if (res) {
+        QMessageBox::information(nullptr, "Shutdown Initiated",
+                                 "Device will shutdown shortly..");
+        qDebug() << "Shutting down device";
+    } else {
+        QMessageBox::warning(nullptr, "Shutdown Failed",
+                             "Failed to shutdown device.");
+    }
 }
 
 void ToolboxWidget::enterRecoveryMode(
     const std::shared_ptr<iDescriptorDevice> device)
 {
-    // QMessageBox msgBox;
-    // msgBox.setWindowTitle("Enter Recovery Mode");
-    // msgBox.setText("Are you sure you want to enter recovery mode?");
-    // msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    // msgBox.setDefaultButton(QMessageBox::No);
+    QMessageBox msgBox;
+    msgBox.setWindowTitle("Enter Recovery Mode");
+    msgBox.setText("Are you sure you want to enter recovery mode?");
+    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    msgBox.setDefaultButton(QMessageBox::No);
 
-    // int ret = msgBox.exec();
-    // if (ret != QMessageBox::Yes)
-    //     return;
+    int ret = msgBox.exec();
+    if (ret != QMessageBox::Yes)
+        return;
 
-    // if (!device || device->udid.empty()) {
-    //     return;
-    // }
+    bool res = device->service_manager->enter_recovery_mode();
 
-    // IdeviceFfiError *error = lockdownd_enter_recovery(device->lockdown);
-    // if (error != nullptr) {
-    //     QMessageBox::warning(nullptr, "Enter Recovery Mode Failed",
-    //                          "Failed to enter recovery mode: " +
-    //                              QString::fromStdString(error->message));
-    //     idevice_error_free(error);
-    // } else {
-    //     QMessageBox::information(nullptr, "Enter Recovery Mode Initiated",
-    //                              "Device will enter recovery mode.");
-    // }
+    if (res) {
+        QMessageBox::information(nullptr, "Enter Recovery Mode Initiated",
+                                 "Device will enter recovery mode.");
+        qDebug() << "Entering recovery mode";
+    } else {
+        QMessageBox::warning(nullptr, "Enter Recovery Mode Failed",
+                             "Failed to enter recovery mode.");
+    }
 }
 
 void ToolboxWidget::restartAirPlayWidget()
