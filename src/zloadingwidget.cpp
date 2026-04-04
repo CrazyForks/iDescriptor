@@ -5,14 +5,12 @@
 #include <QLabel>
 #include <QStackedWidget>
 
-ZLoadingWidget::ZLoadingWidget(bool start, QWidget *parent)
-    : QStackedWidget{parent}, m_loadingIndicator(new QProcessIndicator())
+ZLoadingWidget::ZLoadingWidget(bool retryEnabled, QWidget *parent)
+    : QStackedWidget{parent}, m_loadingIndicator(new QProcessIndicator()),
+      m_retryEnabled(retryEnabled)
 {
     m_loadingIndicator->setType(QProcessIndicator::line_rotate);
     m_loadingIndicator->setFixedSize(64, 32);
-    if (start) {
-        m_loadingIndicator->start();
-    }
 
     // Create a proper container widget for the loading indicator
     QWidget *loadingWidget = new QWidget(this);
@@ -22,7 +20,7 @@ ZLoadingWidget::ZLoadingWidget(bool start, QWidget *parent)
     loadingLayout->addWidget(m_loadingIndicator);
     loadingLayout->addStretch();
 
-    m_errorWidget = new ZLoadingErrorWidget(this);
+    m_errorWidget = new ZLoadingErrorWidget(m_retryEnabled, this);
     connect(static_cast<ZLoadingErrorWidget *>(m_errorWidget),
             &ZLoadingErrorWidget::retryClicked, this,
             [this]() { emit retryClicked(); });
@@ -65,9 +63,9 @@ void ZLoadingWidget::setupErrorWidget(QLayout *errorLayout)
     addWidget(m_errorWidget);
 }
 
-void ZLoadingWidget::setupAditionalWidget(QWidget *customWidget)
+int ZLoadingWidget::setupAditionalWidget(QWidget *customWidget)
 {
-    addWidget(customWidget);
+    return addWidget(customWidget);
 }
 
 void ZLoadingWidget::switchToWidget(QWidget *widget)
