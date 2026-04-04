@@ -186,104 +186,81 @@ void ToolboxWidget::setupUI()
             this, &ToolboxWidget::onDeviceSelectionChanged);
 }
 
-ClickableWidget *ToolboxWidget::createToolbox(iDescriptorTool tool,
-                                              const QString &description,
-                                              bool requiresDevice)
+ToolboxItemWidget *ToolboxWidget::createToolbox(iDescriptorTool tool,
+                                                const QString &description,
+                                                bool requiresDevice)
 {
-    ClickableWidget *b = new ClickableWidget();
-    b->setStyleSheet("padding: 5px; border: none; outline: none;");
-
-    QVBoxLayout *layout = new QVBoxLayout(b);
-
-    ZIconLabel *icon = new ZIconLabel(QIcon(), nullptr, 1.5, this);
     QString title;
+    QString iconName;
+    bool iconThemable = true;
     switch (tool) {
     case iDescriptorTool::Airplayer:
         title = "Airplayer";
-        icon->setIcon(
-            QIcon(":/resources/icons/MaterialSymbolsLightAirplayOutline.png"));
+        iconName = ":/resources/icons/MaterialSymbolsLightAirplayOutline.png";
         break;
     case iDescriptorTool::LiveScreen:
         title = "Live Screen";
-        icon->setIcon(QIcon(":/resources/icons/PepiconsPrintCellphoneEye.png"));
+        iconName = ":/resources/icons/PepiconsPrintCellphoneEye.png";
         break;
     case iDescriptorTool::MountDevImage:
         title = "Mount Dev Image";
-        icon->setIcon(QIcon(":/resources/icons/MdiDisk.png"));
+        iconName = ":/resources/icons/MdiDisk.png";
         break;
     case iDescriptorTool::VirtualLocation:
         title = "Virtual Location";
-        icon->setIcon(
-            QIcon(":/resources/icons/MaterialSymbolsLocationOnOutline.png"));
+        iconName = ":/resources/icons/MaterialSymbolsLocationOnOutline.png";
         break;
     case iDescriptorTool::Restart:
         title = "Restart";
-        icon->setIcon(QIcon(":/resources/icons/IcTwotoneRestartAlt.png"));
+        iconName = ":/resources/icons/IcTwotoneRestartAlt.png";
         break;
     case iDescriptorTool::Shutdown:
         title = "Shutdown";
-        icon->setIcon(QIcon(":/resources/icons/IcOutlinePowerSettingsNew.png"));
+        iconName = ":/resources/icons/IcOutlinePowerSettingsNew.png";
         break;
     case iDescriptorTool::RecoveryMode:
         title = "Recovery Mode";
-        icon->setIcon(QIcon(":/resources/icons/HugeiconsWrench01.png"));
+        iconName = ":/resources/icons/HugeiconsWrench01.png";
         break;
     case iDescriptorTool::QueryMobileGestalt:
         title = "Query Mobile Gestalt";
-        icon->setIcon(
-            QIcon(":/resources/icons/"
-                  "StreamlineProgrammingBrowserSearchSearchWindowGlassAppCod"
-                  "eProgrammingQueryFindMagnifyingApps.png"));
+        iconName = ":/resources/icons/"
+                   "StreamlineProgrammingBrowserSearchSearchWindowGlassAppCod"
+                   "eProgrammingQueryFindMagnifyingApps.png";
         break;
     case iDescriptorTool::DeveloperDiskImages:
         title = "Dev Disk Images";
-        icon->setIcon(QIcon(":/resources/icons/TablerDatabaseExport.png"));
+        iconName = ":/resources/icons/TablerDatabaseExport.png";
         break;
     case iDescriptorTool::WirelessGalleryImport:
         title = "Wireless Gallery Import";
-        icon->setIcon(
-            QIcon(":/resources/icons/MaterialSymbolsAndroidWifi3BarPlus.png"));
+        iconName = ":/resources/icons/MaterialSymbolsAndroidWifi3BarPlus.png";
         break;
     case iDescriptorTool::iFuse:
         title = "iFuse Mount";
-        icon->setIcon(QIcon(":/resources/icons/fuse.png"));
-        icon->setIconThemable(false);
+        iconName = ":/resources/icons/fuse.png";
+        iconThemable = false;
         break;
     case iDescriptorTool::CableInfoWidget:
         title = "Cable Info";
-        icon->setIcon(
-            QIcon(":/resources/icons/MaterialSymbolsLightCableRounded.png"));
+        iconName = ":/resources/icons/MaterialSymbolsLightCableRounded.png";
         break;
     case iDescriptorTool::NetworkDevices:
         title = "Network Devices";
-        icon->setIcon(QIcon(
-            ":/resources/icons/StreamlineUltimateMultipleUsersNetwork.png"));
+        iconName =
+            ":/resources/icons/StreamlineUltimateMultipleUsersNetwork.png";
         break;
     default:
         title = "Unknown Tool";
         break;
     }
 
-    // Title
-    QLabel *titleLabel = new QLabel(title);
-    titleLabel->setAlignment(Qt::AlignCenter);
-
-    // Description
-    QLabel *descLabel = new QLabel(description);
-    descLabel->setWordWrap(true);
-    descLabel->setAlignment(Qt::AlignCenter);
-    descLabel->setStyleSheet("color: #666; font-size: 12px;");
-    icon->setIconSizeMultiplier(1.90);
-
-    layout->addWidget(icon, 0, Qt::AlignCenter);
-    layout->addWidget(titleLabel);
-    layout->addWidget(descLabel);
-
-    b->setCursor(Qt::PointingHandCursor);
+    ToolboxItemWidget *b = new ToolboxItemWidget(
+        tool, description, iconName, title, requiresDevice, iconThemable);
 
     m_toolboxes.append(b);
     b->setProperty("requiresDevice", requiresDevice);
-    connect(b, &ClickableWidget::clicked, [this, tool, requiresDevice]() {
+    connect(b, &ToolboxItemWidget::clicked, [this, tool, requiresDevice]() {
         onToolboxClicked(tool, requiresDevice);
     });
     return b;
@@ -332,41 +309,11 @@ void ToolboxWidget::updateToolboxStates()
     bool hasDevice = !AppContext::sharedInstance()->getAllDevices().isEmpty();
 
     for (int i = 0; i < m_toolboxes.size(); ++i) {
-        QWidget *toolbox = m_toolboxes[i];
+        ToolboxItemWidget *toolbox = m_toolboxes[i];
         bool requiresDevice = toolbox->property("requiresDevice").toBool();
 
         bool enabled = !requiresDevice || hasDevice;
-        toolbox->setEnabled(enabled);
-
-// Opacity does not work because of the stylesheet on Windows
-#ifndef WIN32
-        if (enabled) {
-            toolbox->setStyleSheet("QWidget#toolboxFrame { "
-                                   "padding: 5px; }");
-        } else {
-            toolbox->setStyleSheet("QWidget#toolboxFrame { "
-                                   "padding: 5px;"
-                                   "opacity: 0.45;  }");
-        }
-#else
-        // base style
-        // toolbox->setStyleSheet("QWidget#toolboxFrame{ padding: 5px; border: "
-        //                        "none; outline: none; }");
-
-        if (enabled) {
-            // normal look
-            toolbox->setStyleSheet("QWidget#toolboxFrame { padding: 5px; "
-                                   "border: none; outline: none; }");
-            toolbox->setCursor(Qt::PointingHandCursor);
-        } else {
-            // disabled look: dull bg + border + muted text, no hand cursor
-            toolbox->setStyleSheet("padding: 5px;"
-                                   "border-radius: 8px;"
-                                   "background-color: rgba(255,255,255,1);"
-                                   "color: #666;");
-            toolbox->setCursor(Qt::ArrowCursor);
-        }
-#endif
+        toolbox->updateStyles(enabled);
     }
 }
 

@@ -39,6 +39,66 @@
 #include "ifusewidget.h"
 #endif
 
+class ToolboxItemWidget : public ClickableWidget
+{
+    Q_OBJECT
+public:
+    ToolboxItemWidget(iDescriptorTool tool, const QString &description,
+                      const QString &iconName, const QString &title,
+                      bool requiresDevice, bool iconThemable,
+                      QWidget *parent = nullptr)
+        : ClickableWidget(parent)
+    {
+        setCursor(Qt::PointingHandCursor);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        setStyleSheet("padding: 5px; border: none; outline: none;");
+        QVBoxLayout *layout = new QVBoxLayout(this);
+        ZIconLabel *icon = new ZIconLabel(QIcon(iconName), nullptr, 1.5, this);
+        if (!iconThemable) {
+            icon->setIconThemable(false);
+        }
+        QLabel *titleLabel = new QLabel(title);
+        titleLabel->setAlignment(Qt::AlignCenter);
+
+        // Description
+        QLabel *descLabel = new QLabel(description);
+        descLabel->setWordWrap(true);
+        descLabel->setAlignment(Qt::AlignCenter);
+        descLabel->setStyleSheet("color: #666; font-size: 12px;");
+        icon->setIconSizeMultiplier(1.90);
+
+        layout->addWidget(icon, 0, Qt::AlignCenter);
+        layout->addWidget(titleLabel);
+        layout->addWidget(descLabel);
+    }
+
+    void updateStyles(bool enabled)
+    {
+        // FIXME: Opacity does not work because of the stylesheet on Windows
+#ifndef WIN32
+        if (enabled) {
+            setStyleSheet("QWidget#toolboxFrame { "
+                          "padding: 5px; }");
+        } else {
+            setStyleSheet("QWidget#toolboxFrame { "
+                          "padding: 5px;"
+                          "opacity: 0.45;  }");
+        }
+#else
+        if (enabled) {
+            setStyleSheet("QWidget#toolboxFrame { padding: 5px; "
+                          "border: none; outline: none; }");
+            setCursor(Qt::PointingHandCursor);
+        } else {
+            setStyleSheet("padding: 5px;"
+                          "border-radius: 8px;"
+                          "color: #666;");
+            setCursor(Qt::ArrowCursor);
+        }
+#endif
+    }
+};
+
 class ToolboxWidget : public QWidget
 {
     Q_OBJECT
@@ -60,15 +120,15 @@ private:
     void updateDeviceList();
     void updateToolboxStates();
     void updateUI();
-    ClickableWidget *createToolbox(iDescriptorTool tool,
-                                   const QString &description,
-                                   bool requiresDevice);
+    ToolboxItemWidget *createToolbox(iDescriptorTool tool,
+                                     const QString &description,
+                                     bool requiresDevice);
     QComboBox *m_deviceCombo;
     QLabel *m_deviceLabel;
     QScrollArea *m_scrollArea;
     QWidget *m_contentWidget;
     QGridLayout *m_gridLayout;
-    QList<QWidget *> m_toolboxes;
+    QList<ToolboxItemWidget *> m_toolboxes;
     QString m_uuid;
     DevDiskImagesWidget *m_devDiskImagesWidget = nullptr;
     NetworkDevicesWidget *m_networkDevicesWidget = nullptr;
