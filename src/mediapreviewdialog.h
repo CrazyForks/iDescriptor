@@ -57,6 +57,7 @@ public:
                                 const QString &filePath,
                                 std::optional<std::shared_ptr<CXX::HauseArrest>>
                                     hause_arrest = std::nullopt,
+                                bool useAfc2 = false,
                                 QWidget *parent = nullptr);
     ~MediaPreviewDialog();
 
@@ -104,6 +105,7 @@ private:
     // Core data
     std::shared_ptr<iDescriptorDevice> m_device;
     std::optional<std::shared_ptr<CXX::HauseArrest>> m_hause_arrest;
+    bool m_useAfc2;
     QString m_filePath;
     bool m_isVideo;
 
