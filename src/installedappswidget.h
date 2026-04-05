@@ -40,6 +40,7 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QPainter>
@@ -49,6 +50,7 @@
 #include <QPushButton>
 #include <QQueue>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStyle>
@@ -75,6 +77,7 @@ public:
     void setIcon(const QPixmap &icon);
 
     void updateStyles();
+    bool hasIcon() const { return m_hasIcon; }
 
 signals:
     void clicked();
@@ -96,7 +99,7 @@ private:
     QString m_bundleId;
     QString m_version;
     bool m_selected = false;
-
+    bool m_hasIcon = false;
     IDLoadingIconLabel *m_iconLabel;
     QLabel *m_nameLabel;
     QLabel *m_versionLabel;
@@ -122,6 +125,8 @@ private slots:
 
 private:
     void setupUI();
+    void initInternal();
+    void refresh();
     void createLoadingWidget();
     void createErrorWidget();
     void createContentWidget();
@@ -139,6 +144,8 @@ private:
     void enqueueIconLoad(const QString &bundleId);
     void startNextIconLoad();
     void onAppIconLoaded(const QString &bundleId, const QByteArray &icon);
+    void updateVisibleIcons();
+    void clearContainerLayout();
 
     const std::shared_ptr<iDescriptorDevice> m_device;
     QHBoxLayout *m_mainLayout;
@@ -149,9 +156,7 @@ private:
     QLabel *m_errorLabel;
     ZLineEdit *m_searchEdit;
     QCheckBox *m_fileSharingCheckBox;
-    QScrollArea *m_tabScrollArea;
-    QWidget *m_tabContainer;
-    QVBoxLayout *m_tabLayout;
+    QListWidget *m_appsListWidget;
     QProgressBar *m_progressBar;
     QScrollArea *m_containerScrollArea;
     QWidget *m_containerWidget;
@@ -162,6 +167,7 @@ private:
     std::shared_ptr<CXX::HauseArrest> m_houseArrestAfcClient = nullptr;
     // App data storage
     QMap<QString, AppTabWidget *> m_appTabs;
+    QMap<QString, QListWidgetItem *> m_appItems;
     AppTabWidget *m_selectedTab = nullptr;
 
     QQueue<QString> m_iconLoadQueue;

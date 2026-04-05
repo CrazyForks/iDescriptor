@@ -105,6 +105,7 @@ void AppTabWidget::setIcon(const QPixmap &icon)
     } else {
         m_iconLabel->setLoadFailed();
     }
+    m_hasIcon = true;
 }
 
 void AppTabWidget::mousePressEvent(QMouseEvent *event)
@@ -150,6 +151,19 @@ InstalledAppsWidget::InstalledAppsWidget(
 
     m_zloadingWidget = new ZLoadingWidget(true, this);
     rootLayout->addWidget(m_zloadingWidget);
+    initInternal();
+}
+
+void InstalledAppsWidget::initInternal()
+{
+    setupUI();
+
+    connect(m_device->service_manager,
+            &CXX::ServiceManager::installed_apps_retrieved, this,
+            &InstalledAppsWidget::onAppsDataReady);
+    connect(m_device->service_manager, &CXX::ServiceManager::app_icon_loaded,
+            this, &InstalledAppsWidget::onAppIconLoaded);
+    setStyleSheet("InstalledAppsWidget { background: transparent; }");
 }
 
 void InstalledAppsWidget::init()
@@ -160,17 +174,26 @@ void InstalledAppsWidget::init()
         return;
     }
     m_loaded = true;
-
-    setupUI();
-
-    connect(m_device->service_manager,
-            &CXX::ServiceManager::installed_apps_retrieved, this,
-            &InstalledAppsWidget::onAppsDataReady);
-    setStyleSheet("InstalledAppsWidget { background: transparent; }");
     m_device->service_manager->fetch_installed_apps();
 }
 
-InstalledAppsWidget::~InstalledAppsWidget() { cleanupHouseArrestClients(); }
+void InstalledAppsWidget::refresh()
+{
+    m_zloadingWidget->showLoading();
+    m_device->service_manager->fetch_installed_apps();
+}
+
+InstalledAppsWidget::~InstalledAppsWidget()
+{
+    cleanupHouseArrestClients();
+
+    if (m_device && m_device->service_manager) {
+        disconnect(m_device->service_manager, nullptr, this, nullptr);
+    }
+
+    m_iconLoadQueue.clear();
+    m_iconLoading = false;
+}
 
 void InstalledAppsWidget::setupUI()
 {
@@ -246,9 +269,8 @@ void InstalledAppsWidget::createErrorWidget()
 
     QPushButton *retryButton = new QPushButton("Retry");
     retryButton->setFixedSize(100, 30);
-    // FIXME:
-    // connect(retryButton, &QPushButton::clicked, this,
-    //         &InstalledAppsWidget::fetchInstalledApps);
+    connect(retryButton, &QPushButton::clicked, this,
+            &InstalledAppsWidget::refresh);
     errorLayout->addWidget(retryButton, 0, Qt::AlignCenter);
 
     m_stackedWidget->addWidget(m_errorWidget);
@@ -272,7 +294,7 @@ void InstalledAppsWidget::createContentWidget()
     // Right side - Content area
     createRightPanel();
 
-    // Set initial splitter sizes (400px for tabs, rest for content)
+    // Set initial splitter
     m_splitter->setSizes({400, 600});
 
     // Connect signals
@@ -295,26 +317,22 @@ void InstalledAppsWidget::onAppsDataReady(const QMap<QString, QVariant> &result)
     m_stackedWidget->setCurrentWidget(m_contentWidget);
 
     // Clear existing tabs
-    qDeleteAll(m_appTabs);
+    if (m_appsListWidget)
+        m_appsListWidget->clear();
     m_appTabs.clear();
+    m_appItems.clear();
     m_selectedTab = nullptr;
     m_iconLoadQueue.clear();
     m_iconLoading = false;
 
-    connect(m_device->service_manager, &CXX::ServiceManager::app_icon_loaded,
-            this, &InstalledAppsWidget::onAppIconLoaded);
     // Create tabs for each app
     for (const QVariant &appVariant : result) {
-        // variant is json object
-
-        // Step 3: Parse JSON
         QJsonParseError error;
         QJsonDocument doc =
             QJsonDocument::fromJson(appVariant.toString().toUtf8(), &error);
 
         if (error.error != QJsonParseError::NoError) {
             qDebug() << "JSON parse error:" << error.errorString();
-            // return;
             continue;
         }
 
@@ -348,16 +366,14 @@ void InstalledAppsWidget::onAppsDataReady(const QMap<QString, QVariant> &result)
         }
 
         createAppTab(tabName, bundleId, version, QPixmap());
-
-        enqueueIconLoad(bundleId);
-
-        // Select first tab if available
-        m_device->service_manager->fetch_app_icon(bundleId);
     }
 
+    // Select first tab if available
     if (!m_appTabs.isEmpty()) {
         selectAppTab(m_appTabs.first());
     }
+
+    QTimer::singleShot(0, this, &InstalledAppsWidget::updateVisibleIcons);
 }
 
 void InstalledAppsWidget::createAppTab(const QString &appName,
@@ -365,18 +381,22 @@ void InstalledAppsWidget::createAppTab(const QString &appName,
                                        const QString &version,
                                        const QPixmap &icon)
 {
-    AppTabWidget *tabWidget =
-        new AppTabWidget(appName, bundleId, version, icon, this);
+    if (!m_appsListWidget)
+        return;
+
+    auto *tabWidget =
+        new AppTabWidget(appName, bundleId, version, icon, m_appsListWidget);
     connect(tabWidget, &AppTabWidget::clicked, this,
             &InstalledAppsWidget::onAppTabClicked);
 
-    // Remove the stretch before adding the new tab
-    m_tabLayout->removeItem(m_tabLayout->itemAt(m_tabLayout->count() - 1)); //
+    auto *item = new QListWidgetItem(m_appsListWidget);
+    item->setSizeHint(tabWidget->sizeHint());
 
-    m_tabLayout->addWidget(tabWidget);
-    m_tabLayout->addStretch(); // Add stretch back at the end
+    m_appsListWidget->addItem(item);
+    m_appsListWidget->setItemWidget(item, tabWidget);
 
     m_appTabs[bundleId] = tabWidget;
+    m_appItems[bundleId] = item;
 }
 
 void InstalledAppsWidget::onAppTabClicked()
@@ -414,7 +434,6 @@ void InstalledAppsWidget::filterApps(const QString &searchText)
         if (lowerSearchText.isEmpty()) {
             shouldShow = true;
         } else {
-            // Search in app name and bundle ID
             QString appName = tab->getAppName().toLower();
             QString bundleId = tab->getBundleId().toLower();
 
@@ -422,8 +441,14 @@ void InstalledAppsWidget::filterApps(const QString &searchText)
                          bundleId.contains(lowerSearchText);
         }
 
+        QListWidgetItem *item = m_appItems.value(tab->getBundleId(), nullptr);
+        if (item)
+            item->setHidden(!shouldShow);
+
         tab->setVisible(shouldShow);
     }
+
+    updateVisibleIcons();
 }
 
 void InstalledAppsWidget::loadAppContainer(const QString &bundleId)
@@ -434,17 +459,10 @@ void InstalledAppsWidget::loadAppContainer(const QString &bundleId)
     m_loadingContainer = true;
 
     disableTabs(true);
-    // Clean up previous house arrest clients before creating new ones
+    // Clean up previous house arrest clients before creating a new one
     cleanupHouseArrestClients();
 
-    // Clear previous container data
-    QLayoutItem *item;
-    while ((item = m_containerLayout->takeAt(0)) != nullptr) {
-        if (item->widget()) {
-            item->widget()->deleteLater();
-        }
-        delete item;
-    }
+    clearContainerLayout();
 
     // Create a centered loading widget
     QWidget *loadingWidget = new QWidget();
@@ -472,13 +490,7 @@ void InstalledAppsWidget::loadAppContainer(const QString &bundleId)
 
 void InstalledAppsWidget::onContainerDataReady(bool success)
 {
-    QLayoutItem *item;
-    while ((item = m_containerLayout->takeAt(0)) != nullptr) {
-        if (item->widget()) {
-            item->widget()->deleteLater();
-        }
-        delete item;
-    }
+    clearContainerLayout();
 
     m_loadingContainer = false;
     disableTabs(false);
@@ -510,21 +522,21 @@ void InstalledAppsWidget::onAppIconLoaded(const QString &bundleId,
         tab->setIcon(pixmap);
     }
 
-    // startNextIconLoad();
+    startNextIconLoad();
 }
 
 void InstalledAppsWidget::onFileSharingFilterChanged(bool enabled)
 {
     Q_UNUSED(enabled)
-    // Refresh the apps list when filter changes
-    // fetchInstalledApps();
+    m_iconLoadQueue.clear();
+    m_iconLoading = false;
+    m_device->service_manager->fetch_installed_apps();
 }
 
 void InstalledAppsWidget::cleanupHouseArrestClients()
 {
     if (m_houseArrestAfcClient) {
         m_houseArrestAfcClient = nullptr;
-        // delete m_houseArrestAfcClient;
     }
 }
 
@@ -550,7 +562,6 @@ void InstalledAppsWidget::createLeftPanel()
     searchLayout->addWidget(m_searchEdit);
 
     // File sharing filter checkbox
-    // FIXME: crash when toggled
     m_fileSharingCheckBox = new QCheckBox("Show Only File Sharing Enabled");
     m_fileSharingCheckBox->setChecked(true);
     m_fileSharingCheckBox->setStyleSheet("QCheckBox { font-size: 10px; }");
@@ -558,26 +569,23 @@ void InstalledAppsWidget::createLeftPanel()
 
     tabWidgetLayout->addWidget(searchContainer);
 
-    // App list scroll area
-    m_tabScrollArea = new QScrollArea();
-    m_tabScrollArea->setWidgetResizable(true);
-    m_tabScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_tabScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_tabScrollArea->setStyleSheet(
-        "QScrollArea { background: transparent; border: none; }");
-    m_tabScrollArea->viewport()->setStyleSheet("background: transparent;");
+    // App list view
+    m_appsListWidget = new QListWidget();
+    m_appsListWidget->setSelectionMode(QAbstractItemView::NoSelection);
+    m_appsListWidget->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    m_appsListWidget->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_appsListWidget->setFrameShape(QFrame::NoFrame);
+    m_appsListWidget->setSpacing(10);
+    m_appsListWidget->setStyleSheet(
+        "QListWidget { background: transparent; border: none; }"
+        "QListWidget::item { margin: 0px; }");
 
-    m_tabContainer = new QWidget();
-    m_tabContainer->setStyleSheet("QWidget { background: transparent; }");
-    m_tabLayout = new QVBoxLayout(m_tabContainer);
-    m_tabLayout->setContentsMargins(0, 0, 10, 0);
-    m_tabLayout->setSpacing(10);
-    m_tabLayout->addStretch();
-
-    m_tabScrollArea->setWidget(m_tabContainer);
-    tabWidgetLayout->addWidget(m_tabScrollArea);
+    tabWidgetLayout->addWidget(m_appsListWidget);
 
     m_splitter->addWidget(tabWidget);
+
+    connect(m_appsListWidget->verticalScrollBar(), &QScrollBar::valueChanged,
+            this, &InstalledAppsWidget::updateVisibleIcons);
 }
 
 void InstalledAppsWidget::createRightPanel()
@@ -622,83 +630,70 @@ void InstalledAppsWidget::enqueueIconLoad(const QString &bundleId)
     }
 }
 
-// FIXME: we better use this
+void InstalledAppsWidget::updateVisibleIcons()
+{
+    if (!m_appsListWidget)
+        return;
+
+    QWidget *viewport = m_appsListWidget->viewport();
+    if (!viewport)
+        return;
+
+    const QRect viewportRect = viewport->rect();
+
+    for (auto it = m_appTabs.cbegin(); it != m_appTabs.cend(); ++it) {
+        AppTabWidget *tab = it.value();
+        if (!tab)
+            continue;
+
+        if (tab->hasIcon())
+            continue;
+
+        const QString bundleId = tab->getBundleId();
+        if (m_iconLoadQueue.contains(bundleId))
+            continue;
+
+        QListWidgetItem *item = m_appItems.value(bundleId, nullptr);
+        if (!item)
+            continue;
+
+        QRect itemRect = m_appsListWidget->visualItemRect(item);
+        if (viewportRect.intersects(itemRect)) {
+            qDebug() << "Enqueuing icon load for visible tab:" << bundleId;
+            enqueueIconLoad(bundleId);
+        }
+    }
+}
+
+void InstalledAppsWidget::clearContainerLayout()
+{
+    if (!m_containerLayout)
+        return;
+
+    QLayoutItem *item;
+    while ((item = m_containerLayout->takeAt(0)) != nullptr) {
+        if (item->widget()) {
+            item->widget()->deleteLater();
+        }
+        delete item;
+    }
+}
+
 void InstalledAppsWidget::startNextIconLoad()
 {
-    // if (!m_device || QCoreApplication::closingDown()) {
-    //     m_iconLoading = false;
-    //     return;
-    // }
+    if (!m_device || QCoreApplication::closingDown()) {
+        m_iconLoading = false;
+        return;
+    }
 
-    // if (m_iconLoadQueue.isEmpty()) {
-    //     m_iconLoading = false;
-    //     return;
-    // }
+    if (m_iconLoadQueue.isEmpty()) {
+        m_iconLoading = false;
+        return;
+    }
 
-    // m_iconLoading = true;
-    // const QString bundleId = m_iconLoadQueue.dequeue();
+    m_iconLoading = true;
+    const QString bundleId = m_iconLoadQueue.dequeue();
 
-    // QtConcurrent::run([this, bundleId]() {
-    //     if (QCoreApplication::closingDown() || !m_device)
-    //         return;
-
-    //     QPixmap iconPixmap;
-
-    //     {
-    //         std::lock_guard<std::recursive_mutex> lock(m_device->mutex);
-
-    //         IdeviceFfiError *err = nullptr;
-    //         SpringBoardServicesClientHandle *springboardClient = nullptr;
-
-    //         err = springboard_services_connect(m_device->provider,
-    //                                            &springboardClient);
-    //         if (err != nullptr) {
-    //             qWarning() << "Error connecting to SpringBoard services for"
-    //                        << bundleId << ":"
-    //                        << QString::fromUtf8(err->message);
-    //             idevice_error_free(err);
-    //         } else {
-    //             void *out_result = nullptr;
-    //             size_t out_result_len = 0;
-
-    //             err = springboard_services_get_icon(
-    //                 springboardClient, bundleId.toUtf8().constData(),
-    //                 &out_result, &out_result_len);
-    //             if (err != nullptr) {
-    //                 qWarning() << "Error getting icon for" << bundleId << ":"
-    //                            << QString::fromUtf8(err->message);
-    //                 idevice_error_free(err);
-    //             } else if (out_result && out_result_len > 0) {
-    //                 QByteArray byteArray(
-    //                     reinterpret_cast<const char *>(out_result),
-    //                     static_cast<int>(out_result_len));
-    //                 QImage image;
-    //                 image.loadFromData(byteArray);
-    //                 iconPixmap = QPixmap::fromImage(image);
-    //                 springboard_services_free_icon_result(out_result,
-    //                                                       out_result_len);
-    //             }
-
-    //             springboard_services_free(springboardClient);
-    //         }
-    //     }
-
-    //     QMetaObject::invokeMethod(
-    //         this,
-    //         [this, bundleId, iconPixmap]() {
-    //             if (QCoreApplication::closingDown())
-    //                 return;
-
-    //             for (AppTabWidget *tab : m_appTabs) {
-    //                 if (tab->getBundleId() == bundleId) {
-    //                     tab->setIcon(iconPixmap);
-    //                     break;
-    //                 }
-    //             }
-
-    //             m_iconLoading = false;
-    //             startNextIconLoad();
-    //         },
-    //         Qt::QueuedConnection);
-    // });
+    // Use the working API
+    m_device->service_manager->fetch_app_icon(bundleId);
 }
