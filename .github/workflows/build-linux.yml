@@ -35,6 +35,13 @@ jobs:
         with:
           submodules: "recursive"
 
+      # not yet merged into main
+      - name: Switch branch
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          cd lib/idevice-rs
+          git switch idescriptor-compat
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -83,6 +90,9 @@ jobs:
             libavutil-dev \
             libswscale-dev
 
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
@@ -116,7 +126,7 @@ jobs:
 
           base_url="https://github.com/libimobiledevice"
 
-          libs=( "libplist" "libtatsu" "libimobiledevice-glue" "libusbmuxd" "libimobiledevice" "libirecovery"  "ifuse" )
+          libs=( "libplist" )
 
           for name in "${libs[@]}"; do
             ver_var=$(echo "${name^^}_VER" | sed 's/-/_/g')   # e.g. LIBPLIST_VER
