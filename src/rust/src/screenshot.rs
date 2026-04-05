@@ -234,7 +234,6 @@ async fn run_capture_ios17_and_above(
                             .ok();
                     }
                     Err(e) => {
-                        eprintln!("screenshot take err: {e}");
                         qt_thread
                             .queue(move |b| {
                                 b.init_failed(QString::from(format!(
@@ -246,6 +245,7 @@ async fn run_capture_ios17_and_above(
                     }
                 }
             }
+            eprint!("screenshot service loop ended");
         }
         Err(e) => {
             eprintln!("screenshot client err: {e}");
@@ -277,17 +277,11 @@ async fn run_capture_ios16_and_lower(
                     }
                     Err(e) => {
                         eprintln!("screenshotr take err: {e}");
-                        qt_thread
-                            .queue(move |b| {
-                                b.init_failed(QString::from(format!(
-                                    "Failed to take screenshot: {e}"
-                                )))
-                            })
-                            .ok();
                         return;
                     }
                 }
             }
+            eprint!("screenshot service loop ended");
         }
         Err(e) => {
             eprintln!("screenshotr connect failed: {e}");
