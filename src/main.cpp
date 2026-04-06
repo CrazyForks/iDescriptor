@@ -17,9 +17,9 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "mainwindow.h"
-// #include "settingsmanager.h"
 #include "iDescriptor.h"
+#include "mainwindow.h"
+#include "settingsmanager.h"
 #include <QApplication>
 #include <QDebug>
 #include <QDir>
@@ -38,13 +38,12 @@ int main(int argc, char *argv[])
     QCoreApplication::setOrganizationName("iDescriptor");
     QCoreApplication::setApplicationName("iDescriptor");
     QCoreApplication::setApplicationVersion(APP_VERSION);
-    // idevice_init_logger(Debug, Disabled, NULL);
-    // if (a.arguments().contains("--reset-settings")) {
-    //     SettingsManager::sharedInstance()->clear();
-    //     QMessageBox::information(nullptr, "Settings Reset",
-    //                              "All application settings have been reset to
-    //                              " "their default values.");
-    // }
+    if (a.arguments().contains("--reset-settings")) {
+        SettingsManager::sharedInstance()->clear();
+        QMessageBox::information(nullptr, "Settings Reset",
+                                 "All application settings have been reset to "
+                                 "their default values.");
+    }
 #ifdef WIN32
     QFile styleFile(detectDarkModeWindows() ? ":/resources/win.dark.qcss"
                                             : ":/resources/win.light.qcss");
