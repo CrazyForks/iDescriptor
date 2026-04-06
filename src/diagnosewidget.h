@@ -38,7 +38,7 @@ class DependencyItem : public QWidget
 public:
     explicit DependencyItem(const QString &name, const QString &description,
                             QWidget *parent = nullptr);
-    void setInstalled(bool installed);
+    void setInstalled(bool installed, bool isRequired);
     void setChecking(bool checking);
     void setInstalling(bool installing);
     void setProgress(const QString &message);

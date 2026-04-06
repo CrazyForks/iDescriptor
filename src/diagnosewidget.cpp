@@ -92,7 +92,7 @@ DependencyItem::DependencyItem(const QString &name, const QString &description,
     layout->addLayout(actionLayout);
 }
 
-void DependencyItem::setInstalled(bool installed)
+void DependencyItem::setInstalled(bool installed, bool isRequired)
 {
     setChecking(false);
 
@@ -117,11 +117,17 @@ void DependencyItem::setInstalled(bool installed)
             m_statusLabel->setText("Not activated");
             m_installButton->setText("Enable");
         } else {
-            m_statusLabel->setText("Not Installed");
+            if (isRequired) {
+                m_statusLabel->setText("Not Installed");
+            } else {
+                m_statusLabel->setText("Not Installed (Optional)");
+            }
             m_installButton->setText("Install");
         }
 #ifndef WIN32
-        m_statusLabel->setStyleSheet("color: red;");
+        if (isRequired) {
+            m_statusLabel->setStyleSheet("color: red;");
+        }
 #else
         // FIXME: if we call this multiple times, the styles will keep stacking
         // and become a mess, need a better way to handle this
@@ -172,8 +178,9 @@ DiagnoseWidget::DiagnoseWidget(QWidget *parent)
     setupUI();
 
 #ifdef WIN32
-    addDependencyItem("Bonjour Service",
-                      "Required for AirPlay and network service discovery");
+    addDependencyItem(
+        "Bonjour Service",
+        "Required for AirPlay, wireless devices and network service discovery");
     addDependencyItem("Apple Mobile Device Support",
                       "Required for iOS device communication");
     addDependencyItem("WinFsp", "Required for mounting your device as a drive");
@@ -181,11 +188,13 @@ DiagnoseWidget::DiagnoseWidget(QWidget *parent)
 
 #ifdef __linux__
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
-    addDependencyItem("USB Device Permissions",
-                      "Required for recovery devices (udev rules)");
+    addDependencyItem(
+        "UDEV rules",
+        "Required for recovery devices requires manual setup (optional)");
 #endif
-    addDependencyItem("Avahi Daemon",
-                      "Required for Airplay, device discovery and more");
+    addDependencyItem(
+        "Avahi Daemon",
+        "Required for Airplay, wireless devices and network service discovery");
 #endif
 
     // Auto-check on startup
@@ -264,7 +273,7 @@ void DiagnoseWidget::checkDependencies(bool autoExpand)
 
     QTimer::singleShot(500, [this, autoExpand]() {
         int installedCount = 0;
-        int totalCount = m_dependencyItems.size();
+        int totalCount = 0;
 
         for (DependencyItem *item : m_dependencyItems) {
             bool installed = false;
@@ -281,21 +290,32 @@ void DiagnoseWidget::checkDependencies(bool autoExpand)
 #endif
 
 #ifdef __linux__
-            if (itemName == "USB Device Permissions") {
+            if (itemName == "UDEV rules") {
                 installed = checkUdevRulesInstalled();
             } else if (itemName == "Avahi Daemon") {
                 installed = checkAvahiDaemonRunning();
             }
 #endif
 
-            item->setInstalled(installed);
-            if (installed)
-                installedCount++;
+            bool isRequired = true;
+#ifdef __linux__
+            if (itemName == "UDEV rules") {
+                isRequired = false;
+            }
+#endif
+            item->setInstalled(installed, isRequired);
+
+            if (isRequired) {
+                ++totalCount;
+                if (installed)
+                    ++installedCount;
+            }
         }
 
         if (installedCount == totalCount) {
             m_summaryLabel->setText(
-                QString("All dependencies are installed/activated (%1/%2)")
+                QString(
+                    "All required dependencies are installed/activated (%1/%2)")
                     .arg(installedCount)
                     .arg(totalCount));
             m_summaryLabel->setStyleSheet(
@@ -306,7 +326,7 @@ void DiagnoseWidget::checkDependencies(bool autoExpand)
             }
         } else {
             m_summaryLabel->setText(
-                QString("Missing dependencies (%1/%2 installed)")
+                QString("Missing required dependencies (%1/%2 installed)")
                     .arg(installedCount)
                     .arg(totalCount));
             m_summaryLabel->setStyleSheet(
@@ -443,114 +463,29 @@ void DiagnoseWidget::onInstallRequested(const QString &name)
 #endif
 
 #ifdef __linux__
-    if (name == "USB Device Permissions") {
-        DependencyItem *itemToInstall = nullptr;
-        for (DependencyItem *item : m_dependencyItems) {
-            if (item->property("name").toString() == name) {
-                itemToInstall = item;
-                break;
-            }
+    if (name == "UDEV rules") {
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle("Manual configuration required");
+        msgBox.setText(
+            "USB device permissions are required for recovery "
+            "devices.\n\n"
+            "Due to the variety of Linux distributions and package managers, "
+            "you should configure these permissions manually.\n\n"
+            "Please refer to the UDEV.md file in the project repository for "
+            "detailed instructions.");
+        msgBox.setInformativeText(
+            "Would you like to open the instructions now?");
+
+        QPushButton *openButton =
+            msgBox.addButton("Open Instructions", QMessageBox::ActionRole);
+        msgBox.addButton("Close", QMessageBox::RejectRole);
+
+        msgBox.exec();
+
+        if (msgBox.clickedButton() == openButton) {
+            QDesktopServices::openUrl(QUrl(
+                "https://github.com/uncor3/iDescriptor/blob/main/UDEV.md"));
         }
-
-        if (!itemToInstall)
-            return;
-
-        itemToInstall->setInstalling(true);
-
-        QString userName = qEnvironmentVariable("USER");
-        if (userName.isEmpty()) {
-            userName = qEnvironmentVariable("LOGNAME");
-        }
-
-        if (userName.isEmpty()) {
-            QMessageBox::critical(
-                this, "Error",
-                "Failed to determine the current user. Cannot "
-                "proceed with the installation.");
-            itemToInstall->setInstalling(false);
-            return;
-        }
-
-        // Create a temporary script to set up udev rules
-        QString scriptPath = QDir::temp().filePath("setup-idevice-udev.sh");
-        QFile scriptFile(scriptPath);
-
-        if (!scriptFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QMessageBox::critical(this, "Error",
-                                  "Failed to create installation script");
-            itemToInstall->setInstalling(false);
-            return;
-        }
-
-        // FIXME: maybe, can be handled better
-        QTextStream out(&scriptFile);
-        out << "#!/bin/bash\n";
-        out << "set -e\n\n";
-        out << "USERNAME=$1\n\n";
-        out << "if [ -z \"$USERNAME\" ]; then\n";
-        out << "    echo \"Error: Username not provided.\" >&2\n";
-        out << "    exit 1\n";
-        out << "fi\n\n";
-        out << "# Create udev rules file\n";
-        out << "echo 'SUBSYSTEM==\"usb\", ATTR{idVendor}==\"05ac\", "
-               "MODE=\"0666\", GROUP=\"idevice\"' | tee "
-               "/etc/udev/rules.d/99-idevice.rules > "
-               "/dev/null\n\n";
-        out << "# Create idevice group if it doesn't exist\n";
-        out << "if ! getent group idevice > /dev/null 2>&1; then\n";
-        out << "    groupadd idevice\n";
-        out << "fi\n\n";
-        out << "# Add current user to idevice group\n";
-        out << "usermod -aG idevice \"$USERNAME\"\n\n";
-        out << "# Reload udev rules\n";
-        out << "udevadm control --reload-rules\n";
-        out << "udevadm trigger\n\n";
-        out << "echo 'USB device permissions configured successfully!'\n";
-        out << "echo 'Note: You may need to log out and log back in for group "
-               "changes to take effect.'\n";
-        scriptFile.close();
-
-        // Make script executable
-        QFile::setPermissions(scriptPath, QFileDevice::ReadOwner |
-                                              QFileDevice::WriteOwner |
-                                              QFileDevice::ExeOwner);
-
-        QProcess *installProcess = new QProcess(this);
-        connect(
-            installProcess, &QProcess::finished, this,
-            [this, installProcess, itemToInstall,
-             scriptPath](int exitCode, QProcess::ExitStatus exitStatus) {
-                // Clean up temporary script
-                QFile::remove(scriptPath);
-
-                if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-                    QString errorOutput =
-                        installProcess->readAllStandardError();
-                    if (errorOutput.isEmpty()) {
-                        errorOutput = installProcess->readAllStandardOutput();
-                    }
-                    QMessageBox::warning(
-                        this, "Installation Failed",
-                        "Failed to configure USB device permissions. "
-                        "This might be because the action was cancelled or an "
-                        "error occurred.\n\nDetails: " +
-                            errorOutput.trimmed());
-                    checkDependencies(false);
-                } else {
-                    QMessageBox::information(
-                        this, "Installation Complete",
-                        "USB device permissions have been configured.\n\n"
-                        "Note: You may need to log out and log back in for or "
-                        "even restart for changes to take full effect.");
-                    checkDependencies(false);
-                }
-                itemToInstall->setInstalling(false);
-                installProcess->deleteLater();
-            });
-
-        QStringList args;
-        args << scriptPath << userName;
-        installProcess->start("pkexec", args);
     }
 
     if (name == "Avahi Daemon") {
