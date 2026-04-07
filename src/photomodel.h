@@ -101,7 +101,6 @@ private:
     void sortPhotos(QList<PhotoInfo> &photos) const;
     bool matchesFilter(const PhotoInfo &info) const;
 
-    QDateTime extractDateTimeFromFile(const QString &filePath) const;
     PhotoInfo::FileType determineFileType(const QString &fileName) const;
 
 private slots:

@@ -52,6 +52,7 @@ void PhotoModel::clear()
     endResetModel();
 
     qDebug() << "Cleared PhotoModel data";
+    // FIXME : bug we use the same loader on every device
     // FIXME: we shouldn't do this
     // QHashPrivate::Span<QHashPrivate::Node<QString, ImageTask *>>::hasNode
     // qhash.h         310  0x5555559d50e1
@@ -149,16 +150,19 @@ bool PhotoModel::populatePhotoPaths()
     }
 
     m_allPhotos.clear();
-    QList<QString> photoPaths = m_device->afc_backend->list_dir(m_albumPath);
+    QMap<QString, QVariant> photoPaths =
+        m_device->afc_backend->list_dir_with_creation_date(m_albumPath);
 
-    for (const QString &fileName : photoPaths) {
+    for (auto it = photoPaths.constBegin(); it != photoPaths.constEnd(); ++it) {
+        const QString &fileName = it.key();
+        const QVariant &creationDateVariant = it.value();
+
         if (iDescriptor::Utils::isGalleryFile(fileName)) {
             PhotoInfo info;
             info.filePath = m_albumPath + "/" + fileName;
             info.fileName = fileName;
             info.thumbnailRequested = false;
-            info.fileType = determineFileType(fileName);
-            info.dateTime = extractDateTimeFromFile(info.filePath);
+            info.dateTime = creationDateVariant.toDateTime();
             m_allPhotos.append(info);
         }
     }
@@ -283,34 +287,11 @@ QStringList PhotoModel::getFilteredFilePaths() const
     return paths;
 }
 
-// FIXME:
-// Helper methods
-QDateTime PhotoModel::extractDateTimeFromFile(const QString &filePath) const
-{
-    // AfcFileInfo info = {};
-    // IdeviceFfiError *err = ServiceManager::safeAfcGetFileInfo(
-    //     m_device, filePath.toUtf8().constData(), &info);
-    // if (!err && info.creation) {
-    //     uint64_t creation_seconds = info.creation;
-    //     QDateTime dateTime =
-    //         QDateTime::fromSecsSinceEpoch(creation_seconds, Qt::UTC);
-
-    //     afc_file_info_free(&info);
-    //     if (dateTime.isValid()) {
-    //         return dateTime;
-    //     }
-    // }
-
-    return QDateTime::currentDateTime();
-}
-
 PhotoInfo::FileType PhotoModel::determineFileType(const QString &fileName) const
 {
-    if (iDescriptor::Utils::isVideoFile(fileName)) {
+    if (iDescriptor::Utils::isVideoFile(fileName))
         return PhotoInfo::Video;
-    } else {
-        return PhotoInfo::Image;
-    }
+    return PhotoInfo::Image;
 }
 
 void PhotoModel::setAlbumPath(const QString &albumPath)
