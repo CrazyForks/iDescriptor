@@ -256,39 +256,40 @@ SERVICE_AVAILABILITY IsBonjourServiceInstalled()
     return SERVICE_AVAILABLE_BUT_NOT_RUNNING;
 }
 
-bool StartBonjourService()
-{
-    // Modern Bonjour service name
-    if (IsServiceRunning("Bonjour Service")) {
-        return true;
-    }
-    if (StartServiceByName("Bonjour Service")) {
-        return true;
-    }
+/* These require the app to be run as Administrator */
+// bool StartBonjourService()
+// {
+//     // Modern Bonjour service name
+//     if (IsServiceRunning("Bonjour Service")) {
+//         return true;
+//     }
+//     if (StartServiceByName("Bonjour Service")) {
+//         return true;
+//     }
 
-    // Apparently it used to be called mDNSResponder
-    if (IsServiceRunning("mDNSResponder")) {
-        return true;
-    }
-    if (StartServiceByName("mDNSResponder")) {
-        return true;
-    }
+//     // Apparently it used to be called mDNSResponder
+//     if (IsServiceRunning("mDNSResponder")) {
+//         return true;
+//     }
+//     if (StartServiceByName("mDNSResponder")) {
+//         return true;
+//     }
 
-    return false;
-}
+//     return false;
+// }
 
-bool StartAppleMobileDeviceService()
-{
-    if (IsServiceRunning("Apple Mobile Device Service")) {
-        return true;
-    }
-    return StartServiceByName("Apple Mobile Device Service");
-}
+// bool StartAppleMobileDeviceService()
+// {
+//     if (IsServiceRunning("Apple Mobile Device Service")) {
+//         return true;
+//     }
+//     return StartServiceByName("Apple Mobile Device Service");
+// }
 
-bool StartWinFspService()
-{
-    if (IsServiceRunning("WinFsp.Launcher")) {
-        return true;
-    }
-    return StartServiceByName("WinFsp.Launcher");
-}
+// bool StartWinFspService()
+// {
+//     if (IsServiceRunning("WinFsp.Launcher")) {
+//         return true;
+//     }
+//     return StartServiceByName("WinFsp.Launcher");
+// }

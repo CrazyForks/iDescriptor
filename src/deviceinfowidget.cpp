@@ -396,7 +396,7 @@ void DeviceInfoWidget::updateChargingStatusIcon()
 
     } else {
         m_chargingStatusLabel->setText("Not Charging");
-        m_chargingStatusLabel->setStyleSheet("");
+        m_chargingStatusLabel->setStyleSheet("margin-right: 5px;");
         m_lightningIconLabel->hide();
     }
 }

@@ -37,9 +37,10 @@ SERVICE_AVAILABILITY IsWinFspInstalled();
 bool is_iDescriptorInstalled();
 SERVICE_AVAILABILITY IsBonjourServiceInstalled();
 
-bool StartAppleMobileDeviceService();
-bool StartWinFspService();
-bool StartBonjourService();
+/* These require the app to be run as Administrator */
+// bool StartAppleMobileDeviceService();
+// bool StartWinFspService();
+// bool StartBonjourService();
 
 void enableAcrylic(HWND hwnd);
 void enableMica(HWND hwnd);

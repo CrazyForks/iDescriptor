@@ -105,7 +105,7 @@ void DependencyItem::setInstalled(SERVICE_AVAILABILITY availability,
         break;
 
     case SERVICE_AVAILABLE_BUT_NOT_RUNNING:
-        m_statusLabel->setText("Installed but not running");
+        m_statusLabel->setText("Not running");
         m_installButton->setText("Enable");
         break;
     case UNABLE_TO_CHECK:
@@ -380,20 +380,42 @@ void DiagnoseWidget::onInstallRequested(const QString &name)
 #ifdef WIN32
     if (name == "Bonjour Service") {
         if (availability == SERVICE_AVAILABLE_BUT_NOT_RUNNING) {
-            qDebug() << "Attempting to start Bonjour Service...";
             itemToInstall->setActivating(true);
-            QTimer::singleShot(100, [this, itemToInstall, name]() {
-                bool success = StartBonjourService();
-                itemToInstall->setActivating(false);
 
-                if (!success) {
-                    QMessageBox::warning(
-                        this, "Activation Failed",
-                        "Failed to start the service. Please try to start it "
-                        "manually from the Services app (services.msc)");
-                }
-                checkDependencies(false);
-            });
+            QProcess *proc = new QProcess(this);
+            connect(
+                proc, &QProcess::finished, this,
+                [this, proc, itemToInstall](int exitCode,
+                                            QProcess::ExitStatus status) {
+                    itemToInstall->setActivating(false);
+                    if (status != QProcess::NormalExit || exitCode != 0) {
+                        QString err = proc->readAllStandardError();
+                        if (err.isEmpty())
+                            err = proc->readAllStandardOutput();
+                        QMessageBox::warning(
+                            this, "Activation Failed",
+                            "Failed to start Bonjour Service.\n\nDetails:\n" +
+                                err.trimmed());
+                    }
+                    checkDependencies(false);
+                    proc->deleteLater();
+                });
+
+            QString ps = "Set-Service -Name 'Bonjour Service' "
+                         "-StartupType Automatic; "
+                         "Start-Service -Name 'Bonjour Service'";
+
+            QStringList args;
+            args << "-NoProfile"
+                 << "-ExecutionPolicy"
+                 << "Bypass"
+                 << "-Command"
+                 << QString(
+                        "Start-Process -FilePath powershell.exe -Verb RunAs "
+                        "-ArgumentList \"%1\" -Wait")
+                        .arg(ps.replace("\"", "\\\""));
+
+            proc->start("powershell.exe", args);
             return;
         }
 
@@ -403,20 +425,42 @@ void DiagnoseWidget::onInstallRequested(const QString &name)
 
     if (name == "Apple Mobile Device Support") {
         if (availability == SERVICE_AVAILABLE_BUT_NOT_RUNNING) {
-            qDebug() << "Attempting to start Apple Mobile Device Service...";
             itemToInstall->setActivating(true);
-            QTimer::singleShot(100, [this, itemToInstall, name]() {
-                bool success = StartWinFspService();
-                itemToInstall->setActivating(false);
 
-                if (!success) {
-                    QMessageBox::warning(
-                        this, "Activation Failed",
-                        "Failed to start the service. Please try to start it "
-                        "manually from the Services app (services.msc)");
-                }
-                checkDependencies(false);
-            });
+            QProcess *proc = new QProcess(this);
+            connect(proc, &QProcess::finished, this,
+                    [this, proc, itemToInstall](int exitCode,
+                                                QProcess::ExitStatus status) {
+                        itemToInstall->setActivating(false);
+                        if (status != QProcess::NormalExit || exitCode != 0) {
+                            QString err = proc->readAllStandardError();
+                            if (err.isEmpty())
+                                err = proc->readAllStandardOutput();
+                            QMessageBox::warning(
+                                this, "Activation Failed",
+                                "Failed to start Apple Mobile Device "
+                                "Service.\n\nDetails:\n" +
+                                    err.trimmed());
+                        }
+                        checkDependencies(false);
+                        proc->deleteLater();
+                    });
+
+            QString ps = "Set-Service -Name 'Apple Mobile Device Service' "
+                         "-StartupType Automatic; "
+                         "Start-Service -Name 'Apple Mobile Device Service'";
+
+            QStringList args;
+            args << "-NoProfile"
+                 << "-ExecutionPolicy"
+                 << "Bypass"
+                 << "-Command"
+                 << QString(
+                        "Start-Process -FilePath powershell.exe -Verb RunAs "
+                        "-ArgumentList \"%1\" -Wait")
+                        .arg(ps.replace("\"", "\\\""));
+
+            proc->start("powershell.exe", args);
             return;
         }
 
@@ -464,17 +508,46 @@ void DiagnoseWidget::onInstallRequested(const QString &name)
     }
 
     if (name == "WinFsp") {
-        DependencyItem *itemToInstall = nullptr;
-        for (DependencyItem *item : m_dependencyItems) {
-            if (item->property("name").toString() == name) {
-                itemToInstall = item;
-                break;
-            }
-        }
+        if (availability == SERVICE_AVAILABLE_BUT_NOT_RUNNING) {
+            itemToInstall->setActivating(true);
 
-        if (!itemToInstall)
+            QProcess *proc = new QProcess(this);
+            connect(
+                proc, &QProcess::finished, this,
+                [this, proc, itemToInstall](int exitCode,
+                                            QProcess::ExitStatus status) {
+                    itemToInstall->setActivating(false);
+                    if (status != QProcess::NormalExit || exitCode != 0) {
+                        QString err = proc->readAllStandardError();
+                        if (err.isEmpty())
+                            err = proc->readAllStandardOutput();
+                        QMessageBox::warning(
+                            this, "Activation Failed",
+                            "Failed to start WinFsp.Launcher.\n\nDetails:\n" +
+                                err.trimmed());
+                    }
+                    checkDependencies(false);
+                    proc->deleteLater();
+                });
+
+            // Use single quotes around the service name; no Read-Host
+            QString ps = "Set-Service -Name 'WinFsp.Launcher' "
+                         "-StartupType Automatic; "
+                         "Start-Service -Name 'WinFsp.Launcher'";
+
+            QStringList args;
+            args << "-NoProfile"
+                 << "-ExecutionPolicy"
+                 << "Bypass"
+                 << "-Command"
+                 << QString(
+                        "Start-Process -FilePath powershell.exe -Verb RunAs "
+                        "-ArgumentList \"%1\" -Wait")
+                        .arg(ps.replace("\"", "\\\""));
+
+            proc->start("powershell.exe", args);
             return;
-
+        }
         itemToInstall->setInstalling(true);
 
         QString scriptPath = QCoreApplication::applicationDirPath() +
@@ -624,7 +697,6 @@ SERVICE_AVAILABILITY DiagnoseWidget::checkUdevRulesInstalled()
         groupsOutput.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
 
     bool isInIdeviceGroup = groups.contains("idevice");
-    qDebug() << "Is user in 'idevice' group?" << isInIdeviceGroup;
     return isInIdeviceGroup ? SERVICE_AVAILABLE : UNABLE_TO_CHECK;
 }
 
