@@ -272,6 +272,8 @@ set(ADDITIONAL_DLLS
     "libtheoraenc-2.dll"
     "libbluray-2.dll"
     "libnettle-8.dll"
+    "libunistring-5.dll"
+    "libidn2-0.dll"
 )
 
 message("Copying additional MinGW runtime DLLs from MSYS2...")
@@ -284,6 +286,27 @@ foreach(DLL_NAME ${ADDITIONAL_DLLS})
         message(WARNING "Additional DLL not found: ${DLL_NAME} (searched ${MSYS2_BIN_PATH})")
     endif()
 endforeach()
+
+
+# Required for win-ifuse and iproxy since we moved from libimobiledevice
+# and these are not dependencies of the main executable
+set(LIBIMOBILEDEVICE_DLLS
+    "libimobiledevice-1.dll"
+    "libusbmuxd-2.0.dll"
+    "libplist-2.0.dll"
+    "libssl-3-x64.dll"
+)
+
+foreach(DLL_NAME ${LIBIMOBILEDEVICE_DLLS})
+    set(DLL_PATH "${MSYS2_BIN_PATH}/${DLL_NAME}")
+    if(EXISTS ${DLL_PATH})
+        message("Copying libimobiledevice DLL: ${DLL_NAME}")
+        file(COPY ${DLL_PATH} DESTINATION ${OUTPUT_DIR})
+    else()
+        message(WARNING "libimobiledevice DLL not found: ${DLL_NAME} (searched ${MSYS2_BIN_PATH})")
+    endif()
+endforeach()
+
 
 message("Copying GStreamer helper executables...")
 set(GST_LIBEXEC_PATH "${MSYS2_BIN_PATH}/../libexec/gstreamer-1.0")
