@@ -294,19 +294,34 @@ void fetchAppIconFromApple(
     std::function<void(const QPixmap &, const QJsonObject &)> callback);
 
 struct NetworkDevice {
-    QString name;                           // service name
-    QString hostname;                       // e.g., iPhone-2.local
-    QString address;                        // IPv4 or IPv6 address
-    uint16_t port = 22;                     // SSH port
-    std::map<std::string, std::string> txt; // TXT records
-    QString macAddress;                     // MAC address if available
+    QString name;       // service name
+    QString hostname;   // e.g., iPhone-2.local
+    QString address;    // IPv4 or IPv6 address
+    uint16_t port = 22; // SSH port
+    QString macAddress; // MAC address if available
+
+    NetworkDevice() = default;
+    NetworkDevice(const QString &name, const QString &address,
+                  const QString &macAddress, const QString &hostname,
+                  uint16_t port)
+        : name(name), address(address), port(port), macAddress(macAddress),
+          hostname(hostname)
+    {
+    }
+
+    bool isValid() const
+    {
+        return !name.isEmpty() && !address.isEmpty() && !macAddress.isEmpty() &&
+               port > 0;
+    }
+
     bool operator==(const NetworkDevice &other) const
     {
         return name == other.name && address == other.address;
     }
 };
 
-QPixmap load_heic(const QByteArray &data);
+QImage load_heic(const QByteArray &data);
 
 // Helper struct for semantic version comparison
 struct AppVersion {

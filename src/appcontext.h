@@ -74,7 +74,7 @@ private:
 signals:
     void deviceAdded(std::shared_ptr<iDescriptorDevice> device);
     void deviceRemoved(const QString &udid, const std::string &macAddress,
-                       const std::string &ipAddress, bool wasWireless);
+                       bool wasWireless);
     void devicePaired(std::shared_ptr<iDescriptorDevice> device);
     void devicePasswordProtected(const QString &udid);
     void deviceAlreadyExists(const iDescriptor::Uniq &uniq);

@@ -191,7 +191,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     statusbar->setStyleSheet(
         "QWidget#StatusBar { background-color: transparent; }");
     statusLayout->addWidget(m_connectedDeviceCountLabel);
-    // TODO: implement downloads/uploads progress stuff
 
     StatusBalloon *statusBalloon = StatusBalloon::sharedInstance();
 
@@ -372,19 +371,29 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // ═══════════════════════════════════════════════════════════════════════
     //  Upgrade to wireless when a "WIRED" device is removed
     // ═══════════════════════════════════════════════════════════════════════
-    connect(AppContext::sharedInstance(), &AppContext::deviceRemoved, this,
-            [](const QString &udid, const std::string &wifiMacAddress,
-               const std::string &ipAddress, bool wasWireless) {
-                if (wasWireless)
-                    return;
-                qDebug() << "Upgrading device to wireless connection for UDID"
-                         << udid;
-                // FIXME: ignore iOS 15 and lower
-                NetworkDevice dev;
-                dev.macAddress = QString::fromStdString(wifiMacAddress);
-                dev.address = QString::fromStdString(ipAddress);
-                AppContext::sharedInstance()->tryToConnectToNetworkDevice(dev);
-            });
+    connect(
+        AppContext::sharedInstance(), &AppContext::deviceRemoved, this,
+        [](const QString &udid, const std::string &wifiMacAddress,
+           bool wasWireless) {
+            if (wasWireless)
+                return;
+            QString wifiMac = QString::fromStdString(wifiMacAddress);
+            NetworkDevice dev =
+                NetworkDeviceProvider::sharedInstance()->getNetworkDeviceByMac(
+                    wifiMac);
+            if (!dev.isValid()) {
+                qDebug() << "No valid network device found for UDID" << udid
+                         << "with Wi-Fi MAC" << wifiMac
+                         << "Not trying to upgrade to wireless connection.";
+                return;
+            }
+
+            qDebug()
+                << "Trying to upgrade device to wireless connection for UDID"
+                << udid;
+            // FIXME: maybe ignore iOS 15 and lower?
+            AppContext::sharedInstance()->tryToConnectToNetworkDevice(dev);
+        });
 
     // ═══════════════════════════════════════════════════════════════════════
     //  Add a wireless device
@@ -490,7 +499,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::handleShowSleepyDeviceWarning()
 {
-
+    static bool widgetAlreadyVisible = false;
     /* one minute cooldown to prevent spamming */
     static const int kMinIntervalMs = 60 * 1000;
 
@@ -504,9 +513,12 @@ void MainWindow::handleShowSleepyDeviceWarning()
 
     lastShown = now;
 
-    if (SettingsManager::sharedInstance()->isSleepyDeviceWarningDismissed()) {
+    if (SettingsManager::sharedInstance()->isSleepyDeviceWarningDismissed() ||
+        widgetAlreadyVisible) {
         return;
     }
 
+    widgetAlreadyVisible = true;
     DeviceSleepWarningWidget(this).exec();
+    widgetAlreadyVisible = false;
 }

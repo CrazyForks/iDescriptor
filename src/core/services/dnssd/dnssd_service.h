@@ -46,7 +46,8 @@ public:
 
     void startBrowsing();
     void stopBrowsing();
-    QList<NetworkDevice> getNetworkDevices() const;
+    QMap<QString, NetworkDevice> getNetworkDevices() const;
+    NetworkDevice getNetworkDeviceByMac(const QString &macAddress) const;
 
 signals:
     void deviceAdded(const NetworkDevice &device);

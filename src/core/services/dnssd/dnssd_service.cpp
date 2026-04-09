@@ -150,10 +150,7 @@ void DNSSD_API DnssdService::browseCallback(
 
         // Remove from our list
         QMutexLocker locker(&service->m_devicesMutex);
-        service->m_networkDevices.removeIf(
-            [macAddress](const NetworkDevice &dev) {
-                return dev.macAddress == macAddress;
-            });
+        service->m_networkDevices.remove(macAddress);
         service->m_pendingDevices.remove(macAddress);
     }
 }
@@ -269,32 +266,28 @@ void DNSSD_API DnssdService::addrInfoCallback(
     auto *addr_in = reinterpret_cast<const struct sockaddr_in *>(address);
     inet_ntop(AF_INET, &addr_in->sin_addr, ip, sizeof(ip));
 
-    NetworkDevice device;
-    // Extract a better device name from hostname or use TXT records
     QString friendlyName = pending.hostname;
     if (friendlyName.endsWith(".local.")) {
         friendlyName =
             friendlyName.left(friendlyName.length() - 7); // Remove ".local."
-        qDebug() << "friendly name:" << friendlyName;
     }
 
+    QString deviceName;
     // Try to get device name from TXT records first
     if (pending.txt.contains("DvNm")) {
-        device.name = pending.txt["DvNm"];
+        deviceName = pending.txt["DvNm"];
         qDebug() << "Device name from DvNm TXT record:" << device.name;
     } else if (pending.txt.contains("Name")) {
-        device.name = pending.txt["Name"];
+        deviceName = pending.txt["Name"];
         qDebug() << "Device name from Name TXT record:" << device.name;
     } else {
-        // Use the cleaned hostname as fallback
         qDebug() << "Using hostname as device name:" << friendlyName;
-        device.name = friendlyName;
+        deviceName = friendlyName;
     }
 
-    device.hostname = pending.hostname;
-    device.address = QString::fromUtf8(ip);
-    device.port = pending.port > 0 ? pending.port : 22; // Default to SSH port
-    device.macAddress = pending.macAddress;
+    NetworkDevice device(deviceName, QString::fromUtf8(ip), pending.macAddress,
+                         pending.hostname,
+                         pending.port > 0 ? pending.port : 22);
 
     qDebug() << "Resolved IP for Apple device:" << device.name << "at"
              << device.address << ":" << device.port;
@@ -302,11 +295,7 @@ void DNSSD_API DnssdService::addrInfoCallback(
     // Add to our list if not already present
     {
         QMutexLocker locker(&service->m_devicesMutex);
-        bool exists = std::any_of(service->m_networkDevices.begin(),
-                                  service->m_networkDevices.end(),
-                                  [&device](const NetworkDevice &existing) {
-                                      return existing == device;
-                                  });
+        bool exists = m_networkDevices.contains(pending.macAddress);
         if (!exists) {
             service->m_networkDevices.append(device);
             emit service->deviceAdded(device);

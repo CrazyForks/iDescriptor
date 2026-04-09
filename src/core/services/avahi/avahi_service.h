@@ -44,7 +44,8 @@ public:
 
     void startBrowsing();
     void stopBrowsing();
-    QList<NetworkDevice> getNetworkDevices() const;
+    QMap<QString, NetworkDevice> getNetworkDevices() const;
+    NetworkDevice getNetworkDeviceByMac(const QString &macAddress) const;
 
 signals:
     void deviceAdded(const NetworkDevice &device);
@@ -79,7 +80,7 @@ private:
     QTimer *m_pollTimer;
 
     mutable QMutex m_devicesMutex;
-    QList<NetworkDevice> m_networkDevices;
+    QMap<QString, NetworkDevice> m_networkDevices;
     bool m_running;
 };
 

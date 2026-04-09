@@ -188,7 +188,6 @@ void AppContext::removeDevice(iDescriptor::Uniq uniq, bool ask_backend)
              << "wasWireless:" << device->deviceInfo.isWireless;
 
     emit deviceRemoved(q_udid, device->deviceInfo.wifiMacAddress,
-                       device->deviceInfo.ipAddress,
                        device->deviceInfo.isWireless);
     emit deviceChange();
 
@@ -290,6 +289,9 @@ void AppContext::addRecoveryDevice(uint64_t ecid)
 AppContext::~AppContext()
 {
     m_devices.clear();
+    for (const QString &udid : m_devices.keys()) {
+        core->remove_device(udid);
+    }
 
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
     for (auto recoveryDevice : m_recoveryDevices) {

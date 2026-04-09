@@ -182,7 +182,7 @@ void NetworkDevicesWidget::updateDeviceList()
 {
     clearDeviceCards();
 
-    QList<NetworkDevice> devices =
+    QMap<QString, NetworkDevice> devices =
         NetworkDeviceProvider::sharedInstance()->getNetworkDevices();
 
     if (devices.isEmpty()) {

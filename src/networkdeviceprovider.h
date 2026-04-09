@@ -40,9 +40,14 @@ public:
                            [this]() { m_networkProvider->startBrowsing(); });
     }
 
-    QList<NetworkDevice> getNetworkDevices()
+    QMap<QString, NetworkDevice> getNetworkDevices()
     {
         return m_networkProvider->getNetworkDevices();
+    }
+
+    NetworkDevice getNetworkDeviceByMac(const QString &macAddress)
+    {
+        return m_networkProvider->getNetworkDeviceByMac(macAddress);
     }
 
 private:

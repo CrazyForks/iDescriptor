@@ -148,7 +148,7 @@ void SSHTerminalTool::updateDeviceList()
     }
 
     // Add wireless devices
-    QList<NetworkDevice> wirelessDevices =
+    QMap<QString, NetworkDevice> wirelessDevices =
         NetworkDeviceProvider::sharedInstance()->getNetworkDevices();
     for (const NetworkDevice &device : wirelessDevices) {
         addWirelessDevice(device);

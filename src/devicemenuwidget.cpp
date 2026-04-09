@@ -97,34 +97,46 @@ void DeviceMenuWidget::init()
     stackedWidget->removeWidget(loadingWidget);
     loadingWidget->deleteLater();
 
-    // FIXME: toast really necessary here?
-    //  if (m_device->deviceInfo.parsedDeviceVersion.major < 13) {
-    //      Toast *toast = new Toast(this);
-    //      toast->setAttribute(Qt::WA_DeleteOnClose);
-    //      toast->setDuration(8000); // Hide after 8 seconds
-    //      toast->setTitle("Not wireless compatible");
-    //      toast->setText("This device is not wireless compatible.");
-    //      toast->setPosition(ToastPosition::BOTTOM_MIDDLE);
-    //      toast->show();
-    //  } else {
-    //      if (m_device->deviceInfo.isWireless)
-    //          return;
-    //      bool enabled = ServiceManager::enableWirelessConnections(m_device);
-    //      Toast *toast = new Toast(this);
-    //      toast->setAttribute(Qt::WA_DeleteOnClose);
-    //      toast->setDuration(8000); // Hide after 8 seconds
-    //      toast->setPosition(ToastPosition::BOTTOM_MIDDLE);
-    //      if (enabled) {
-    //          toast->setTitle("Wireless connections enabled");
-    //          toast->setText(
-    //              "You can now use wireless connections with this device.");
-    //      } else {
-    //          toast->setTitle("Failed to enable wireless connections");
-    //          toast->setText(
-    //              "Could not enable wireless connections for this device.");
-    //      }
-    //      toast->show();
-    //  }
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Enable wireless connections for iOS 14+ devices
+    //  (maybe supported on 13 too, untested)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (m_device->deviceInfo.parsedDeviceVersion.major >= 14) {
+        auto sm = SettingsManager::sharedInstance();
+
+        // Don't enable if
+        // auto-enable wifi connections is disabled
+        // we've already seen this device
+        // device is already wireless
+        if (!sm->autoEnableWifiConnections() ||
+            sm->hasSeenDevice(m_device->udid) ||
+            m_device->deviceInfo.isWireless)
+            return;
+
+        connect(
+            m_device->service_manager,
+            &CXX::ServiceManager::enable_wifi_connections_result, this,
+            [this, sm](bool success) {
+                if (success) {
+                    QMessageBox::information(
+                        this, "Wireless connections enabled",
+                        "You can now connect to this device wirelessly.");
+                } else {
+                    QMessageBox::warning(
+                        this, "Failed to enable wireless connections",
+                        "Could not enable wireless connections for this "
+                        "device.");
+                }
+                // FIXME: this could be a problem if
+                // depend on this value elsewhere, but it should be fine for
+                // now since it's only used for showing the warning about
+                // auto-enabling wifi connections
+                sm->setHasSeenDevice(m_device->udid, true);
+            },
+            Qt::SingleShotConnection);
+
+        m_device->service_manager->enable_wifi_connections();
+    }
 }
 
 void DeviceMenuWidget::switchToTab(const QString &tabName)

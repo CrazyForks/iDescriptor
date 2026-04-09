@@ -60,10 +60,17 @@ void AvahiService::stopBrowsing()
     m_networkDevices.clear();
 }
 
-QList<NetworkDevice> AvahiService::getNetworkDevices() const
+QMap<QString, NetworkDevice> AvahiService::getNetworkDevices() const
 {
     QMutexLocker locker(&m_devicesMutex);
     return m_networkDevices;
+}
+
+NetworkDevice
+AvahiService::getNetworkDeviceByMac(const QString &macAddress) const
+{
+    QMutexLocker locker(&m_devicesMutex);
+    return m_networkDevices.value(macAddress, NetworkDevice());
 }
 
 void AvahiService::pollAvahi()
@@ -163,10 +170,7 @@ void AvahiService::browseCallback(AvahiServiceBrowser *browser,
         // Remove from our list
         {
             QMutexLocker locker(&service->m_devicesMutex);
-            service->m_networkDevices.removeIf(
-                [macAddress](const NetworkDevice &dev) {
-                    return dev.macAddress == macAddress;
-                });
+            service->m_networkDevices.remove(macAddress);
         }
         break;
 
@@ -195,44 +199,27 @@ void AvahiService::resolveCallback(
     AvahiService *service = static_cast<AvahiService *>(userdata);
 
     if (event == AVAHI_RESOLVER_FOUND) {
-        NetworkDevice device;
-        device.name = QString::fromUtf8(name);
-        device.hostname = QString::fromUtf8(host_name);
-        device.port = port > 0 ? port : 22; // Default to SSH port
+        QString deviceName = QString::fromUtf8(name);
 
         // Convert address to string
         char addr_str[AVAHI_ADDRESS_STR_MAX];
         avahi_address_snprint(addr_str, sizeof(addr_str), address);
-        device.address = QString::fromUtf8(addr_str);
 
-        // Parse TXT records
-        for (AvahiStringList *t = txt; t; t = t->next) {
-            char *key = nullptr;
-            char *value = nullptr;
-            avahi_string_list_get_pair(t, &key, &value, nullptr);
-            if (key) {
-                device.txt[key] = value ? value : "";
-                avahi_free(key);
-            }
-            if (value) {
-                avahi_free(value);
-            }
-        }
-        device.macAddress = device.name.split('@').first();
+        NetworkDevice device(
+            QString::fromUtf8(name), QString::fromUtf8(addr_str),
+            deviceName.split('@').first(), QString::fromUtf8(host_name),
+            port > 0 ? port : 22);
+
         qDebug() << "Resolved Apple device:" << device.name << "at"
                  << device.address << ":" << device.port
                  << "MAC:" << device.macAddress;
 
-        // Add to our list if not already present
+        // Add to list if not already present
         {
             QMutexLocker locker(&service->m_devicesMutex);
-            bool exists = std::any_of(service->m_networkDevices.begin(),
-                                      service->m_networkDevices.end(),
-                                      [&device](const NetworkDevice &existing) {
-                                          return existing == device;
-                                      });
+            bool exists = service->m_networkDevices.contains(device.macAddress);
             if (!exists) {
-                service->m_networkDevices.append(device);
+                service->m_networkDevices[device.macAddress] = device;
                 emit service->deviceAdded(device);
             }
         }
