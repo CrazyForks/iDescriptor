@@ -166,6 +166,8 @@ void ToolboxWidget::setupUI()
         {iDescriptorTool::Shutdown, "Shut down the device", true, ""});
     moreToolWidgets.append({iDescriptorTool::RecoveryMode,
                             "Enter device recovery mode", true, ""});
+    moreToolWidgets.append({iDescriptorTool::EnableWifiConnections,
+                            "Make device connectable via Wi-Fi", true, ""});
 
     for (int i = 0; i < moreToolWidgets.size(); ++i) {
         const auto &tool = moreToolWidgets[i];
@@ -249,6 +251,11 @@ ToolboxItemWidget *ToolboxWidget::createToolbox(iDescriptorTool tool,
         title = "Network Devices";
         iconName =
             ":/resources/icons/StreamlineUltimateMultipleUsersNetwork.png";
+        break;
+    case iDescriptorTool::EnableWifiConnections:
+        title = "Enable Wi-Fi Connections";
+        iconName =
+            ":/resources/icons/StreamlineFreehandChargingFlashWireless.png";
         break;
     default:
         title = "Unknown Tool";
@@ -514,6 +521,26 @@ void ToolboxWidget::onToolboxClicked(iDescriptorTool tool, bool requiresDevice)
             m_networkDevicesWidget->raise();
             m_networkDevicesWidget->activateWindow();
         }
+    } break;
+
+    case iDescriptorTool::EnableWifiConnections: {
+        connect(
+            device->service_manager,
+            &CXX::ServiceManager::enable_wifi_connections_result, this,
+            [this](bool success) {
+                if (success) {
+                    QMessageBox::information(
+                        this, "Success",
+                        "Wi-Fi connections enabled successfully. You can now "
+                        "connect to this device wirelessly.");
+                } else {
+                    QMessageBox::warning(this, "Failure",
+                                         "Failed to enable Wi-Fi connections.");
+                }
+            },
+            Qt::SingleShotConnection);
+
+        device->service_manager->enable_wifi_connections();
     } break;
     default:
         qDebug() << "Clicked on unimplemented tool";

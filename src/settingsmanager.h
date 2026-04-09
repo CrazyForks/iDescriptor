@@ -80,6 +80,9 @@ public:
     bool autoConnectWirelessDevices() const;
     void setAutoConnectWirelessDevices(bool enabled);
 
+    bool autoEnableWifiConnections() const;
+    void setAutoEnableWifiConnections(bool enabled);
+
 #ifndef __APPLE__
     bool unmountiFuseOnExit() const;
     void setUnmountiFuseOnExit(bool enabled);
@@ -142,6 +145,11 @@ public:
     bool isSleepyDeviceWarningDismissed() const;
     void setIsSleepyDeviceWarningDismissed(bool dismissed);
     void dismissSleepyDeviceWarning();
+
+    bool hasSeenDevice(const QString &udid) const;
+    void setHasSeenDevice(const QString &udid, bool seen = true);
+    QStringList seenDeviceUdids() const;
+    void clearSeenDevices();
 
 signals:
     void favoritePlacesChanged();

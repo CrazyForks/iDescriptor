@@ -111,6 +111,10 @@ void SettingsWidget::setupUI()
     m_autoUpdateCheck = new QCheckBox("Automatically check for updates");
     generalLayout->addWidget(m_autoUpdateCheck);
 
+    m_autoEnableWifiConnections =
+        new QCheckBox("Automatically enable Wi-Fi connections");
+    generalLayout->addWidget(m_autoEnableWifiConnections);
+
     // Theme selection
     auto *themeLayout = new QHBoxLayout();
     themeLayout->addWidget(new QLabel("Theme:"));
@@ -306,6 +310,7 @@ void SettingsWidget::loadSettings()
     m_autoUpdateCheck->setChecked(sm->autoCheckUpdates());
     m_autoRaiseWindow->setChecked(sm->autoRaiseWindow());
     m_switchToNewDevice->setChecked(sm->switchToNewDevice());
+    m_autoEnableWifiConnections->setChecked(sm->autoEnableWifiConnections());
     m_autoConnectWirelessDevices->setChecked(sm->autoConnectWirelessDevices());
     m_wirelessFileServerPort->setValue(sm->wirelessFileServerPort());
 
@@ -356,6 +361,8 @@ void SettingsWidget::connectSignals()
     connect(m_autoRaiseWindow, &QCheckBox::toggled, this,
             &SettingsWidget::onSettingChanged);
     connect(m_switchToNewDevice, &QCheckBox::toggled, this,
+            &SettingsWidget::onSettingChanged);
+    connect(m_autoEnableWifiConnections, &QCheckBox::toggled, this,
             &SettingsWidget::onSettingChanged);
     connect(m_autoConnectWirelessDevices, &QCheckBox::toggled, this,
             &SettingsWidget::onSettingChanged);
@@ -493,6 +500,7 @@ void SettingsWidget::saveSettings()
     sm->setAutoCheckUpdates(m_autoUpdateCheck->isChecked());
     sm->setAutoRaiseWindow(m_autoRaiseWindow->isChecked());
     sm->setSwitchToNewDevice(m_switchToNewDevice->isChecked());
+    sm->setAutoEnableWifiConnections(m_autoEnableWifiConnections->isChecked());
     sm->setAutoConnectWirelessDevices(
         m_autoConnectWirelessDevices->isChecked());
     sm->setWirelessFileServerPort(m_wirelessFileServerPort->value());

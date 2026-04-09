@@ -24,6 +24,8 @@
 #include <QSettings>
 #include <QStandardPaths>
 
+const QString SEEN_DEVICE_PREFIX = "seenDevices/";
+
 SettingsManager *SettingsManager::sharedInstance()
 {
     static SettingsManager instance;
@@ -130,6 +132,17 @@ bool SettingsManager::autoConnectWirelessDevices() const
 void SettingsManager::setAutoConnectWirelessDevices(bool enabled)
 {
     m_settings->setValue("autoConnectWirelessDevices", enabled);
+    m_settings->sync();
+}
+
+bool SettingsManager::autoEnableWifiConnections() const
+{
+    return m_settings->value("autoEnableWifiConnections", true).toBool();
+}
+
+void SettingsManager::setAutoEnableWifiConnections(bool enabled)
+{
+    m_settings->setValue("autoEnableWifiConnections", enabled);
     m_settings->sync();
 }
 
@@ -250,6 +263,7 @@ void SettingsManager::resetToDefaults()
     setAutoRaiseWindow(true);
     setSwitchToNewDevice(true);
     setAutoConnectWirelessDevices(true);
+    setAutoEnableWifiConnections(true);
 #ifndef __APPLE__
     setUnmountiFuseOnExit(false);
 #endif
@@ -524,5 +538,59 @@ void SettingsManager::dismissSleepyDeviceWarning()
 void SettingsManager::setIsSleepyDeviceWarningDismissed(bool dismissed)
 {
     m_settings->setValue("sleepyDeviceWarningDismissed", dismissed);
+    m_settings->sync();
+}
+
+bool SettingsManager::hasSeenDevice(const QString &udid) const
+{
+    const QString trimmed = udid.trimmed();
+    if (trimmed.isEmpty()) {
+        return false;
+    }
+    return m_settings->value(SEEN_DEVICE_PREFIX + trimmed, false).toBool();
+}
+
+void SettingsManager::setHasSeenDevice(const QString &udid, bool seen)
+{
+    const QString trimmed = udid.trimmed();
+    if (trimmed.isEmpty()) {
+        return;
+    }
+
+    const QString key = SEEN_DEVICE_PREFIX + trimmed;
+    if (seen) {
+        m_settings->setValue(key, true);
+    } else {
+        m_settings->remove(key);
+    }
+    m_settings->sync();
+}
+
+QStringList SettingsManager::seenDeviceUdids() const
+{
+    QStringList udids;
+    const QStringList allKeys = m_settings->allKeys();
+
+    for (const QString &key : allKeys) {
+        if (!key.startsWith(SEEN_DEVICE_PREFIX)) {
+            continue;
+        }
+
+        if (m_settings->value(key, false).toBool()) {
+            udids.append(key.mid(SEEN_DEVICE_PREFIX.length()));
+        }
+    }
+
+    return udids;
+}
+
+void SettingsManager::clearSeenDevices()
+{
+    const QStringList allKeys = m_settings->allKeys();
+    for (const QString &key : allKeys) {
+        if (key.startsWith(SEEN_DEVICE_PREFIX)) {
+            m_settings->remove(key);
+        }
+    }
     m_settings->sync();
 }

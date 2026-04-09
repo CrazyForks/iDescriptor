@@ -57,6 +57,7 @@ private:
     QComboBox *m_themeCombo;
     QCheckBox *m_autoRaiseWindow;
     QCheckBox *m_switchToNewDevice;
+    QCheckBox *m_autoEnableWifiConnections;
 #ifndef __APPLE__
     QCheckBox *m_unmount_iFuseDrives;
 #endif
