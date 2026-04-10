@@ -69,12 +69,13 @@ void AppDownloadBaseDialog::startDownloadProcess(const QString &bundleId,
                                                  bool promptToOpenDir,
                                                  bool close)
 {
-
     if (bundleId.isEmpty()) {
         QMessageBox::critical(this, "Error", "Bundle ID not provided.");
         reject();
         return;
     }
+
+    m_tries = 0;
 
     addProgressBar(index);
     if (m_actionButton)
@@ -117,10 +118,12 @@ void AppDownloadBaseDialog::tryToDownload(const QString &bundleId,
                 return;
             }
             safeThis->m_operationInProgress = false;
-            if (result == 0) { // Success
+
+            if (result == 0) {
                 emit safeThis->downloadFinished(true, "Success");
                 if (safeThis->m_progressBar)
                     safeThis->m_progressBar->setValue(100);
+
                 if (promptToOpenDir) {
 
                     if (QMessageBox::Yes ==
@@ -141,19 +144,20 @@ void AppDownloadBaseDialog::tryToDownload(const QString &bundleId,
                         }
                     }
                 }
+
                 if (close)
                     safeThis->accept();
-            } else { // Failure
-                // 3 attempts
+            } else {
                 if (safeThis->m_tries < 3) {
                     safeThis->m_tries++;
-                    qDebug()
-                        << "Retrying download for" + safeThis->m_bundleId +
-                               "Attempt:" + QString::number(safeThis->m_tries);
+                    qDebug() << "Retrying download for" << safeThis->m_bundleId
+                             << "Attempt:" << safeThis->m_tries;
+
                     safeThis->tryToDownload(safeThis->m_bundleId, outputDir,
-                                            promptToOpenDir);
+                                            promptToOpenDir, close);
                     return;
                 }
+
                 emit safeThis->downloadFinished(false, "Failed");
                 // if (promptToOpenDir)
                 QMessageBox::critical(

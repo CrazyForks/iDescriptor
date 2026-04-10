@@ -123,5 +123,5 @@ void AppDownloadDialog::onDownloadClicked()
     m_actionButton->deleteLater();
     qDebug() << "Starting download to" << m_outputDir;
     qDebug() << "Bundle ID:" << m_bundleId;
-    startDownloadProcess(m_bundleId, m_outputDir, buttonIndex);
+    startDownloadProcess(m_bundleId, m_outputDir, buttonIndex, true, true);
 }
