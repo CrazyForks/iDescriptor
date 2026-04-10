@@ -43,7 +43,7 @@ private:
     QVBoxLayout *m_mainLayout;
     ZLabel *m_titleLabel;
     ZLabel *m_subtitleLabel;
-    ResponsiveQLabel *m_imageLabel;
+    QLabel *m_imageLabel;
     ZLabel *m_instructionLabel;
     ZLabel *m_githubLabel;
     ZLabel *m_howToConnectLabel;

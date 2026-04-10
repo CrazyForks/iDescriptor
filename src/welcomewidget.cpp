@@ -56,18 +56,18 @@ void WelcomeWidget::setupUI()
 
     QHBoxLayout *imageAndWirelessDevicesLayout = new QHBoxLayout();
 
-    m_imageLabel = new ResponsiveQLabel();
-    m_imageLabel->setPixmap(QPixmap(":/resources/connect.png"));
-    m_imageLabel->setMinimumWidth(200);
+    m_imageLabel = new QLabel();
 
+    const QPixmap pixmap(":/resources/connect.png");
+    m_imageLabel->setPixmap(pixmap);
     m_imageLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-
+    m_imageLabel->setFixedSize(pixmap.size());
     m_imageLabel->setStyleSheet("background: transparent; border: none;");
     m_imageLabel->setAlignment(Qt::AlignCenter);
 
-    imageAndWirelessDevicesLayout->addSpacing(40);
-    imageAndWirelessDevicesLayout->addWidget(m_imageLabel, 0, Qt::AlignHCenter);
-    imageAndWirelessDevicesLayout->addSpacing(40);
+    imageAndWirelessDevicesLayout->addSpacing(75);
+    imageAndWirelessDevicesLayout->addWidget(m_imageLabel);
+    imageAndWirelessDevicesLayout->addSpacing(75);
 
     QVBoxLayout *explorerWithIntructionLayout = new QVBoxLayout();
     NetworkDevicesToConnectWidget *networkDevicesWidget =
@@ -85,6 +85,7 @@ void WelcomeWidget::setupUI()
     explorerWithIntructionLayout->addWidget(networkDevicesWidget);
     explorerWithIntructionLayout->addWidget(m_howToConnectLabel, 0,
                                             Qt::AlignCenter);
+    explorerWithIntructionLayout->addSpacing(20);
     imageAndWirelessDevicesLayout->addLayout(explorerWithIntructionLayout);
 
     m_mainLayout->addLayout(imageAndWirelessDevicesLayout);
@@ -100,7 +101,6 @@ void WelcomeWidget::setupUI()
     m_githubLabel = createStyledLabel("Found an issue? Report it on GitHub", 12,
                                       true, COLOR_HYPERLINK);
     m_githubLabel->setWordWrap(false);
-    m_githubLabel->setMaximumWidth(m_imageLabel->sizeHint().width());
     m_githubLabel->setCursor(Qt::PointingHandCursor);
     connect(m_githubLabel, &ZLabel::clicked, this,
             []() { QDesktopServices::openUrl(QUrl(REPO_URL)); });
