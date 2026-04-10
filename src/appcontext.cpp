@@ -33,6 +33,14 @@ AppContext *AppContext::sharedInstance()
 AppContext::AppContext(QObject *parent) : QObject{parent}
 {
     cachePairedDevices();
+    connect(core, &CXX::Core::device_became_wired, this,
+            [this](const QString &udid) {
+                if (auto dev = getDevice(udid)) {
+                    dev->deviceInfo.isWireless = false;
+                }
+
+                emit deviceBecameWired(udid);
+            });
 }
 
 void AppContext::cachePairedDevices()

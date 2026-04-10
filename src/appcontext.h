@@ -79,6 +79,7 @@ signals:
     void devicePasswordProtected(const QString &udid);
     void deviceAlreadyExists(const iDescriptor::Uniq &uniq);
     void deviceAlreadyExistsMAC(const iDescriptor::Uniq &uniq);
+    void deviceBecameWired(const QString &udid);
 #ifdef ENABLE_RECOVERY_DEVICE_SUPPORT
     void recoveryDeviceAdded(const iDescriptorRecoveryDevice *deviceInfo);
     void recoveryDeviceRemoved(uint64_t ecid);
