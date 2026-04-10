@@ -23,9 +23,23 @@ HowToConnectDialog::HowToConnectDialog(QWidget *parent) : QDialog{parent}
                                           QSize(200, 200))); // first page
     m_stackedWidget->addWidget(createPage("Accept the pairing dialog",
                                           ":/resources/trust.png")); // second
+
+    QString message;
+
+#ifdef WIN32
+    message =
+        "You can now unplug the device. iDescriptor will connect to it "
+        "automatically (requires iOS 15 or later and the Bonjour service).";
+#elif __linux__
+    message = "You can now unplug the device. iDescriptor will connect to it "
+              "automatically (requires iOS 15 or later and the Avahi daemon).";
+#else
+    message = "You can now unplug the device. iDescriptor will connect to it "
+              "automatically (requires iOS 15 or later).";
+#endif
+
     m_stackedWidget->addWidget(
-        createPage("You can now unplug it iDescriptor will connect to it "
-                   "automatically (iOS 15 or later is required)",
+        createPage(message,
                    ":/resources/ios-version.png")); // third
     contentLayout->addWidget(m_stackedWidget, 1);
 
