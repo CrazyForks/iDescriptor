@@ -321,7 +321,8 @@ void NetworkDevicesToConnectWidget::onWirelessDeviceRemoved(
 
 void NetworkDevicesToConnectWidget::eval()
 {
-    if (QCoreApplication::closingDown())
+    if (QCoreApplication::closingDown() ||
+        !SettingsManager::sharedInstance()->autoConnectWirelessDevices())
         return;
     bool forceCache = true;
     for (const auto &card : m_deviceCards) {
