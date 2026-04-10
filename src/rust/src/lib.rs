@@ -164,7 +164,7 @@ impl qobject::Core {
 
                                             let qt_thread = qt_t.clone();
                                             RUNTIME.spawn(async move {
-                                                let already_paired = {
+                                                let pair_record_exists = {
                                                     let mut u2 =
                                                         match UsbmuxdConnection::default().await {
                                                             Ok(u) => u,
@@ -177,207 +177,23 @@ impl qobject::Core {
                                                     }
                                                 };
 
-                                                // Helper: emit event with optional info
-                                                async fn emit_connected(
-                                                    qt_thread: cxx_qt::CxxQtThread<Core>,
-                                                    udid: String,
-                                                ) {
-                                                    let mut uc =
-                                                        match UsbmuxdConnection::default().await {
-                                                            Ok(u) => u,
-                                                            Err(_) => return,
-                                                        };
 
-                                                    let dev = match uc.get_device(&udid).await {
-                                                        Ok(d) => d,
-                                                        Err(_) => return,
-                                                    };
-                                                    let provider = dev.to_provider(
-                                                        UsbmuxdAddr::default(),
-                                                        APP_LABEL,
-                                                    );
-
-                                                    let info = init_idescriptor_device(
-                                                        provider,
-                                                        qt_thread.clone(),
-                                                    )
-                                                    .await;
-
-                                                    match info {
-                                                        Some((udid_for_event, info_for_event)) => {
-                                                            qt_thread
-                                                                .queue(move |core_qobj| {
-                                                                    core_qobj.device_event(
-                                                                        EV_CONNECTED,
-                                                                        &QString::from(
-                                                                            udid_for_event,
-                                                                        ),
-                                                                        &QString::from(
-                                                                            info_for_event,
-                                                                        ),
-                                                                    );
-                                                                })
-                                                                .ok();
-                                                        }
-                                                        // FIXME: sometimes happens
-                                                        /*
-                                                            init_idescriptor_device: Attempting to start Lockdown session.
-                                                            init_idescriptor_device: Lockdown session started.
-                                                            init_idescriptor_device: Attempting to get default values from Lockdown.
-                                                            init_idescriptor_device: Default values obtained.
-                                                            init_idescriptor_device: Attempting to connect to AFC client.
-                                                            AfcClient::connect failed: PasswordProtected
-                                                         */
-                                                        None => return,
-                                                    }
-                                                }
-
-                                                if already_paired {
+                                                // we may not even need to check if pair record exists
+                                                if pair_record_exists {
                                                     emit_connected(qt_thread.clone(), udid).await;
                                                     return;
                                                 }
-
-                                                fn emit_pairing_failed(
-                                                    qt_thread: cxx_qt::CxxQtThread<Core>,
-                                                    udid: String,
-                                                    _reason : &str,
-                                                )  {
-                                                    // let reason_clone = reason.to_string();
-                                                    //TODO: listen for this event
-                                                    qt_thread
-                                                        .queue(move |core_qobj| {
-                                                            core_qobj.device_event(
-                                                                EV_FAIL,
-                                                                &QString::from(udid),
-                                                                // FIXME: reason is not info
-                                                                &QString::from(""),
-                                                            );
-                                                        })
-                                                        .ok();
+                                                
+                                                match handle_pairing(qt_thread.clone(), udid.clone()).await {
+                                                    Ok(_) => {
+                                                        emit_connected(qt_thread.clone(), udid).await;
+                                                    }
+                                                    Err(e) => {
+                                                        eprintln!("Pairing failed for device {}: {e:?}", udid);
+                                                        emit_pairing_failed(qt_thread.clone(), udid, "Failed to pair device");
+                                                    }
                                                 }
 
-                                                // pairing pending
-                                                let udid_for_event = udid.clone();
-                                                qt_thread
-                                                    .queue(move |core_qobj| {
-                                                        core_qobj.device_event(
-                                                            EV_PAIRING_PENDING,
-                                                            &QString::from(udid_for_event),
-                                                            &QString::from(""),
-                                                        );
-                                                    })
-                                                    .ok();
-
-
-                                                let mut uc2 = match UsbmuxdConnection::default()
-                                                    .await
-                                                {
-                                                    Ok(u) => u,
-                                                    Err(_) => {
-                                                        let udid_for_event = udid.clone();
-                                                        emit_pairing_failed(qt_thread.clone(), udid_for_event, "Failed to connect to usbmuxd");
-                                                        return;
-                                                    }
-                                                };
-
-                                                let dev = match uc2.get_device(&udid).await {
-                                                    Ok(d) => d,
-                                                    Err(_) => {
-                                                        let udid_for_event = udid.clone();
-                                                        emit_pairing_failed(qt_thread.clone(), udid_for_event, "Failed to get device from usbmuxd");
-                                                        return;
-                                                    }
-                                                };
-
-                                                let provider = dev
-                                                    .to_provider(UsbmuxdAddr::default(), APP_LABEL);
-
-                                                let mut lc = match LockdownClient::connect(
-                                                    &provider,
-                                                )
-                                                .await
-                                                {
-                                                    Ok(l) => l,
-                                                    Err(_) => {
-                                                        let udid_for_event = udid.clone();
-                                                        emit_pairing_failed(qt_thread.clone(), udid_for_event, "Failed to connect to Lockdown");
-                                                        return;
-                                                    }
-                                                };
-
-                                                let buid = match uc2.get_buid().await {
-                                                    Ok(b) => b,
-                                                    Err(_) => {
-                                                        let udid_for_event = udid.clone();
-                                                        emit_pairing_failed(qt_thread.clone(), udid_for_event, "Failed to get BUID from usbmuxd");
-                                                        return;
-                                                    }
-                                                };
-
-
-                                                let host_id =
-                                                    uuid::Uuid::new_v4().to_string().to_uppercase();
-
-                                                println!(
-                                                    "Pairing with device {}, host_id: {}, buid: {}",
-                                                    udid, host_id, buid
-                                                );
-                                                let mut pf = loop {  
-                                                    match lc.pair(host_id.clone(), buid.clone(), None).await {  
-                                                        Ok(p) => {  
-                                                            println!("Pairing successful with device {}, host_id: {}, buid: {}", udid, host_id, buid);
-                                                            break p;  
-                                                        }  
-                                                        Err(IdeviceError::PairingDialogResponsePending) => {  
-                                                            /* wait */
-                                                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;  
-                                                            continue;  
-                                                        }
-                                                        Err(IdeviceError::PasswordProtected) => {
-                                                            /* wait */
-                                                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;  
-                                                            continue;
-                                                        }
-                                                        Err(IdeviceError::InvalidHostID) =>{
-                                                            /* wait */
-                                                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;  
-                                                            continue;
-                                                        }
-                                                        // TODO: we can also check for CanceledByUser or UserDeniedPairing
-                                                        Err(e) => {  
-                                                            // Actual error occurred  
-                                                            eprintln!("Pairing failed for device {}: {e:?}", udid);
-                                                            let udid_for_event = udid.clone();  
-                                                            emit_pairing_failed(qt_thread.clone(), udid_for_event, "Failed to pair device");  
-                                                            return;  
-                                                        }  
-                                                    }  
-                                                };
-                                                println!("Paired with device {}, pairing file obtained", udid);
-                                                pf.udid = Some(udid.clone());
-
-                                                let bytes = match pf.serialize() {
-                                                    Ok(b) => b,
-                                                    Err(_) => {
-                                                        let udid_for_event = udid.clone();
-                                                        emit_pairing_failed(qt_thread.clone(), udid_for_event, "Failed to serialize pairing file");
-                                                        return;
-                                                    }
-                                                };
-
-                                                if let Err(_) =
-                                                    uc2.save_pair_record(&udid, bytes).await
-                                                {
-                                                    let udid_for_event = udid.clone();
-                                                    emit_pairing_failed(qt_thread.clone(), udid_for_event, "Failed to save pairing record to usbmuxd");
-                                                    return;
-                                                }
-
-                                                println!(
-                                                    "Pairing record saved to usbmuxd for device {}. Emitting connected event.",
-                                                    udid
-                                                );
-                                                emit_connected(qt_thread.clone(), udid).await;
                                             });
                                         }
                                         /* DISCONNECTED */
@@ -462,15 +278,15 @@ impl qobject::Core {
 
             let result = tokio::select! {
                 res = init_idescriptor_device(t, qt_t.clone()) => res,
-                // timeout
+                /* timeout */ 
                 _ = tokio::time::sleep(tokio::time::Duration::from_secs(20)) => {
                     eprintln!("Timeout collecting device info for wireless device mac address: {mac_address_owned}");
-                    None 
+                    Err(IdeviceError::Timeout)
                 }
             };
 
             match result {
-                Some((udid, info)) => {
+                Ok((udid, info)) => {
                     // emit event with info
                     let qt_thread = qt_t.clone();
 
@@ -484,8 +300,8 @@ impl qobject::Core {
                         })
                         .ok();
                 }
-                None => {
-                    eprintln!("Failed to collect device info for wireless device mac address: {mac_address_owned}");
+                Err(e) => {
+                    eprintln!("Failed to initialize wireless device mac address: {mac_address_owned} {e:?}");
                     let qt_thread = qt_t.clone();
 
                     qt_thread
@@ -588,58 +404,203 @@ async fn clean_device_from_app_state(udid: &str) {
     }
 }
 
+fn is_pairing_related_error(e: &IdeviceError) -> bool {
+    matches!(
+        e,
+        IdeviceError::InvalidHostID
+            | IdeviceError::PairingDialogResponsePending
+            | IdeviceError::PasswordProtected
+            | IdeviceError::UserDeniedPairing
+            | IdeviceError::CanceledByUser
+    )
+}
+
+async fn handle_pairing(
+    qt_thread: cxx_qt::CxxQtThread<Core>,
+    udid: String,
+) -> Result<(), IdeviceError> {
+    let udid_for_event = udid.clone();
+    qt_thread
+        .queue(move |core_qobj| {
+            core_qobj.device_event(
+                EV_PAIRING_PENDING,
+                &QString::from(udid_for_event),
+                &QString::from(""),
+            );
+        })
+        .ok();
+
+    let mut uc2 = UsbmuxdConnection::default().await?;
+
+    let dev = uc2.get_device(&udid).await?;
+
+    let provider = dev.to_provider(UsbmuxdAddr::default(), APP_LABEL);
+
+    let mut lc = LockdownClient::connect(&provider).await?;
+
+    let buid = uc2.get_buid().await?;
+
+    let host_id = uuid::Uuid::new_v4().to_string().to_uppercase();
+
+    println!(
+        "Pairing with device {}, host_id: {}, buid: {}",
+        udid, host_id, buid
+    );
+    let mut pf = loop {
+        match lc.pair(host_id.clone(), buid.clone(), None).await {
+            Ok(p) => {
+                println!(
+                    "Pairing successful with device {}, host_id: {}, buid: {}",
+                    udid, host_id, buid
+                );
+                break p;
+            }
+            Err(IdeviceError::PairingDialogResponsePending) => {
+                /* wait */
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                continue;
+            }
+            Err(IdeviceError::PasswordProtected) => {
+                /* wait */
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                continue;
+            }
+            Err(IdeviceError::InvalidHostID) => {
+                /* wait */
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                continue;
+            }
+            // TODO: we can also check for CanceledByUser or UserDeniedPairing
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    };
+    println!("Paired with device {}, pairing file obtained", udid);
+    pf.udid = Some(udid.clone());
+
+    let bytes = pf.serialize()?;
+    uc2.save_pair_record(&udid, bytes).await?;
+
+    println!("Pairing record saved to usbmuxd for device {}.", udid);
+    Ok(())
+}
+
+fn emit_pairing_failed(
+    qt_thread: cxx_qt::CxxQtThread<Core>,
+    udid: String,
+    // FIXME: we may want to use this in the future
+    _reason: &str,
+) {
+    qt_thread
+        .queue(move |core_qobj| {
+            core_qobj.device_event(EV_FAIL, &QString::from(udid), &QString::from(""));
+        })
+        .ok();
+}
+
+async fn emit_connected(qt_thread: cxx_qt::CxxQtThread<Core>, udid: String) {
+    // one init retry after successful pairing
+    let mut retried_after_pair = false;
+
+    loop {
+        let mut uc = match UsbmuxdConnection::default().await {
+            Ok(u) => u,
+            Err(_) => return,
+        };
+
+        let dev = match uc.get_device(&udid).await {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+
+        let provider = dev.to_provider(UsbmuxdAddr::default(), APP_LABEL);
+
+        match init_idescriptor_device(provider, qt_thread.clone()).await {
+            Ok((udid_for_event, info_for_event)) => {
+                qt_thread
+                    .queue(move |core_qobj| {
+                        core_qobj.device_event(
+                            EV_CONNECTED,
+                            &QString::from(udid_for_event),
+                            &QString::from(info_for_event),
+                        );
+                    })
+                    .ok();
+                return;
+            }
+            Err(e) if is_pairing_related_error(&e) && !retried_after_pair => {
+                match handle_pairing(qt_thread.clone(), udid.clone()).await {
+                    Ok(_) => {
+                        retried_after_pair = true;
+                        println!(
+                            "Pairing succeeded for device {}, retrying initialization.",
+                            udid
+                        );
+                        continue; // retry init once
+                    }
+                    Err(e) => {
+                        eprintln!("Pairing failed for device {}: {e:?}", udid);
+                        emit_pairing_failed(
+                            qt_thread.clone(),
+                            udid.clone(),
+                            "Failed to pair device",
+                        );
+                        return;
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "Unhandled error while initializing device for udid {}: {e:?}",
+                    udid
+                );
+                return;
+            }
+        }
+    }
+}
+
 async fn init_idescriptor_device<
     T: idevice::provider::IdeviceProvider + Send + Sync + Clone + 'static,
 >(
     provider: T,
     qt_thread: cxx_qt::CxxQtThread<Core>,
-) -> Option<(String, String)> {
+) -> Result<(String, String), IdeviceError> {
     let provider_name = type_name::<T>();
     let is_wireless = provider_name == "idevice::provider::TcpProvider";
 
-    let pf = match idevice::provider::IdeviceProvider::get_pairing_file(&provider).await {
-        Ok(pf) => pf,
-        Err(e) => {
-            eprintln!("get_pairing_file failed: {e:?}");
-            return None;
-        }
-    };
-    eprintln!("init_idescriptor_device: Pairing file obtained.");
-
-    let mut lc = match LockdownClient::connect(&provider).await {
-        Ok(lc) => lc,
-        Err(e) => {
-            eprintln!("LockdownClient::connect failed : {e:?}");
-            return None;
-        }
-    };
-
-    eprintln!("init_idescriptor_device: Attempting to start Lockdown session.");
-    if let Err(e) = lc.start_session(&pf).await {
-        eprintln!("start_session failed: {e:?}");
-        return None;
-    }
-    eprintln!("init_idescriptor_device: Lockdown session started.");
+    let pf = idevice::provider::IdeviceProvider::get_pairing_file(&provider).await?;
+    let mut lc = LockdownClient::connect(&provider).await?;
+    lc.start_session(&pf).await?;
 
     eprintln!("init_idescriptor_device: Attempting to get default values from Lockdown.");
     let mut def_vals = match lc.get_value(None, None).await {
         Ok(v) => v,
         Err(e) => {
             eprintln!("get_value(None, None) failed : {e:?}");
-            return None;
+            return Err(e);
         }
     };
     eprintln!("init_idescriptor_device: Default values obtained.");
 
+    // FIXME: we may need our own error types here
+    // but InternalError should be fine for now
     let udid = def_vals
-        .as_dictionary()?
-        .get("UniqueDeviceID")?
-        .as_string()?
+        .as_dictionary()
+        .ok_or_else(|| {
+            IdeviceError::InternalError("Lockdown root is not a dictionary".to_string())
+        })?
+        .get("UniqueDeviceID")
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| {
+            IdeviceError::InternalError("Missing UniqueDeviceID in Lockdown response".to_string())
+        })?
         .to_string();
 
     if udid.is_empty() {
         eprintln!("init_idescriptor_device: UDID is empty.");
-        return None;
+        return Err(IdeviceError::InvalidHostID);
     }
     let mut hb = None;
 
@@ -649,38 +610,22 @@ async fn init_idescriptor_device<
             Ok(h) => Some(h),
             Err(e) => {
                 eprintln!("heartbeat: connect failed: {e:?}");
-                return None;
+                return Err(e);
             }
         };
         eprintln!("init_idescriptor_device: Connected to HeartbeatClient.");
     }
 
-    let disk_vals = match lc.get_value(None, Some("com.apple.disk_usage")).await {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("get_value(com.apple.disk_usage) failed: {e:?}");
-            return None;
-        }
-    };
+    let disk_vals = lc.get_value(None, Some("com.apple.disk_usage")).await?;
 
     eprintln!("init_idescriptor_device: Attempting to connect to AFC client.");
-    let mut afc_client = match AfcClient::connect(&provider).await {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("AfcClient::connect failed: {e:?}");
-            return None;
-        }
-    };
+    let mut afc_client = AfcClient::connect(&provider).await?;
+
     eprintln!("init_idescriptor_device: Connected to AfcClient.");
 
     eprintln!("init_idescriptor_device: Attempting to connect to DiagnosticsRelayClient.");
-    let mut diag_relay = match DiagnosticsRelayClient::connect(&provider).await {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("DiagnosticsRelayClient::connect failed: {e:?}");
-            return None;
-        }
-    };
+    let mut diag_relay = DiagnosticsRelayClient::connect(&provider).await?;
+
     eprintln!("init_idescriptor_device: Connected to DiagnosticsRelayClient.");
 
     let afc2 = match AfcClient::new_afc2(&provider).await {
@@ -696,7 +641,7 @@ async fn init_idescriptor_device<
         Ok(i) => i,
         Err(e) => {
             eprintln!("get_device_info failed: {e:?}");
-            return None;
+            return Err(e);
         }
     };
     eprintln!("init_idescriptor_device: AFC device info obtained.");
@@ -753,18 +698,17 @@ async fn init_idescriptor_device<
     {
         let mut state = APP_DEVICE_STATE.lock().await;
         if let Some(mut old) = state.insert(udid.to_string(), device_services) {
-            eprintln!(
-                "device became wired - UDID {}",
-                udid
-            );
+            eprintln!("device became wired - UDID {}", udid);
             if let Some(task) = old.heartbeat_task.take() {
                 task.abort();
             }
             let udid_for_signal = udid.clone();
-            qt_thread.queue(move |core_qobj| {
-                core_qobj.device_became_wired(&QString::from(udid_for_signal));
-            }).ok();
-        } 
+            qt_thread
+                .queue(move |core_qobj| {
+                    core_qobj.device_became_wired(&QString::from(udid_for_signal));
+                })
+                .ok();
+        }
     }
 
     if is_wireless {
@@ -780,7 +724,7 @@ async fn init_idescriptor_device<
                     }
                     Err(()) => {
                         eprintln!("init_idescriptor_device: Failed to spawn heartbeat task.");
-                        return None;
+                        return Err(IdeviceError::Heartbeat(idevice::HeartbeatError::Unknown));
                     }
                 }
             }
@@ -788,7 +732,7 @@ async fn init_idescriptor_device<
                 eprintln!(
                     "init_idescriptor_device: Heartbeat client is None, cannot spawn heartbeat task."
                 );
-                return None;
+                return Err(IdeviceError::Heartbeat(idevice::HeartbeatError::Unknown));
             }
         }
     }
@@ -796,12 +740,18 @@ async fn init_idescriptor_device<
     let mut buf = Vec::new();
     if def_vals.to_writer_xml(&mut buf).is_err() {
         eprintln!("init_idescriptor_device: Failed to serialize default values to XML.");
-        return None;
+        return Err(IdeviceError::InternalError(
+            "Failed to serialize default values to XML".to_string(),
+        ));
     }
-    let info = String::from_utf8(buf).ok()?;
+
+    let info = String::from_utf8(buf).map_err(|_| {
+        IdeviceError::InternalError("Failed to convert default values XML to UTF-8".to_string())
+    })?;
+
     eprintln!("init_idescriptor_device: Device has been initialized.");
 
-    Some((udid, info))
+    Ok((udid, info))
 }
 
 async fn spawn_heartbeat_task(
@@ -825,7 +775,7 @@ async fn spawn_heartbeat_task(
                 Err(e) => {
                     fails += 1;
                     eprintln!("heartbeat:  get_marco failed (fail count: {fails}): {e:?}");
-                    
+
                     match e {
                         IdeviceError::Heartbeat(idevice::HeartbeatError::SleepyTime) => {
                             println!("heartbeat: Sleepy time");
