@@ -633,6 +633,7 @@ void ToolboxWidget::restartAirPlayWidget()
     connect(
         m_airplayWidget, &QObject::destroyed, this,
         [this]() {
+            m_airplayWidget = nullptr;
             // give some time for cleanup
             QTimer::singleShot(100, this, [this]() {
                 onToolboxClicked(iDescriptorTool::Airplayer, false);
