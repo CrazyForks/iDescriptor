@@ -452,8 +452,10 @@ void StatusBalloon::onItemExported(const QUuid &job_id,
     auto item = m_processes[job_id];
     if (success)
         item->completedItems++;
-    else
+    else {
         item->failedItems++;
+        qDebug() << "Export of" << file_name << "failed:" << error_message;
+    }
 
     handleJobUpdate(item);
     updateHeader();
@@ -499,8 +501,10 @@ void StatusBalloon::onItemImported(const QUuid &job_id,
     auto item = m_processes[job_id];
     if (success)
         item->completedItems++;
-    else
+    else {
         item->failedItems++;
+        qDebug() << "Import of" << file_name << "failed:" << error_message;
+    }
 
     handleJobUpdate(item);
     updateHeader();
