@@ -71,44 +71,44 @@ void enableMica(HWND hwnd)
 {
     if (!hwnd)
         return;
-    SettingsManager *sm = SettingsManager::sharedInstance();
-    WIN_BACKDROP type = sm->winBackdropType();
-    MARGINS margins = {-1};
-    DwmExtendFrameIntoClientArea(hwnd, &margins);
+    // SettingsManager *sm = SettingsManager::sharedInstance();
+    // WIN_BACKDROP type = sm->winBackdropType();
+    // MARGINS margins = {-1};
+    // DwmExtendFrameIntoClientArea(hwnd, &margins);
 
-    DWORD build = 0;
-    RTL_OSVERSIONINFOW rovi = {0};
-    rovi.dwOSVersionInfoSize = sizeof(rovi);
+    // DWORD build = 0;
+    // RTL_OSVERSIONINFOW rovi = {0};
+    // rovi.dwOSVersionInfoSize = sizeof(rovi);
 
-    using RtlGetVersionPtr = LONG(WINAPI *)(PRTL_OSVERSIONINFOW);
-    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
-    if (ntdll) {
-        auto pRtlGetVersion = reinterpret_cast<RtlGetVersionPtr>(
-            GetProcAddress(ntdll, "RtlGetVersion"));
-        if (pRtlGetVersion && pRtlGetVersion(&rovi) == 0) {
-            build = rovi.dwBuildNumber;
-        }
-    }
+    // using RtlGetVersionPtr = LONG(WINAPI *)(PRTL_OSVERSIONINFOW);
+    // HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    // if (ntdll) {
+    //     auto pRtlGetVersion = reinterpret_cast<RtlGetVersionPtr>(
+    //         GetProcAddress(ntdll, "RtlGetVersion"));
+    //     if (pRtlGetVersion && pRtlGetVersion(&rovi) == 0) {
+    //         build = rovi.dwBuildNumber;
+    //     }
+    // }
 
-    if (build >= 22523) {
-        DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &type,
-                              sizeof(type));
-    } else if (build >= 22000) {
-        // Undocumented old method
-        BOOL mica = TRUE;
-        DwmSetWindowAttribute(hwnd, DWMWA_MICA_EFFECT, &mica, sizeof(mica));
-    }
+    // if (build >= 22523) {
+    //     DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &type,
+    //                           sizeof(type));
+    // } else if (build >= 22000) {
+    //     // Undocumented old method
+    //     BOOL mica = TRUE;
+    //     DwmSetWindowAttribute(hwnd, DWMWA_MICA_EFFECT, &mica, sizeof(mica));
+    // }
 }
 
 void setupWinWindow(QWidget *window)
 {
-    QOperatingSystemVersion osVersion = QOperatingSystemVersion::current();
-    if (osVersion < QOperatingSystemVersion::Windows11 ||
-        SettingsManager::sharedInstance()->disableMica())
-        return;
-    window->setAttribute(Qt::WA_TranslucentBackground);
-    HWND hwnd = reinterpret_cast<HWND>(window->winId());
-    enableMica(hwnd);
+    // QOperatingSystemVersion osVersion = QOperatingSystemVersion::current();
+    // if (osVersion < QOperatingSystemVersion::Windows11 ||
+    //     SettingsManager::sharedInstance()->disableMica())
+    //     return;
+    // window->setAttribute(Qt::WA_TranslucentBackground);
+    // HWND hwnd = reinterpret_cast<HWND>(window->winId());
+    // enableMica(hwnd);
 
     /*
         normally we had plans to enable acrylic on win 10 but since it's

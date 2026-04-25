@@ -47,7 +47,7 @@ using u_int64_t = uint64_t;
     "© 2026 The iDescriptor Project contributors. See AUTHORS for details."
 #define RECOVERY_CLIENT_CONNECTION_TRIES 3
 #define APPLE_VENDOR_ID 0x05ac
-#define REPO_URL "https://github.com/iDescriptor/iDescriptor"
+#define IDESCRIPTOR_REPO_URL "https://github.com/iDescriptor/iDescriptor"
 #define SPONSORS_JSON_URL                                                      \
     "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/"    \
     "main/sponsors.json"
@@ -86,13 +86,13 @@ using u_int64_t = uint64_t;
 #endif
 
 // rust codebase
-#include "idescriptor_rust_codebase/src/afc2_services.cxxqt.h"
-#include "idescriptor_rust_codebase/src/afc_services.cxxqt.h"
-#include "idescriptor_rust_codebase/src/hause_arrest.cxxqt.h"
-#include "idescriptor_rust_codebase/src/io_manager.cxxqt.h"
-#include "idescriptor_rust_codebase/src/lib.cxxqt.h"
-#include "idescriptor_rust_codebase/src/screenshot.cxxqt.h"
-#include "idescriptor_rust_codebase/src/service_manager.cxxqt.h"
+// #include "idescriptor_rust_codebase/src/afc2_services.cxxqt.h"
+// #include "idescriptor_rust_codebase/src/afc_services.cxxqt.h"
+// #include "idescriptor_rust_codebase/src/hause_arrest.cxxqt.h"
+// #include "idescriptor_rust_codebase/src/io_manager.cxxqt.h"
+// #include "idescriptor_rust_codebase/src/lib.cxxqt.h"
+// #include "idescriptor_rust_codebase/src/screenshot.cxxqt.h"
+// #include "idescriptor_rust_codebase/src/service_manager.cxxqt.h"
 
 namespace iDescriptor
 {
@@ -233,9 +233,9 @@ struct iDescriptorDevice {
     iDescriptor::IdeviceConnectionType conn_type;
     DeviceInfo deviceInfo;
     unsigned int ios_version;
-    CXX::ServiceManager *service_manager;
-    CXX::AfcBackend *afc_backend;
-    CXX::Afc2Backend *afc2_backend;
+    QObject *service_manager;
+    QObject *afc_backend;
+    QObject *afc2_backend;
 };
 
 void fullDeviceInfo(const pugi::xml_document &doc, DeviceInfo &d);

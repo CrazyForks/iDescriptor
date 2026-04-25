@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/">
+        <file>src/qml/Main.qml</file>
+        <file>src/qml/Index.qml</file>
+        <file>src/qml/Tabs.qml</file>
+        <file>src/qml/HowToConnect.qml</file>
+        <file>src/qml/Welcome.qml</file>
+        <file>src/qml/TabButton.qml</file>
+        <file>src/qml/Device.qml</file>
+    </qresource>
+</RCC>

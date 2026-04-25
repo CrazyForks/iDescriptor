@@ -95,10 +95,6 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
 endif()
 
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 set(CXXQT_QTCOMPONENTS Core Gui Qml QuickControls2 QuickTest Widgets Test)
 if(NOT BUILD_WASM)
     set(CXXQT_QTCOMPONENTS ${CXXQT_QTCOMPONENTS})
@@ -138,7 +134,7 @@ endif()
 cxx_qt_import_crate(
     MANIFEST_PATH src/rust/Cargo.toml 
     CRATES idescriptor_rust_codebase 
-    LOCKED 
+    # LOCKED 
     QT_MODULES Qt::Core Qt::Gui Qt::Qml Qt::QuickControls2
 )
 
@@ -188,13 +184,16 @@ else()
 endif()
 
 file(GLOB PROJECT_SOURCES
-src/*.h
-src/*.cpp
-src/core/helpers/*.cpp
-src/core/services/*.cpp
-src/base/*.cpp
-src/base/*.h
+# src/*.h
+# src/*.cpp
+# src/core/helpers/*.cpp
+# src/core/services/*.cpp
+# src/base/*.cpp
+# src/base/*.h
+src/main.cpp
+src/constants.h
 resources.qrc
+resources.ui.qrc
 )
 
 
@@ -283,6 +282,7 @@ target_link_libraries(iDescriptor PRIVATE
     Qt6::Location
     Qt6::Positioning
     Qt6::QuickWidgets
+    Qt6::Qml
     Qt6::QuickControls2
     PkgConfig::SSH
     ${SSH_LIBRARY}
@@ -312,7 +312,6 @@ if(ENABLE_RECOVERY_DEVICE_SUPPORT)
 endif()
 
 target_include_directories(iDescriptor PRIVATE
-    # Put idevice-rs includes FIRST
     ${CMAKE_CURRENT_SOURCE_DIR}/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/zupdater/src
 )

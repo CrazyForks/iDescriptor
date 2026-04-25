@@ -17,8 +17,8 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "constants.h"
 #include "iDescriptor.h"
-#include "mainwindow.h"
 #include "settingsmanager.h"
 #include <QApplication>
 #include <QDebug>
@@ -32,42 +32,54 @@
 #include "platform/windows/win_common.h"
 #endif
 
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
+#include <QQuickWindow>
+#include <QtGui/QGuiApplication>
+#include <QtQml/QQmlApplicationEngine>
+#define FLUENTUI_BUILD_STATIC_LIB 1
+
 int main(int argc, char *argv[])
 {
+#ifdef WIN32
+    // ::SetUnhandledExceptionFilter(MyUnhandledExceptionFilter);
+    qputenv("QT_QPA_PLATFORM", "windows:darkmode=2");
+#endif
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+    qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
+#else
+    qputenv("QT_QUICK_CONTROLS_STYLE", "Default");
+#endif
+#ifdef Q_OS_LINUX
+    // fix bug UOSv20 v-sync does not work
+    qputenv("QSG_RENDER_LOOP", "basic");
+#endif
+
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+#endif
+#if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
+    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
+    QApplication::setHighDpiScaleFactorRoundingPolicy(
+        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+#endif
+#endif
+
     QApplication a(argc, argv);
     QCoreApplication::setOrganizationName("iDescriptor");
     QCoreApplication::setApplicationName("iDescriptor");
     QCoreApplication::setApplicationVersion(APP_VERSION);
     if (a.arguments().contains("--reset-settings")) {
-        SettingsManager::sharedInstance()->clear();
+        // SettingsManager::sharedInstance()->clear();
         QMessageBox::information(nullptr, "Settings Reset",
                                  "All application settings have been reset to "
                                  "their default values.");
     }
+    QQmlApplicationEngine engine;
+
 #ifdef WIN32
-
-    bool enableMica = !a.arguments().contains("--disable-mica") &&
-                      !SettingsManager::sharedInstance()->disableMica();
-    if (!enableMica) {
-        SettingsManager::sharedInstance()->setDisableMica(true);
-        qDebug() << "Mica effect disabled";
-    }
-
-    QApplication::setEffectEnabled(Qt::UI_AnimateCombo, false);
-
-    QOperatingSystemVersion osVersion = QOperatingSystemVersion::current();
-    if (enableMica && osVersion >= QOperatingSystemVersion::Windows11) {
-        QFile styleFile(detectDarkModeWindows() ? ":/resources/win.dark.qcss"
-                                                : ":/resources/win.light.qcss");
-        if (styleFile.open(QFile::ReadOnly | QFile::Text)) {
-            const QString style = QString::fromUtf8(styleFile.readAll())
-                                      .arg(COLOR_ACCENT_BLUE.name());
-            qDebug() << "Loaded Windows style sheet successfully.";
-            a.setStyleSheet(style);
-        }
-    } else {
-        qDebug() << "Not applying WinUI stylesheet.";
-    }
 
     QString appPath = QCoreApplication::applicationDirPath();
     QString gstPluginPath =
@@ -103,7 +115,26 @@ int main(int argc, char *argv[])
     setenv("GST_PLUGIN_SYSTEM_PATH", gstPluginPath.toUtf8().constData(), 1);
     setenv("GST_PLUGIN_SCANNER", gstPluginScannerPath.toUtf8().constData(), 1);
 #endif
-    MainWindow *w = MainWindow::sharedInstance();
-    w->show();
+
+    const QUrl url(QStringLiteral("qrc:/src/qml/Main.qml"));
+    QObject::connect(
+        &engine, &QQmlApplicationEngine::objectCreated, &a,
+        [url](QObject *obj, const QUrl &objUrl) {
+            if (!obj && url == objUrl) {
+                QCoreApplication::exit(-1);
+            }
+        },
+        Qt::QueuedConnection);
+
+// FIXME: for some reason we have to set this
+// dont let this end up in final build
+#ifdef WIN32
+    engine.addImportPath("C:/Qt/6.8.3/mingw_64/qml");
+#endif
+    Constants constants;
+
+    engine.rootContext()->setContextProperty("CONSTANTS", &constants);
+    engine.load(url);
+
     return a.exec();
 }

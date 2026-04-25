@@ -79,9 +79,8 @@ where
     rx.recv().expect("Tokio runtime worker panicked")
 }
 
-#[cxx_qt::bridge(namespace = "CXX")]
+#[cxx_qt::bridge]
 mod qobject {
-    #[namespace = ""]
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         include!("cxx-qt-lib/qlist.h");
@@ -93,6 +92,7 @@ mod qobject {
 
     extern "RustQt" {
         #[qobject]
+        #[qml_element]
         type Core = super::RCore;
 
         #[qinvokable]
