@@ -15,7 +15,8 @@ Button {
     }
 
     Layout.fillWidth: true
-    Layout.fillHeight: true
+    Layout.preferredWidth : 0
+    // Layout.fillHeight: true
     background: Rectangle {
         color : "transparent"
     }

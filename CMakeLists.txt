@@ -192,6 +192,9 @@ file(GLOB PROJECT_SOURCES
 # src/base/*.h
 src/main.cpp
 src/constants.h
+# src/thumbnailmodel.h
+# src/thumbnailmodel.cpp
+src/thumbnailprovider.h
 resources.qrc
 resources.ui.qrc
 )

@@ -27,7 +27,7 @@ Item {
             font.pixelSize: 28
             font.weight: Font.DemiBold
             wrapMode: Text.WordWrap
-            color: palette.text
+            color: "white"
         }
 
         Item { Layout.preferredHeight: 6 }
@@ -40,7 +40,7 @@ Item {
             font.pixelSize: 10
             font.weight: Font.Normal
             wrapMode: Text.WordWrap
-            color: palette.text
+            // color: palette.text
         }
 
         Item { Layout.preferredHeight: 12 }
@@ -114,7 +114,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             font.pixelSize: 14
             wrapMode: Text.WordWrap
-            color: palette.text
+            // color: palette.text
         }
 
         Item { Layout.preferredHeight: 10 }

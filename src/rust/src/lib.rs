@@ -9,6 +9,8 @@ use idevice::{
     provider::TcpProvider,
     usbmuxd::{Connection, UsbmuxdAddr, UsbmuxdConnection, UsbmuxdListenEvent},
 };
+use idevice::afc::opcode::AfcFopenMode;
+
 use std::{any::type_name, sync::Arc};
 use std::{collections::HashMap, net::IpAddr};
 use tokio::sync::Mutex;
@@ -26,7 +28,7 @@ use cxx_qt_lib::{QMap, QMapPair_QString_QVariant, QString, QVariant};
 
 use crate::qobject::Core;
 use once_cell::sync::Lazy;
-use plist::Value;
+use plist::{Dictionary, Value};
 mod afc;
 mod afc2_services;
 mod afc_services;
@@ -35,6 +37,9 @@ mod io_manager;
 mod screenshot;
 mod service_manager;
 mod utils;
+mod query_sqlite;
+mod image_loader;
+mod bridge;
 
 const POSSIBLE_ROOT: &str = "../../../../";
 const APP_LABEL: &str = "iDescriptor";
@@ -82,9 +87,9 @@ where
 #[cxx_qt::bridge]
 mod qobject {
     unsafe extern "C++" {
-        include!("cxx-qt-lib/qstring.h");
         include!("cxx-qt-lib/qlist.h");
         include!("cxx-qt-lib/qmap.h");
+        include!("cxx-qt-lib/qstring.h");
 
         type QString = cxx_qt_lib::QString;
         type QMap_QString_QVariant = cxx_qt_lib::QMap<cxx_qt_lib::QMapPair_QString_QVariant>;
@@ -113,7 +118,7 @@ mod qobject {
         fn remove_device(self: Pin<&mut Core>, udid: &QString);
 
         #[qsignal]
-        fn device_event(self: Pin<&mut Core>, event_type: u32, udid: &QString, info: &QString);
+        fn device_event(self: Pin<&mut Core>, event_type: u32, udid: &QString, info: &QMap_QString_QVariant);
 
         #[qsignal]
         fn init_failed(self: Pin<&mut Core>, mac_address: &QString);
@@ -207,7 +212,7 @@ impl qobject::Core {
                                                         core_qobj.device_event(
                                                             EV_DISCONNECTED,
                                                             &QString::from(udid),
-                                                            &QString::from(""),
+                                                            &QMap::<QMapPair_QString_QVariant>::default(),
                                                         );
                                                     })
                                                     .ok();
@@ -296,7 +301,7 @@ impl qobject::Core {
                             core_qobj.device_event(
                                 EV_CONNECTED,
                                 &QString::from(udid),
-                                &QString::from(info),
+                                &info,
                             );
                         })
                         .ok();
@@ -426,7 +431,7 @@ async fn handle_pairing(
             core_qobj.device_event(
                 EV_PAIRING_PENDING,
                 &QString::from(udid_for_event),
-                &QString::from(""),
+                &QMap::<QMapPair_QString_QVariant>::default(),
             );
         })
         .ok();
@@ -495,7 +500,7 @@ fn emit_pairing_failed(
 ) {
     qt_thread
         .queue(move |core_qobj| {
-            core_qobj.device_event(EV_FAIL, &QString::from(udid), &QString::from(""));
+            core_qobj.device_event(EV_FAIL, &QString::from(udid), &QMap::<QMapPair_QString_QVariant>::default());
         })
         .ok();
 }
@@ -524,7 +529,7 @@ async fn emit_connected(qt_thread: cxx_qt::CxxQtThread<Core>, udid: String) {
                         core_qobj.device_event(
                             EV_CONNECTED,
                             &QString::from(udid_for_event),
-                            &QString::from(info_for_event),
+                            &info_for_event,
                         );
                     })
                     .ok();
@@ -567,7 +572,7 @@ async fn init_idescriptor_device<
 >(
     provider: T,
     qt_thread: cxx_qt::CxxQtThread<Core>,
-) -> Result<(String, String), IdeviceError> {
+) -> Result<(String, QMap<QMapPair_QString_QVariant>), IdeviceError> {
     let provider_name = type_name::<T>();
     let is_wireless = provider_name == "idevice::provider::TcpProvider";
 
@@ -575,7 +580,6 @@ async fn init_idescriptor_device<
     let mut lc = LockdownClient::connect(&provider).await?;
     lc.start_session(&pf).await?;
 
-    eprintln!("init_idescriptor_device: Attempting to get default values from Lockdown.");
     let mut def_vals = match lc.get_value(None, None).await {
         Ok(v) => v,
         Err(e) => {
@@ -587,11 +591,11 @@ async fn init_idescriptor_device<
 
     // FIXME: we may need our own error types here
     // but InternalError should be fine for now
-    let udid = def_vals
-        .as_dictionary()
-        .ok_or_else(|| {
-            IdeviceError::InternalError("Lockdown root is not a dictionary".to_string())
-        })?
+    let def_vals_dict = def_vals.as_dictionary_mut().ok_or_else(|| {
+        IdeviceError::InternalError("Lockdown root is not a dictionary".to_string())
+    })?;
+
+    let udid = def_vals_dict
         .get("UniqueDeviceID")
         .and_then(|v| v.as_string())
         .ok_or_else(|| {
@@ -603,6 +607,7 @@ async fn init_idescriptor_device<
         eprintln!("init_idescriptor_device: UDID is empty.");
         return Err(IdeviceError::InvalidHostID);
     }
+
     let mut hb = None;
 
     if is_wireless {
@@ -616,8 +621,6 @@ async fn init_idescriptor_device<
         };
         eprintln!("init_idescriptor_device: Connected to HeartbeatClient.");
     }
-
-    let disk_vals = lc.get_value(None, Some("com.apple.disk_usage")).await?;
 
     eprintln!("init_idescriptor_device: Attempting to connect to AFC client.");
     let mut afc_client = AfcClient::connect(&provider).await?;
@@ -637,53 +640,15 @@ async fn init_idescriptor_device<
         }
     };
 
-    eprintln!("init_idescriptor_device: Attempting to get AFC device info.");
-    let afc_info = match afc_client.get_device_info().await {
-        Ok(i) => i,
-        Err(e) => {
-            eprintln!("get_device_info failed: {e:?}");
-            return Err(e);
-        }
-    };
-    eprintln!("init_idescriptor_device: AFC device info obtained.");
+    let info = collect_info(
+        def_vals_dict,
+        &mut afc_client,
+        &mut lc,
+        &mut diag_relay,
+        is_wireless,
+    )
+    .await?;
 
-    if let (Value::Dictionary(d_target), Value::Dictionary(d_source)) = (&mut def_vals, disk_vals) {
-        d_target.extend(d_source);
-
-        let mut afc_info_dict = plist::Dictionary::new();
-        afc_info_dict.insert("Model".into(), Value::String(afc_info.model));
-        afc_info_dict.insert(
-            "TotalBytes".into(),
-            Value::Integer((afc_info.total_bytes as u64).into()),
-        );
-        afc_info_dict.insert(
-            "FreeBytes".into(),
-            Value::Integer((afc_info.free_bytes as u64).into()),
-        );
-        afc_info_dict.insert(
-            "BlockSize".into(),
-            Value::Integer((afc_info.block_size as u64).into()),
-        );
-
-        d_target.insert("AFC_INFO".into(), Value::Dictionary(afc_info_dict));
-        d_target.insert(
-            "Jailbroken".into(),
-            Value::Boolean(utils::detect_jailbroken(&mut afc_client).await),
-        );
-
-        if let Some(battery_info) = utils::get_battery_info(&mut diag_relay).await {
-            d_target.insert("DIAG_INFO".into(), Value::Dictionary(battery_info));
-        }
-
-        d_target.insert(
-            "ConnectionType".into(),
-            Value::String(if is_wireless {
-                "Wireless".into()
-            } else {
-                "USB".into()
-            }),
-        );
-    }
 
     eprintln!("init_idescriptor_device: Storing device services.");
     let device_services = DeviceServices {
@@ -738,23 +703,107 @@ async fn init_idescriptor_device<
         }
     }
 
-    let mut buf = Vec::new();
-    if def_vals.to_writer_xml(&mut buf).is_err() {
-        eprintln!("init_idescriptor_device: Failed to serialize default values to XML.");
-        return Err(IdeviceError::InternalError(
-            "Failed to serialize default values to XML".to_string(),
-        ));
-    }
-
-    let info = String::from_utf8(buf).map_err(|_| {
-        IdeviceError::InternalError("Failed to convert default values XML to UTF-8".to_string())
-    })?;
-
     eprintln!("init_idescriptor_device: Device has been initialized.");
 
     Ok((udid, info))
 }
 
+async fn collect_info(
+    mut def_vals_dict: &mut Dictionary,
+    mut afc: &mut AfcClient,
+    mut lc: &mut LockdownClient,
+    mut diag_relay: &mut DiagnosticsRelayClient,
+    is_wireless: bool,
+) -> Result<QMap<QMapPair_QString_QVariant>, IdeviceError> {
+    let mut info = QMap::<QMapPair_QString_QVariant>::default();
+
+    eprintln!("init_idescriptor_device: Attempting to get default values from Lockdown.");
+
+    let disk_vals = lc.get_value(None, Some("com.apple.disk_usage")).await?;
+
+    eprintln!("init_idescriptor_device: Attempting to get AFC device info.");
+    let afc_info = match afc.get_device_info().await {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("get_device_info failed: {e:?}");
+            return Err(e);
+        }
+    };
+    eprintln!("init_idescriptor_device: AFC device info obtained.");
+
+    if let (d_target, Value::Dictionary(d_source)) = (&mut def_vals_dict, disk_vals) {
+        d_target.extend(d_source);
+
+        let mut afc_info_dict = plist::Dictionary::new();
+        afc_info_dict.insert("Model".into(), Value::String(afc_info.model));
+        afc_info_dict.insert(
+            "TotalBytes".into(),
+            Value::Integer((afc_info.total_bytes as u64).into()),
+        );
+        afc_info_dict.insert(
+            "FreeBytes".into(),
+            Value::Integer((afc_info.free_bytes as u64).into()),
+        );
+        afc_info_dict.insert(
+            "BlockSize".into(),
+            Value::Integer((afc_info.block_size as u64).into()),
+        );
+
+        d_target.insert("AFC_INFO".into(), Value::Dictionary(afc_info_dict));
+        d_target.insert(
+            "Jailbroken".into(),
+            Value::Boolean(utils::detect_jailbroken(&mut afc).await),
+        );
+
+        if let Some(battery_info) = utils::get_battery_info(&mut diag_relay).await {
+            d_target.insert("DIAG_INFO".into(), Value::Dictionary(battery_info));
+        }
+
+        d_target.insert(
+            "ConnectionType".into(),
+            Value::String(if is_wireless {
+                "Wireless".into()
+            } else {
+                "USB".into()
+            }),
+        );
+    }
+
+    let keys_to_insert_string = [
+        "DeviceName",
+        "DeviceClass",
+        "DeviceColor",
+        "ModelNumber",
+        "CPUArchitecture",
+        "BuildVersion",
+        "HardwareModel",
+        "HardwarePlatform",
+        "EthernetAddress",
+        "BluetoothAddress",
+        "FirmwareVersion",
+        "ProductVersion",
+        "WiFiAddress",
+        "UniqueDeviceID",
+    ];
+
+    let mut insert_string = |key: &str| {
+        info.insert(
+            QString::from(key),
+            QVariant::from(&QString::from(
+                def_vals_dict
+                    .get(key)
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| ""),
+            )),
+        );
+    };
+
+    for key in keys_to_insert_string.iter() {
+        insert_string(key);
+    }
+
+    Ok(info)
+}
 async fn spawn_heartbeat_task(
     mut hb_client: heartbeat::HeartbeatClient,
     qt_thread: cxx_qt::CxxQtThread<Core>,
@@ -798,7 +847,7 @@ async fn spawn_heartbeat_task(
                             core_qobj.device_event(
                                 EV_DISCONNECTED,
                                 &QString::from(udid_for_event),
-                                &QString::from(""),
+                                &QMap::<QMapPair_QString_QVariant>::default(),
                             );
                         });
                         break;
@@ -831,7 +880,7 @@ async fn spawn_heartbeat_task(
                         core_qobj.device_event(
                             EV_DISCONNECTED,
                             &QString::from(udid_for_event),
-                            &QString::from(""),
+                            &QMap::<QMapPair_QString_QVariant>::default(),
                         );
                     });
                     break;

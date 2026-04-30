@@ -31,7 +31,8 @@
 #ifdef WIN32
 #include "platform/windows/win_common.h"
 #endif
-
+// #include "thumbnailmodel.h"
+#include "thumbnailprovider.h"
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
@@ -132,8 +133,11 @@ int main(int argc, char *argv[])
     engine.addImportPath("C:/Qt/6.8.3/mingw_64/qml");
 #endif
     Constants constants;
-
+    // qmlRegisterType<ThumbnailModel>("iDescriptor", 1, 0, "ThumbnailModel");
     engine.rootContext()->setContextProperty("CONSTANTS", &constants);
+    engine.addImageProvider("thumb", ThumbnailProvider::sharedInstance());
+    engine.rootContext()->setContextProperty(
+        "ThumbnailProvider", ThumbnailProvider::sharedInstance());
     engine.load(url);
 
     return a.exec();

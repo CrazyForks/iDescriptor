@@ -8,6 +8,7 @@ use idevice::{
 use plist::Dictionary as PlistDictionary;
 use plist_macro::plist;
 use rusqlite::Connection;
+use serde_json::json;
 use std::path::PathBuf;
 
 pub const PUBLIC_STAGING: &str = "PublicStaging";
@@ -98,7 +99,7 @@ pub fn query_gallery_usage(db_bytes: &mut Vec<u8>) -> Result<u64, rusqlite::Erro
     unsafe {
         let db_ptr = rusqlite::ffi::sqlite3_deserialize(
             conn.handle(),
-            b"main\0".as_ptr() as *const i8,
+            b"main\0".as_ptr() as *const std::os::raw::c_char,
             db_bytes.as_mut_ptr(),
             db_bytes.len() as i64,
             db_bytes.len() as i64,
@@ -156,4 +157,15 @@ pub async fn ensure_public_staging(afc: &mut AfcClient) -> Result<(), IdeviceErr
         Ok(_) => Ok(()),
         Err(_) => afc.mk_dir(PUBLIC_STAGING).await,
     }
+}
+
+// converts album info to json
+pub fn create_album_info(
+    album_id: i32,
+    item_count: i32,
+    asset_dir: String,
+    asset_file_name: String,
+) -> String {
+    json!({"album_id" : album_id, "item_count" : item_count,"file_path" : format!("{}/{}",asset_dir,asset_file_name)})
+        .to_string()
 }

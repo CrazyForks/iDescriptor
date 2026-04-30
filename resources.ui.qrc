@@ -1,11 +1,17 @@
 <RCC>
     <qresource prefix="/">
         <file>src/qml/Main.qml</file>
-        <file>src/qml/Index.qml</file>
+        <!-- <file>src/qml/Index.qml</file> -->
         <file>src/qml/Tabs.qml</file>
         <file>src/qml/HowToConnect.qml</file>
         <file>src/qml/Welcome.qml</file>
         <file>src/qml/TabButton.qml</file>
+        <file>src/qml/DeviceTab.qml</file>
         <file>src/qml/Device.qml</file>
+        <file>src/qml/DeviceImage.qml</file>
+        <file>src/qml/DeviceInfo.qml</file>
+        <file>src/qml/DeviceGallery.qml</file>
+        <file>src/qml/AlbumContents.qml</file>
+        <file>src/qml/PreviewWindow.qml</file>
     </qresource>
 </RCC>
