@@ -155,7 +155,7 @@ make sure to do "sudo pacman -Syu" otherwise it's not going to find libimobilede
 | ------------------------------------------------------ | -------------- | --------------------------------------------------------------------- |
 | [AirPlay](#airplay)                                    | ✅ Implemented | Cast your device screen to your computer.                             |
 | [Download & Install Apps From Apple Store](#app-store) | ✅ Implemented | Download and install apps directly from the Apple Store.              |
-| [Virtual Location](#virtual-location)                  | ✅ Implemented | Simulate GPS location. Requires a mounted Developer Disk Image.       |
+| [Virtual Location](#virtual-location)                  | ✅ Implemented | Simulate GPS location.                                                |
 | [iFuse Filesystem Mount](#ifuse-filesystem-mount)      | ✅ Implemented | Mount the device's filesystem. (Windows & Linux only)                 |
 | Gallery                                                | ✅ Implemented | -                                                                     |
 | File Explorer                                          | ✅ Implemented | Explore the device's filesystem.                                      |
@@ -275,7 +275,7 @@ You might get this pop-up on any platform this is because this app uses secure b
   <br/>
   <a href="https://www.cape.co/"><img width="405" src="./resources/repo/cape.svg"></a>
   <br/>
-  Cape is first-of-its kind private and secure consumer cellular service in the US,
+  Cape is the first-of-its kind private and secure consumer cellular service in the US,
 
 <a href="https://www.cape.co/get-cape/enroll">Try Cape risk-free for just $30 for your first month.</a> Use code `trycape30` at checkout to apply.
 
