@@ -327,6 +327,8 @@ You can also send a pr to main branch but it should be something related to buil
 
 **Planned Features**
 
+This codebase is currently undergoing a major refactor and rewrite in `qml` and `qmeta-qml` branches
+
 - Migrate to idevice-rs `DONE` ✅
 - Wireless Connection Support `DONE` ✅
 - Install IPA files directly from the app
