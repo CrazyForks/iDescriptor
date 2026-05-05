@@ -1,4 +1,4 @@
-#include "thumbnail.h"
+#include "bridge.h"
 #include "rust/cxx.h"
 #include <QImage>
 extern "C" {
@@ -244,6 +244,7 @@ QImage generate_thumbnail_with_reader(const AfcReader &reader,
                     }
 
                     result = imgCopy;
+                    // FIXME: scale
                     // Scale to requested size
                     /*
                         TODO: scaling might become optional

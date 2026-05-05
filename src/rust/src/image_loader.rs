@@ -139,70 +139,81 @@ fn ensure_worker_started() {
                 RUNTIME.spawn(async move {
                     let _permit = permit;
 
-                    let afc_arc = {
-                        let maybe_device = APP_DEVICE_STATE
-                            .lock()
-                            .await
-                            .get(key.udid.as_str())
-                            .cloned();
+                    let res: anyhow::Result<()> = async {
+                        let afc_arc = {
+                            let maybe_device = APP_DEVICE_STATE
+                                .lock()
+                                .await
+                                .get(key.udid.as_str())
+                                .cloned();
 
-                        let device = match maybe_device {
-                            Some(d) => d,
-                            None => {
-                                // eprintln!(
-                                //     "image_loader::read_file_via_afc: device {udid} not found"
-                                // );
-                                return;
-                            }
+                            let device = match maybe_device {
+                                Some(d) => d,
+                                None => {
+                                    // eprintln!(
+                                    //     "image_loader::read_file_via_afc: device {udid} not found"
+                                    // );
+                                    anyhow::bail!("No device");
+                                }
+                            };
+
+                            device.afc.clone()
                         };
 
-                        device.afc.clone()
-                    };
-
-                    let mut afc = afc_arc.lock().await;
-
-                    let info = afc.get_file_info(&key.path).await;
-
-                    let size = match info {
-                        Ok(i) => i.size,
-                        Err(_) => return,
-                    };
-
-                    drop(afc);
-
-                    let mut img = QImage::default();
-                    if is_video_file(&key.path) {
-                        // FIXME: can we do something better here ?
-                        let reader =
-                            crate::bridge::AfcReader::new(key.udid.clone(), key.path.clone());
-
-                        let reader_for_block = reader;
-                        let size_for_block = size as i32;
-                        img = tokio::task::spawn_blocking(move || {
-                            crate::bridge::bridge::generate_thumbnail_with_reader(
-                                &reader_for_block,
-                                size_for_block,
-                                // FIXME: sizes aren't respected
-                                320,
-                                240,
-                            )
-                        })
-                        .await
-                        .unwrap_or_default();
-                    } else {
                         let mut afc = afc_arc.lock().await;
-                        img = file_to_image(&mut afc, key.path).await;
-                    }
 
-                    let row = payload.row;
-                    let path_for_qt = payload.path_for_qt;
-                    let qt_thread = payload.qt_thread;
+                        let info = afc.get_file_info(&key.path).await;
 
-                    if let Err(e) = qt_thread.queue(move |mut backend_qobj| {
-                        backend_qobj.thumbnail_ready(path_for_qt, img, row);
-                    }) {
-                        eprintln!("image_loader: failed to queue thumbnail_ready: {e}");
+                        let size = match info {
+                            Ok(i) => i.size,
+                            Err(_) => anyhow::bail!("File has no size ?"),
+                        };
+
+                        drop(afc);
+
+                        let mut img = QImage::default();
+                        if is_video_file(&key.path) {
+                            // FIXME: can we do something better here ?
+                            let reader =
+                                crate::bridge::AfcReader::new(key.udid.clone(), key.path.clone());
+
+                            let reader_for_block = reader;
+                            let size_for_block = size as i32;
+                            img = tokio::task::spawn_blocking(move || {
+                                crate::bridge::bridge::generate_thumbnail_with_reader(
+                                    &reader_for_block,
+                                    size_for_block,
+                                    // FIXME: sizes aren't respected
+                                    320,
+                                    240,
+                                )
+                            })
+                            .await
+                            .unwrap_or_default();
+                        } else {
+                            let mut afc = afc_arc.lock().await;
+                            if key.path.to_ascii_lowercase().ends_with(".heic") {
+                                let mut fd = afc.open(key.path, AfcFopenMode::RdOnly).await?;
+                                let buf = fd.read_entire().await?;
+                                img = crate::bridge::bridge::heic_to_image(&buf);
+                            } else {
+                                img = file_to_image(&mut afc, key.path).await;
+                            }
+                        }
+
+                        let row = payload.row;
+                        let path_for_qt = payload.path_for_qt;
+                        let qt_thread = payload.qt_thread;
+
+                        if let Err(e) = qt_thread.queue(move |mut backend_qobj| {
+                            backend_qobj.thumbnail_ready(path_for_qt, img, row);
+                        }) {
+                            eprintln!("image_loader: failed to queue thumbnail_ready: {e}");
+                        }
+
+                        Ok(())
                     }
+                    .await;
                 });
             }
         });

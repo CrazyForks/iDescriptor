@@ -13,5 +13,8 @@
         <file>src/qml/DeviceGallery.qml</file>
         <file>src/qml/AlbumContents.qml</file>
         <file>src/qml/PreviewWindow.qml</file>
+        <file>src/qml/SidebarTabButton.qml</file>
+        <file>src/qml/AppsTab.qml</file>
+        <file>src/qml/LoginDialog.qml</file>
     </qresource>
 </RCC>

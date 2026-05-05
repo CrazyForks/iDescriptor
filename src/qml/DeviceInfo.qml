@@ -3,7 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
 Item {
-    property var info: ({})
+    required property var info
     // property string udid: ""
 
     function v(key, fallback) {

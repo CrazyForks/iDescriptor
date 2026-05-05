@@ -40,6 +40,8 @@ mod utils;
 mod query_sqlite;
 mod image_loader;
 mod bridge;
+mod apps;
+
 
 const POSSIBLE_ROOT: &str = "../../../../";
 const APP_LABEL: &str = "iDescriptor";

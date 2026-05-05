@@ -6,17 +6,19 @@ Item {
     id: root
     property var info: ({})
     property var udid: "" 
+    required property int currentSection
+    
+
+    DeviceInfo {
+        anchors.fill: parent
+        visible : currentSection == 0
+        info: root.info
+    }
+
     DeviceGallery {
-        visible : true
+        visible : currentSection == 1
         anchors.fill: parent
         udid: root.udid
         // info: root.info
     }
-
-    DeviceInfo {
-        anchors.fill: parent
-        visible : false
-        info: root.info
-    }
-
 }

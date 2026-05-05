@@ -55,7 +55,8 @@ find_package(PkgConfig REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets Network QuickControls2 SerialPort Positioning Location QuickWidgets) 
 # DBUS
 if (UNIX AND NOT APPLE)
-    find_package(Qt6 REQUIRED COMPONENTS DBus)
+    find_package(Qt6 REQUIRED COMPONENTS DBus) 
+    pkg_check_modules(DBUS REQUIRED IMPORTED_TARGET dbus-1)
 endif()
 find_package(SQLite3 REQUIRED)
 # Add QTermWidget
@@ -135,7 +136,7 @@ cxx_qt_import_crate(
     MANIFEST_PATH src/rust/Cargo.toml 
     CRATES idescriptor_rust_codebase 
     # LOCKED 
-    QT_MODULES Qt::Core Qt::Gui Qt::Qml Qt::QuickControls2
+    QT_MODULES Qt::Core Qt::Gui Qt::Qml Qt::QuickControls2 Qt::Widgets
 )
 
 #--------------------------------------------------------------------------------
@@ -186,10 +187,11 @@ endif()
 file(GLOB PROJECT_SOURCES
 # src/*.h
 # src/*.cpp
-# src/core/helpers/*.cpp
-# src/core/services/*.cpp
+src/core/helpers/*.cpp
+src/core/services/*.cpp
 # src/base/*.cpp
 # src/base/*.h
+src/networkdeviceprovider.h
 src/main.cpp
 src/constants.h
 # src/thumbnailmodel.h
@@ -306,7 +308,7 @@ target_link_libraries(iDescriptor PRIVATE
 )
 
 if (UNIX AND NOT APPLE)
-    target_link_libraries(iDescriptor PRIVATE Qt6::DBus)
+    target_link_libraries(iDescriptor PRIVATE Qt6::DBus PkgConfig::DBUS)
 endif()
 
 if(ENABLE_RECOVERY_DEVICE_SUPPORT)

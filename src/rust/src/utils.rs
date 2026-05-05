@@ -169,3 +169,20 @@ pub fn create_album_info(
     json!({"album_id" : album_id, "item_count" : item_count,"file_path" : format!("{}/{}",asset_dir,asset_file_name)})
         .to_string()
 }
+
+// pub fn emit<T>(thread: cxx_qt::CxxQtThread<T>) {}
+use cxx_qt_lib::{QMap, QMapPair_QString_QVariant, QVariant};
+
+pub fn qmap_insert<T>(map: &mut QMap<QMapPair_QString_QVariant>, key: &str, value: &T)
+where
+    QVariant: for<'a> From<&'a T>,
+{
+    map.insert(QString::from(key), QVariant::from(value));
+}
+
+#[macro_export]
+macro_rules! qmap_insert {
+    ($map:expr, $key:expr , $value:expr) => {
+        $crate::utils::qmap_insert(&mut $map, $key, &$value)
+    };
+}

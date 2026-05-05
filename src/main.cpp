@@ -31,6 +31,7 @@
 #ifdef WIN32
 #include "platform/windows/win_common.h"
 #endif
+#include "networkdeviceprovider.h"
 // #include "thumbnailmodel.h"
 #include "thumbnailprovider.h"
 #include <QQmlApplicationEngine>
@@ -138,6 +139,8 @@ int main(int argc, char *argv[])
     engine.addImageProvider("thumb", ThumbnailProvider::sharedInstance());
     engine.rootContext()->setContextProperty(
         "ThumbnailProvider", ThumbnailProvider::sharedInstance());
+    engine.rootContext()->setContextProperty(
+        "NetworkDeviceProvider", NetworkDeviceProvider::sharedInstance());
     engine.load(url);
 
     return a.exec();

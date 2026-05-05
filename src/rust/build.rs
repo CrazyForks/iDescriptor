@@ -16,12 +16,15 @@ fn main() {
         "src/query_sqlite.rs",
         "src/image_loader.rs",
         "src/bridge.rs",
+        "src/apps.rs",
     ])
     .include_dir("include");
 
     let builder = unsafe {
         builder.cc_builder(|cc| {
             cc.file("src/thumbnail.cc");
+            cc.file("src/heic_to_image.cc");
+            cc.file("src/qinput_get_text.cc");
         })
     };
     builder.build();

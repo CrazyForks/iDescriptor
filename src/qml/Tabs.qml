@@ -24,4 +24,9 @@ Item {
         }
     }
 
+    AppsTab {
+        anchors.fill: parent
+        visible : currentIndex == 1
+    }
+
 }

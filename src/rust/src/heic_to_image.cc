@@ -22,7 +22,7 @@
 #include <QImage>
 #include <libheif/heif.h>
 
-QImage load_heic(rust::Vec<uint8_t> &data)
+QImage heic_to_image(rust::Slice<const uint8_t> buf)
 {
     heif_context *ctx = heif_context_alloc();
     if (!ctx) {
@@ -31,7 +31,7 @@ QImage load_heic(rust::Vec<uint8_t> &data)
     }
 
     heif_error err =
-        heif_context_read_from_memory(ctx, data.data(), data.size(), nullptr);
+        heif_context_read_from_memory(ctx, buf.data(), buf.size(), nullptr);
     if (err.code != heif_error_Ok) {
         // qWarning() << "Failed to read HEIC from memory:" << err.message;
         heif_context_free(ctx);

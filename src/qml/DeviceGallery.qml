@@ -7,6 +7,7 @@ import com.kdab.cxx_qt.demo 1.0
 
 Item {
     id: root
+
     readonly property Query query : Query {}
     property bool loading: true
     required property var udid 
@@ -56,6 +57,7 @@ Item {
         }
 
         function onAlbumsChanged() {
+            console.log(JSON.stringify(query.albums))
             albumModel.clear()
 
             const keys = Object.keys(query.albums)
@@ -81,8 +83,6 @@ Item {
         target : ThumbnailProvider
 
         function onThumbnailReady(path, data, rowHint) {
-            console.log(path, rowHint, "!!!!!!!!! thumb ready")
-
             const item = albumModel.get(rowHint)
             if (item && item.filePath == path) {
                 albumModel.setProperty(rowHint, "thumbVersion", item.thumbVersion + 1)
@@ -111,12 +111,12 @@ Item {
 
         GridView {
             id: gallery
-            // anchors.fill: parent // Remove this line
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: albumId ? false : query.albums
-            interactive: false
-
+            interactive: true
+            // FIXME: only available in Qt 6.9
+            acceptedButtons : Qt.NoButton
             cellWidth: 250
             cellHeight: 250
             model: albumModel
@@ -226,7 +226,7 @@ Item {
             query : root.query
             udid : root.udid
             albumId: root.albumId
-            Layout.fillWidth: true // Add this line
+            Layout.fillWidth: true
             Layout.fillHeight: true
         }
     }

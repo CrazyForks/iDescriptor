@@ -68,6 +68,7 @@ impl AfcReader {
 
 #[cxx_qt::bridge]
 pub mod bridge {
+
     extern "Rust" {
         type AfcReader;
 
@@ -75,14 +76,16 @@ pub mod bridge {
     }
 
     unsafe extern "C++" {
-        include!("thumbnail.h");
+        include!("bridge.h");
+
         include!("cxx-qt-lib/qimage.h");
         include!("cxx-qt-lib/qbytearray.h");
         // include!("cxx-qt-lib/qmap.h");
-        // include!("cxx-qt-lib/qstring.h");
+        include!("cxx-qt-lib/qstring.h");
 
         type QImage = cxx_qt_lib::QImage;
         type QByteArray = cxx_qt_lib::QByteArray;
+        type QString = cxx_qt_lib::QString;
 
         fn generate_thumbnail_with_reader(
             reader: &AfcReader,
@@ -90,5 +93,9 @@ pub mod bridge {
             requested_w: i32,
             requested_h: i32,
         ) -> QImage;
+
+        fn heic_to_image(data: &[u8]) -> QImage;
+
+        fn qinput_get_text(ok: bool) -> QString;
     }
 }
