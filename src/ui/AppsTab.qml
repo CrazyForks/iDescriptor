@@ -260,7 +260,7 @@ Item {
                                 // FIXME: wire up click handling 
                                 Button {
                                     text: "Install"
-                                    color: "#007AFF"
+                                    // color: "#007AFF"
                                     font.pixelSize: 12
                                     font.bold: true
                                 }

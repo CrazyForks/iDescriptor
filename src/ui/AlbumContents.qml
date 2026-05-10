@@ -71,8 +71,6 @@ Item {
         target : imageLoader
 
         function onThumbnailReady(path, rowHint) {
-            console.log(path, rowHint, "!!!!!!!!! album contents thumb ready")
-
             const item = albumContentsModel.get(rowHint)
             if (item && item.filePath == path) {
                 albumContentsModel.setProperty(rowHint, "thumbVersion", item.thumbVersion + 1)
