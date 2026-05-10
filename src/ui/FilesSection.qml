@@ -270,10 +270,10 @@ Item {
                             afcClient: root.afcClient
                             favEnabled: true
 
-                            onFavoritePlaceAdded: (alias, path) => {
-                                // FIXME
-                                favoritesModel.append({ "alias": alias, "path": path, "afc2": false })
-                            }
+                            // onFavoritePlaceAdded: (alias, path) => {
+                            //     // FIXME
+                            //     favoritesModel.append({ "alias": alias, "path": path, "afc2": false })
+                            // }
                         }
 
                         Item {
@@ -286,9 +286,9 @@ Item {
                                 favEnabled: true
 
                                 visible: root.afc2Available
-                                onFavoritePlaceAdded: (alias, path) => {
-                                    favoritesModel.append({ "alias": alias, "path": path, "afc2": true })
-                                }
+                                // onFavoritePlaceAdded: (alias, path) => {
+                                //     favoritesModel.append({ "alias": alias, "path": path, "afc2": true })
+                                // }
                             }
 
                             ColumnLayout {
