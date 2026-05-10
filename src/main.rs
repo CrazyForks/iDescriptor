@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright © 2021-2022 Adrian <adrian.eddy at gmail>
-
 #![recursion_limit = "4096"]
 #![windows_subsystem = "windows"]
 
@@ -108,7 +105,7 @@ fn main() {
 
     // let _ = util::install_crash_handler();
     // utils::init_logging();
-    qmetaobject::log::init_qt_to_rust();
+    // qmetaobject::log::init_qt_to_rust();
 
     cpp!(unsafe [] {
 
