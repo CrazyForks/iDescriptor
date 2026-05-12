@@ -1,7 +1,7 @@
 use qmetaobject::prelude::*;
 use qttypes::{QVariantMap,QStringList};
-
-use crate::{APP_DEVICE_STATE, RUNTIME, run_sync, utils,qt_threading::{QtThread,QtThreading},DeviceServices};
+use crate::device_ctx::{DeviceServices,get_device_opt};
+use crate::{RUNTIME, run_sync, utils,qt_threading::{QtThread,QtThreading}};
 use macros::QtThreading;
 use idevice::{afc::opcode::AfcFopenMode, provider};
 use idevice::services::core_device_proxy::CoreDeviceProxy;
@@ -87,7 +87,7 @@ impl ServiceManager {
             loop {
                 interval.tick().await;
 
-                let maybe_device = APP_DEVICE_STATE.lock().await.get(udid.as_str()).cloned();
+                let maybe_device = get_device_opt(udid.as_str()).await;
 
                 let device = match maybe_device {
                     Some(d) => d,

@@ -1,5 +1,4 @@
-use crate::POSSIBLE_ROOT;
-use crate::run_sync;
+use crate::{POSSIBLE_ROOT, run_sync};
 use cpp::*;
 use idevice::{
     IdeviceError, IdeviceService,
@@ -38,6 +37,7 @@ cpp! {{
     #include <QClipboard>
     #include <QEvent>
     #include "src/include/bridge.h"
+    #include <gst/gst.h>
 
     QCoreApplication *globalApp = nullptr;
 }}
@@ -610,3 +610,38 @@ pub fn engine_ptr_new_object(engine_ptr: *mut c_void, obj_ptr: *mut c_void) -> Q
 }
 //TODO: implement
 // pub fn heic_to_qimage()
+
+pub fn force_load_gst_gl() -> bool {
+    /*
+    need to load qml6glsink in order
+    to make Qt6GLVideoItem available on qml side
+    */
+    cpp!(unsafe [] -> bool as "bool"{
+        gst_init(nullptr,nullptr);
+        // GstElement *pipeline = gst_pipeline_new (NULL);
+        // GstElement *src = gst_element_factory_make ("videotestsrc", NULL);
+        // GstElement *glupload = gst_element_factory_make ("glupload", NULL);
+        GstElement *sink = gst_element_factory_make ("qml6glsink", NULL);
+        if (!sink) {
+            return false;
+        }
+
+        gst_object_unref(sink);
+
+        return true;
+    })
+}
+
+
+pub fn qvariant_to_ptr(item : QVariant) -> usize {
+    cpp::cpp!(unsafe [item as "QVariant"] -> usize as "uintptr_t" {
+        QObject* o = item.value<QObject *>();
+        if (!o) return 0;
+
+        // better do this
+        QQuickItem* q = qobject_cast<QQuickItem*>(o);
+        if (!q) return 0;
+
+        return reinterpret_cast<uintptr_t>(q);
+    })
+}

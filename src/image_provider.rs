@@ -82,11 +82,6 @@ impl QQuickImageProvider for ImageProvider {
             );
         }
 
-        println!("index ={}", index);
-
-        // self.loader
-        //     .request_thumbnail(QString::from(udid), QString::from(path), index);
-
         self.loader.pinned().clone().borrow_mut().request_thumbnail(
             QString::from(udid),
             QString::from(path),

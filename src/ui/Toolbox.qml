@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.impl
+import QtQuick.Dialogs
 import "." as App
 
 // FIXME: handle window creation logic
@@ -9,6 +10,11 @@ Item {
     id: root
     anchors.fill: parent
 
+    MessageDialog {
+        id: errorDialog
+        title: "Error"
+        text: ""
+    }
 
     property string currentDeviceUdid: ""
     readonly property bool hasDevice: App.DeviceContext.devices && App.DeviceContext.devices.count > 0
@@ -16,7 +22,40 @@ Item {
     // 0 Airplayer, 1 VirtualLocation, 2 LiveScreen, 3 QueryMobileGestalt, 4 DeveloperDiskImages,
     // 5 WirelessGalleryImport, 6 iFuse, 7 CableInfo, 8 NetworkDevices, 9 MountDevImage,
     // 10 Restart, 11 Shutdown, 12 RecoveryMode, 13 EnableWifiConnections
-    signal toolClicked(int toolId, bool requiresDevice)
+    // signal toolClicked(int toolId, bool requiresDevice)
+    function toolClicked(toolId, requiresDevice) {
+        
+        switch (toolId) {
+            case 0: 
+                const gl_plugin_loaded = AirplayImp.load_gst_gl()
+                if (!gl_plugin_loaded) {
+                    errorDialog.text = "Failed to load gst gl plugin, make sure you have your GPU drivers installed"
+                    errorDialog.open()
+                    return;
+                }
+
+                const comp = Qt.createComponent("./tools/Airplay.qml")
+                if (comp.status === Component.Ready) {
+                    const win = comp.createObject(null,{ 
+                    })
+                    if (win !== null) {
+                        win.show()
+                    } else {
+                        console.error("createObject failed:", comp.errorString())
+                    }
+
+                } else if (comp.status === Component.Error) {
+                    console.error("Component failed to load:", comp.errorString())
+                }
+            break;
+
+            default:
+            console.log(`No tool for id ${toolId}`)
+        }
+
+        
+    }
+
     signal deviceSelectionChanged(string udid)
 
     readonly property var mainToolsModel: ([

@@ -30,8 +30,9 @@ use once_cell::sync::Lazy;
 use plist::{Dictionary, Value};
 use qmetaobject::prelude::*;
 
+use crate::device_ctx::{APP_DEVICE_STATE,DeviceServices};
 use crate::{
-    APP_DEVICE_STATE, APP_LABEL, DeviceServices, EV_CONNECTED, EV_DISCONNECTED, EV_FAIL,
+     APP_LABEL, EV_CONNECTED, EV_DISCONNECTED, EV_FAIL,
     EV_PAIRING_PENDING, POSSIBLE_ROOT, RUNTIME,
     qt_threading::{QtThread, QtThreading},
     utils,
@@ -45,7 +46,7 @@ pub struct Core {
 
     init_wireless_device:
         qt_method!(fn(&mut self, ip: QString, pairing_file: QString, mac_address: QString)),
-    // get_pairing_files : qt_method(fn remove_device(mut &self,  udid: &QString)),
+    get_pairing_files : qt_method!(fn (&mut self) -> QVariantMap),
     // remove_device : qt_method!(fn (&mut self,  udid: QString)),
     device_event: qt_signal!(event_type : u32, udid : QString , info : QVariantMap),
     init_failed: qt_signal!(mac_address : QString),
@@ -569,6 +570,7 @@ async fn init_idescriptor_device<
         lockdown: Arc::new(Mutex::new(lc)),
     };
 
+    // FIXME: use device_ctx
     {
         let mut state = APP_DEVICE_STATE.lock().await;
         if let Some(mut old) = state.insert(udid.to_string(), device_services) {

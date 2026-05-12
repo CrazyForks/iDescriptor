@@ -23,7 +23,9 @@ use crate::qquickimageprovider_imp::AddImageProvider;
 
 pub mod afc_services;
 pub mod apps;
+pub mod constants;
 pub mod core;
+pub mod device_ctx;
 pub mod image_cache;
 pub mod image_loader;
 pub mod image_provider;
@@ -33,6 +35,7 @@ pub mod qt_threading;
 pub mod query_sqlite;
 pub mod service_factory;
 pub mod service_manager;
+pub mod airplay;
 pub mod utils;
 
 pub const POSSIBLE_ROOT: &str = "../../../../";
@@ -55,21 +58,8 @@ cpp! {{
     #include <QIcon>
 
     #include "src/live_reload.cpp"
+    // #include "src/networkdeviceprovider.h"
 }}
-
-#[derive(Clone)]
-pub struct DeviceServices {
-    pub afc: Arc<Mutex<AfcClient>>,
-    pub afc2: Option<Arc<Mutex<AfcClient>>>,
-    pub diag: Arc<Mutex<DiagnosticsRelayClient>>,
-    pub heartbeat_task: Option<Arc<JoinHandle<()>>>,
-    pub video_streams: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
-    pub provider: Arc<Mutex<Box<dyn idevice::provider::IdeviceProvider>>>,
-    pub lockdown: Arc<Mutex<LockdownClient>>,
-}
-
-pub static APP_DEVICE_STATE: Lazy<Mutex<HashMap<String, DeviceServices>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
 
 static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
     tokio::runtime::Builder::new_multi_thread()
@@ -78,6 +68,7 @@ static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
         .unwrap()
 });
 
+// TODO: handle timeout here
 pub fn run_sync<F, R>(fut: F) -> R
 where
     F: Future<Output = R> + Send + 'static,
@@ -128,7 +119,8 @@ fn main() {
         // FIXME: fluentui example app was forcing OpenGL
         // but do we need this ?
         // #if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
-        //     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+            // QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+            // QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
         // #endif
         #if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
             QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
@@ -198,7 +190,7 @@ fn main() {
     // #[cfg(not(compiled_qml))]
     // crate::resources_qml::rsrc_qml();
 
-    qml_register_type::<core::Core>(cstr::cstr!("iDescriptor"), 1, 0, cstr::cstr!("Core"));
+    // qml_register_type::<core::Core>(cstr::cstr!("iDescriptor"), 1, 0, cstr::cstr!("Core"));
     qml_register_type::<query_sqlite::Query>(
         cstr::cstr!("iDescriptor"),
         1,
@@ -206,8 +198,19 @@ fn main() {
         cstr::cstr!("Query"),
     );
 
+
+    // qml_register_type::<airplay::Airplay>(
+    //     cstr::cstr!("iDescriptor"),
+    //     1,
+    //     0,
+    //     cstr::cstr!("Airplay"),
+    // );
+
     let mut engine = QmlEngine::new();
     // let mut dpi = cpp!(unsafe[] -> f64 as "double" { return QGuiApplication::primaryScreen()->logicalDotsPerInch() / 96.0; });
+
+    let core_obj = QObjectBox::new(core::Core::default());
+    engine.set_object_property("core".into(), core_obj.pinned());
 
     let obj = QObjectBox::new(image_loader::ImageLoader::default());
     engine.set_object_property("imageLoader".into(), obj.pinned());
@@ -218,7 +221,16 @@ fn main() {
     let provider_ref_cell = QObjectBox::new(image_provider::ImageProvider::default(obj));
     engine.add_image_provider("thumb", provider_ref_cell);
 
+    let airplay = QObjectBox::new(airplay::Airplay::default());
+    engine.set_object_property("AirplayImp".into(), airplay.pinned());
+
+
+
     let engine_ptr = engine.cpp_ptr();
+
+    // cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
+    //     engine_ptr->rootContext()->setContextProperty("NetworkDeviceProvider", NetworkDeviceProvider::sharedInstance());
+    // });
 
     let service_factory = QObjectBox::new(crate::service_factory::ServiceFactory::new(engine_ptr));
     engine.set_object_property("serviceFactory".into(), service_factory.pinned());

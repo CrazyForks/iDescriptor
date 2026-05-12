@@ -1,19 +1,15 @@
 use qmetaobject::prelude::*;
 use qttypes::{QStringList, QVariantMap};
 
-use crate::qt_threading::{QtThread, QtThreading};
-use crate::{APP_DEVICE_STATE, RUNTIME, run_sync};
-
-use idevice::afc::{AfcClient, opcode::AfcFopenMode};
-use idevice::{
-    IdeviceError, IdeviceService, diagnostics_relay::DiagnosticsRelayClient,
-    house_arrest::HouseArrestClient, installation_proxy::InstallationProxyClient,
-    provider::IdeviceProvider,
+use crate::constants::{
+    FAVS_ALBUM_ID, FAVS_ALBUM_QUERY, FAVS_QUERY, IOS_15_ALBUM_QUERY_STATEMENT, RECENTS_ALBUM_ID,
+    RECENTS_ALBUM_QUERY, RECENTS_QUERY,
 };
-use once_cell::sync::Lazy;
-use plist::Dictionary as PlistDictionary;
-use plist_macro::plist;
-use regex::Regex;
+use crate::device_ctx;
+use crate::qt_threading::{QtThread, QtThreading};
+use crate::utils::create_album_info;
+use crate::{RUNTIME, run_sync};
+use idevice::afc::{AfcClient, opcode::AfcFopenMode};
 use rusqlite::{Connection, Rows};
 use serde_json::json;
 use std::default;
@@ -53,7 +49,6 @@ impl QtThreading for Query {
 }
 
 impl Default for Query {
-    // qml_register_type calls ::default
     fn default() -> Self {
         let mut state = QVariantMap::default();
         state.insert(QString::from("init"), QVariant::from(false));
@@ -83,18 +78,7 @@ impl Query {
         RUNTIME.spawn(async move {
             let res: Result<(), Box<dyn std::error::Error + Send + Sync>> = (async {
                 let mut gallery_db_bytes = {
-                    let afc_arc = {
-                        let device = APP_DEVICE_STATE
-                            .lock()
-                            .await
-                            .get(&udid_clone.to_string())
-                            .cloned();
-                        match device {
-                            Some(d) => d.afc.clone(),
-                            None => return Err("Device not found".into()),
-                        }
-                    };
-
+                    let afc_arc = device_ctx::get_device(udid_clone).await?.afc;
                     let mut afc = afc_arc.lock().await;
                     let mut fd = afc
                         .open("/PhotoData/Photos.sqlite", AfcFopenMode::RdOnly)
@@ -170,7 +154,7 @@ impl Query {
         let con_arc = match &self.connection {
             Some(c) => c.clone(),
             None => {
-                println!("WTF NO CONN");
+                println!("NO CONN");
                 return;
             }
         };
@@ -181,17 +165,7 @@ impl Query {
             let res: Result<(), Box<dyn std::error::Error + Send + Sync>> = (async {
                 let conn = con_arc.lock().await;
                 //recents album
-                let mut recents_stmt = conn.prepare(
-                    "
-                        SELECT 
-                        ZASSET.ZFILENAME as 'FNAME',
-                        ZASSET.ZDIRECTORY as 'DIR',
-                        (SELECT COUNT(*) FROM ZASSET) as 'COUNT'
-                        FROM ZASSET
-                        ORDER BY ZASSET.Z_PK DESC
-                        LIMIT 1
-                ",
-                )?;
+                let mut recents_stmt = conn.prepare(RECENTS_ALBUM_QUERY)?;
 
                 let (fname, fdir, count) = recents_stmt.query_row([], |r| {
                     let fname: String = r.get(0)?;
@@ -200,9 +174,7 @@ impl Query {
                     Ok((fname, fdir, count))
                 })?;
 
-                let recents_album_data =
-                    json!({ "item_count" : count, "file_path" : format!("{}/{}",fdir,fname)})
-                        .to_string();
+                let recents_album_data = create_album_info(RECENTS_ALBUM_ID, count, fdir, fname);
 
                 albums.insert(
                     QString::from("Recents"),
@@ -210,18 +182,7 @@ impl Query {
                 );
 
                 //favs
-                let mut favs_stmt = conn.prepare(
-                    "
-                    SELECT 
-                        ZASSET.ZFILENAME,
-                        ZASSET.ZDIRECTORY,  
-                        (SELECT COUNT(*) FROM ZASSET WHERE ZASSET.ZFAVORITE = 1)  
-                    FROM ZASSET
-                    WHERE ZASSET.ZFAVORITE = 1
-                    ORDER BY ZASSET.Z_PK DESC
-                    LIMIT 1
-                ",
-                )?;
+                let mut favs_stmt = conn.prepare(FAVS_ALBUM_QUERY)?;
 
                 let (fname, fdir, count) = favs_stmt.query_row([], |r| {
                     let fname: String = r.get(0)?;
@@ -230,9 +191,7 @@ impl Query {
                     Ok((fname, fdir, count))
                 })?;
 
-                let favs_album_data =
-                    json!({"item_count" : count, "file_path" : format!("{}/{}",fdir,fname) })
-                        .to_string();
+                let favs_album_data = create_album_info(FAVS_ALBUM_ID, count, fdir, fname);
 
                 albums.insert(
                     QString::from("Favorites"),
@@ -255,18 +214,7 @@ impl Query {
                 //     ",
                 // )?;
 
-                let mut stmt = conn.prepare(
-                    "SELECT   
-                            ZGENERICALBUM.Z_PK,
-                            ZGENERICALBUM.ZTITLE,  
-                            ZGENERICALBUM.ZCACHEDCOUNT,  
-                            ZASSET.ZDIRECTORY,  
-                            ZASSET.ZFILENAME  
-                        FROM ZGENERICALBUM
-                        LEFT JOIN ZASSET ON ZGENERICALBUM.ZKEYASSET = ZASSET.Z_PK  
-                        WHERE ZGENERICALBUM.ZKEYASSET IS NOT NULL
-                    ",
-                )?;
+                let mut stmt = conn.prepare(IOS_15_ALBUM_QUERY_STATEMENT)?;
 
                 let rows_iter = stmt.query_map([], |row| {
                     let album_id: i32 = row.get(0)?;
@@ -280,12 +228,8 @@ impl Query {
                 for row_res in rows_iter {
                     let (album_id, title, item_count, asset_dir, asset_file_name) = row_res?;
 
-                    let album_data = crate::utils::create_album_info(
-                        album_id,
-                        item_count,
-                        asset_dir,
-                        asset_file_name,
-                    );
+                    let album_data =
+                        create_album_info(album_id, item_count, asset_dir, asset_file_name);
 
                     albums.insert(
                         QString::from(title),
@@ -323,6 +267,18 @@ impl Query {
             Some(c) => c.clone(),
             None => return,
         };
+
+        match id {
+            FAVS_ALBUM_ID => {
+                return self.query_favs();
+            }
+            RECENTS_ALBUM_ID => {
+                return self.query_recents();
+            }
+            /* continue if something else */
+            _ => {}
+        };
+
         let q_thread = self.qt_thread();
 
         RUNTIME.spawn(async move {
@@ -361,16 +317,106 @@ impl Query {
                         q.album_queried(id, list);
                     });
                 }
-                Err(_) => {
-                    println!("Error querying album")
+                Err(e) => {
+                    println!("Error querying album {}", e.to_string())
                 }
             }
         });
     }
 
-    fn query_favs(self: Pin<&mut Self>) {}
+    fn query_favs(&mut self) {
+        let q_thread = self.qt_thread();
+        let con_arc = match &self.connection {
+            Some(c) => c.clone(),
+            None => {
+                println!("NO CONN");
+                return;
+            }
+        };
 
-    fn query_recents(self: Pin<&mut Self>) {}
+        RUNTIME.spawn(async move {
+            let res: anyhow::Result<QStringList> = async {
+                let con = con_arc.lock().await;
+                let mut list: QStringList = QStringList::default();
+
+                //favs album
+                let mut favs_stmt = con.prepare(FAVS_QUERY)?;
+
+                let favs_iter = favs_stmt.query_map([], |r| {
+                    let fname: String = r.get(0)?;
+                    let fdir: String = r.get(1)?;
+                    Ok((fname, fdir))
+                })?;
+
+                for fav_item in favs_iter {
+                    let (fname, fdir) = fav_item?;
+                    list.push(QString::from(format!("{}/{}", fdir, fname)));
+                }
+
+                Ok(list)
+            }
+            .await;
+
+            match res {
+                Ok(list) => {
+                    println!("Album loaded has length :{}", list.len());
+                    q_thread.queue(move |q| {
+                        q.album_queried(FAVS_ALBUM_ID, list);
+                    });
+                }
+                Err(e) => {
+                    println!("Error querying album {}", e.to_string())
+                }
+            }
+        });
+    }
+
+    fn query_recents(&mut self) {
+        let q_thread = self.qt_thread();
+        let con_arc = match &self.connection {
+            Some(c) => c.clone(),
+            None => {
+                println!("NO CONN");
+                return;
+            }
+        };
+
+        RUNTIME.spawn(async move {
+            let res: anyhow::Result<QStringList> = async {
+                let con = con_arc.lock().await;
+                let mut list: QStringList = QStringList::default();
+
+                //recents album
+                let mut recents_stmt = con.prepare(RECENTS_QUERY)?;
+
+                let recents_iter = recents_stmt.query_map([], |r| {
+                    let fname: String = r.get(0)?;
+                    let fdir: String = r.get(1)?;
+                    Ok((fname, fdir))
+                })?;
+
+                for recent_item in recents_iter {
+                    let (fname, fdir) = recent_item?;
+                    list.push(QString::from(format!("{}/{}", fdir, fname)));
+                }
+
+                Ok(list)
+            }
+            .await;
+
+            match res {
+                Ok(list) => {
+                    println!("Album loaded has length :{}", list.len());
+                    q_thread.queue(move |q| {
+                        q.album_queried(RECENTS_ALBUM_ID, list);
+                    });
+                }
+                Err(e) => {
+                    println!("Error querying album {}", e.to_string())
+                }
+            }
+        });
+    }
 }
 
 // fn get_album_query_sql(ios_ver : i32, id : i32) {

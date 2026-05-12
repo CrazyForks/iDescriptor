@@ -1,9 +1,10 @@
-use crate::qt_threading::{QtThread, QtThreading};
-use crate::{APP_DEVICE_STATE, RUNTIME, run_sync};
+use crate::device_ctx;
+use crate::qt_threading::QtThreading;
+use crate::{RUNTIME, run_sync};
 use idevice::{
-    IdeviceService,
     afc::{AfcClient, opcode::AfcFopenMode},
 };
+use macros::QtThreading;
 use once_cell::sync::Lazy;
 use qmetaobject::prelude::*;
 use qttypes::{QStringList, QVariantMap};
@@ -16,7 +17,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio::sync::oneshot;
-#[derive(QObject)]
+#[derive(QObject, QtThreading)]
 pub struct AfcServices {
     base: qt_base_class!(trait QObject),
     afc: Arc<Mutex<AfcClient>>,
@@ -31,20 +32,18 @@ pub struct AfcServices {
     ),
     start_video_stream: qt_method!(fn(&self, file_path: QString) -> QString),
     delete_path: qt_method!(fn(&self, path: QString) -> bool),
-}
-
-impl QtThreading for AfcServices {
-    fn qt_thread(&self) -> crate::qt_threading::QtThread<Self>
-    where
-        Self: Sized,
-    {
-        QtThread::new(self)
-    }
+    //only required for hause_arrest afc
+    bundle_id: qt_property!(QString),
 }
 
 impl AfcServices {
-    /* udid is for debugging purposes */
-    pub fn from_afc_client(afc_client: Arc<Mutex<AfcClient>>, udid: String) -> Self {
+    pub fn from_afc_client(
+        afc_client: Arc<Mutex<AfcClient>>,
+        /* udid is for debugging purposes */
+        udid: String,
+        //only required for hause_arrest afc
+        bundle_id: Option<String>,
+    ) -> Self {
         Self {
             afc: afc_client,
             udid: udid,
@@ -57,6 +56,7 @@ impl AfcServices {
             check_is_dir_and_list_finished: Default::default(),
             start_video_stream: Default::default(),
             delete_path: Default::default(),
+            bundle_id: bundle_id.map_or_else(QString::default, QString::from),
         }
     }
 
@@ -325,7 +325,7 @@ impl AfcServices {
         let udid_for_insert = udid.clone();
         // FIXME: should we do it here ?
         let inserted = run_sync(async move {
-            let maybe_device = APP_DEVICE_STATE.lock().await.get(&udid_for_insert).cloned();
+            let maybe_device = device_ctx::get_device_opt(udid_for_insert).await;
             let device = match maybe_device {
                 Some(d) => d,
                 None => return false,
@@ -387,7 +387,7 @@ impl AfcServices {
 
         run_sync(async move {
             let afc_arc = {
-                let maybe_device = APP_DEVICE_STATE.lock().await.get(udid.as_str()).cloned();
+                let maybe_device = device_ctx::get_device_opt(&udid).await;
 
                 let device = match maybe_device {
                     Some(d) => d,

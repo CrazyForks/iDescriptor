@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright © 2021-2022 Adrian <adrian.eddy at gmail>
 
+use cmake::build;
 use std::env;
 use std::fmt::Write;
 use std::path::Path;
@@ -14,6 +15,7 @@ fn compile_qml(dir: &str, qt_include_path: &str, qt_library_path: &str) {
     config.include(&format!("{}/QtQml", qt_include_path));
 
     println!("cargo:rerun-if-changed=src/live_reload.cpp");
+    println!("cargo:rerun-if-changed=src/utils.rs");
 
     if cfg!(target_os = "macos") {
         config.include(format!("{}/QtCore.framework/Headers/", qt_library_path));
@@ -116,20 +118,78 @@ fn compile_qml(dir: &str, qt_include_path: &str, qt_library_path: &str) {
     println!("cargo:rustc-link-lib=static:+whole-archive=qmlcache");
 }
 
+// TODO: we may need to do moc 
+// fn find_moc(qt_library_path: &str) -> String {
+//     let qt_path = Path::new(qt_library_path).parent().unwrap();
+//     let candidates = [
+//         qt_path.join("libexec/moc"),
+//         qt_path.join("../macos/libexec/moc"),
+//         qt_path.join("../msvc2019_64/bin/moc"),
+//     ];
+//     for c in candidates {
+//         if c.exists() {
+//             return c.to_string_lossy().to_string();
+//         }
+//     }
+//     "moc".to_string()
+// }
+
+// fn run_moc(moc: &str, header: &str, out_dir: &Path) -> String {
+//     let base = Path::new(header)
+//         .file_stem()
+//         .unwrap()
+//         .to_string_lossy()
+//         .to_string();
+//     let moc_cpp = out_dir.join(format!("moc_{}.cpp", base));
+//     assert!(
+//         Command::new(moc)
+//             .args([header, "-o", moc_cpp.to_str().unwrap()])
+//             .status()
+//             .unwrap()
+//             .success()
+//     );
+//     moc_cpp.to_string_lossy().to_string()
+// }
+
 fn compile_bridge(qt_include_path: &str) {
     println!("compile_bridge");
     println!("cargo:rerun-if-changed=src/bridge.cpp");
     println!("cargo:rerun-if-changed=src/include/bridge.h");
+    println!("cargo:rerun-if-changed=src/networkdeviceprovider.h");
+    println!("cargo:rerun-if-changed=src/core/services/avahi/avahi_service.h");
+    println!("cargo:rerun-if-changed=src/core/services/avahi/avahi_service.cpp");
+    let dir_var = env::var("OUT_DIR").unwrap();
+    // let out_dir = Path::new(&dir_var);
+    // let moc = find_moc(&env::var("DEP_QT_LIBRARY_PATH").unwrap());
 
     let mut cc_build = cc::Build::new();
     cc_build
         .cpp(true)
         .file("src/bridge.cpp")
+        // .file("src/core/services/avahi/avahi_service.cpp")
+        // .include("src")
         .include(qt_include_path)
         .include(format!("{}/QtCore", qt_include_path))
         .include(format!("{}/QtGui", qt_include_path))
         .flag_if_supported("-std=c++17")
         .flag_if_supported("-Wno-deprecated-declarations");
+
+    // for f in env::var("DEP_QT_COMPILE_FLAGS")
+    //     .unwrap()
+    //     .split_terminator(';')
+    // {
+    //     cc_build.flag(f);
+    // }
+
+    // for header in [
+    //     "src/networkdeviceprovider.h",
+    //     "src/core/services/avahi/avahi_service.h",
+    // ] {
+    //     if Path::new(header).exists() {
+    //         let moc_cpp = run_moc(&moc, header, out_dir);
+    //         cc_build.file(moc_cpp);
+    //     }
+    // }
 
     if let Ok(ffmpeg_dir) = std::env::var("FFMPEG_DIR") {
         cc_build.include(format!("{}/include", ffmpeg_dir));
@@ -148,13 +208,62 @@ fn compile_bridge(qt_include_path: &str) {
         let _ = pkg_config::Config::new().probe("libavcodec");
         let _ = pkg_config::Config::new().probe("libavutil");
         let _ = pkg_config::Config::new().probe("libswscale");
+        let _ = pkg_config::Config::new().probe("avahi-client");
     }
 
     cc_build.compile("bridge");
 
-    for lib in ["avformat", "avcodec", "avutil", "swscale"] {
+    for lib in ["avformat", "avcodec", "avutil", "swscale", "avahi-client"] {
         println!("cargo:rustc-link-lib={}", lib);
     }
+}
+
+fn compile_uxplay() {
+    let uxplay = cmake::Config::new("lib/uxplay")
+        .build_target("uxplay")
+        //no need for x11
+        .define("NO_X11_DEPS", "ON") 
+        .build();
+
+    let build = uxplay.display();
+
+    println!("cargo:rustc-link-search=native={build}/build");
+    println!("cargo:rustc-link-search=native={build}/build/lib");
+    println!("cargo:rustc-link-search=native={build}/build/renderers");
+    println!("cargo:rustc-link-search=native={build}/build/lib/llhttp");
+    println!("cargo:rustc-link-search=native={build}/build/lib/playfair");
+
+    println!("cargo:rustc-link-lib=static=uxplay");
+    println!("cargo:rustc-link-lib=static=renderers");
+    println!("cargo:rustc-link-lib=static=airplay");
+    println!("cargo:rustc-link-lib=static=llhttp");
+    println!("cargo:rustc-link-lib=static=playfair");
+
+    // TODO: don't depend on Qt6Core
+    pkg_config::Config::new().probe("Qt6Core").unwrap();
+
+    // gst stuff
+    for pkg in &[
+        "gstreamer-1.0",
+        "gstreamer-app-1.0",
+        "gstreamer-video-1.0",
+        "gstreamer-audio-1.0",
+    ] {
+        pkg_config::Config::new().probe(pkg).unwrap();
+    }
+
+    pkg_config::Config::new().probe("openssl").unwrap();
+
+    // Linux uses avahi
+    pkg_config::Config::new().probe("avahi-compat-libdns_sd").unwrap();
+    
+    // FIXME: macOS and Windows
+    // println!("cargo:rustc-link-lib=dns_sd");
+
+    // glib
+    pkg_config::Config::new().probe("glib-2.0").unwrap();
+    pkg_config::Config::new().probe("gobject-2.0").unwrap();
+    pkg_config::Config::new().probe("libplist-2.0").unwrap();
 }
 
 fn main() {
@@ -186,6 +295,24 @@ fn main() {
     {
         config.flag(f);
     }
+
+    let mut add_pkg_includes = |pkg: &str| {
+        let lib = pkg_config::Config::new()
+            .cargo_metadata(false) 
+            .probe(pkg)
+            .unwrap_or_else(|e| panic!("pkg-config probe failed for {pkg}: {e}"));
+        for p in lib.include_paths {
+            config.include(p);
+        }
+    };
+
+    add_pkg_includes("gstreamer-1.0");
+    add_pkg_includes("gstreamer-app-1.0");
+    add_pkg_includes("gstreamer-video-1.0");
+    add_pkg_includes("gstreamer-audio-1.0");
+    add_pkg_includes("glib-2.0");
+    add_pkg_includes("gobject-2.0");
+
 
     let mut public_include = |name| {
         if cfg!(target_os = "macos") {
@@ -328,4 +455,5 @@ fn main() {
     }
 
     compile_bridge(&qt_include_path);
+    compile_uxplay();
 }

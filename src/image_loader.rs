@@ -1,3 +1,7 @@
+use crate::RUNTIME;
+use crate::device_ctx;
+use crate::qt_threading::{QtThread, QtThreading};
+use crate::utils::{AfcReader, create_image_from_buffer, generate_thumbnail, is_video_file};
 use idevice::afc::AfcClient;
 use idevice::afc::opcode::AfcFopenMode;
 use once_cell::sync::Lazy;
@@ -14,10 +18,6 @@ use tokio::{
     io::AsyncReadExt,
     sync::{Notify, Semaphore},
 };
-
-use crate::qt_threading::{QtThread, QtThreading};
-use crate::utils::{AfcReader, create_image_from_buffer, generate_thumbnail, is_video_file};
-use crate::{APP_DEVICE_STATE, RUNTIME};
 
 #[derive(Default, QObject)]
 pub struct ImageLoader {
@@ -123,25 +123,7 @@ fn ensure_worker_started() {
                     let _permit = permit;
 
                     let res: anyhow::Result<()> = async {
-                        let afc_arc = {
-                            let maybe_device = APP_DEVICE_STATE
-                                .lock()
-                                .await
-                                .get(key.udid.as_str())
-                                .cloned();
-
-                            let device = match maybe_device {
-                                Some(d) => d,
-                                None => {
-                                    // eprintln!(
-                                    //     "image_loader::read_file_via_afc: device {udid} not found"
-                                    // );
-                                    anyhow::bail!("No device");
-                                }
-                            };
-
-                            device.afc.clone()
-                        };
+                        let afc_arc = device_ctx::get_device(key.udid.as_str()).await?.afc;
 
                         let mut img = QImage::default();
                         if is_video_file(&key.path) {
