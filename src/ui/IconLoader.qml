@@ -10,6 +10,7 @@ Rectangle {
     clip : true
     Layout.preferredWidth: 48
     Layout.preferredHeight: 48
+    color: "transparent"
 
     // FIXME: hardcoded
     readonly property color shimmerBase: "#e5e7eb"
