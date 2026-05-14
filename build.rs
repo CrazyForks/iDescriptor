@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright © 2021-2022 Adrian <adrian.eddy at gmail>
-
 use cmake::build;
 use std::env;
 use std::fmt::Write;
@@ -208,13 +205,21 @@ fn compile_bridge(qt_include_path: &str) {
         let _ = pkg_config::Config::new().probe("libavcodec");
         let _ = pkg_config::Config::new().probe("libavutil");
         let _ = pkg_config::Config::new().probe("libswscale");
-        let _ = pkg_config::Config::new().probe("avahi-client");
+    
+        #[cfg(target_os = "linux")] {
+            let _ = pkg_config::Config::new().probe("avahi-client");
+        }
+        
     }
 
     cc_build.compile("bridge");
 
-    for lib in ["avformat", "avcodec", "avutil", "swscale", "avahi-client"] {
+    for lib in ["avformat", "avcodec", "avutil", "swscale"] {
         println!("cargo:rustc-link-lib={}", lib);
+    }
+
+    #[cfg(target_os = "linux")] {
+        println!("cargo:rustc-link-lib=avahi-client");
     }
 }
 
@@ -255,7 +260,9 @@ fn compile_uxplay() {
     pkg_config::Config::new().probe("openssl").unwrap();
 
     // Linux uses avahi
-    pkg_config::Config::new().probe("avahi-compat-libdns_sd").unwrap();
+    #[cfg(target_os = "linux")] {
+        pkg_config::Config::new().probe("avahi-compat-libdns_sd").unwrap();
+    }
     
     // FIXME: macOS and Windows
     // println!("cargo:rustc-link-lib=dns_sd");
@@ -349,110 +356,15 @@ fn main() {
     private_include("QtQuick");
     private_include("QtQml");
 
-    match target_os.as_str() {
-        "android" => {
-            println!(
-                "cargo:rustc-link-search={}/lib/arm64-v8a",
-                std::env::var("FFMPEG_DIR").unwrap()
-            );
-            println!(
-                "cargo:rustc-link-search={}/lib",
-                std::env::var("FFMPEG_DIR").unwrap()
-            );
-            config.include(format!("{}/include", std::env::var("FFMPEG_DIR").unwrap()));
-        }
-        "macos" | "ios" => {
-            println!(
-                "cargo:rustc-link-search={}/lib",
-                std::env::var("FFMPEG_DIR").unwrap()
-            );
-            println!("cargo:rustc-link-lib=static:+whole-archive=x264");
-            println!("cargo:rustc-link-lib=static=x265");
-        }
-        "linux" => {
-            // println!(
-            //     "cargo:rustc-link-search={}",
-            //     std::env::var("OPENCV_LINK_PATHS").unwrap()
-            // // );
-            // println!(
-            //     "cargo:rustc-link-search={}/lib/{}",
-            //     std::env::var("FFMPEG_DIR").unwrap(),
-            //     std::env::var("FFMPEG_ARCH").unwrap_or("amd64".into())
-            // );
-            // println!(
-            //     "cargo:rustc-link-search={}/lib",
-            //     std::env::var("FFMPEG_DIR").unwrap()
-            // );
-            // println!("cargo:rustc-link-lib=static:+whole-archive=z");
-            // if std::env::var("OPENCV_LINK_PATHS")
-            //     .unwrap_or_default()
-            //     .contains("vcpkg")
-            // {
-            //     std::env::var("OPENCV_LINK_LIBS")
-            //         .unwrap()
-            //         .split(',')
-            //         .for_each(|lib| {
-            //             println!("cargo:rustc-link-lib=static:+whole-archive={}", lib.trim())
-            //         });
-            // } else {
-            //     std::env::var("OPENCV_LINK_LIBS")
-            //         .unwrap()
-            //         .split(',')
-            //         .for_each(|lib| println!("cargo:rustc-link-lib={}", lib.trim()));
-            // }
-        }
-        "windows" => {
-            println!("cargo:rustc-link-arg=/EXPORT:NvOptimusEnablement");
-            println!("cargo:rustc-link-arg=/EXPORT:AmdPowerXpressRequestHighPerformance");
-            println!(
-                "cargo:rustc-link-search={}",
-                std::env::var("OPENCV_LINK_PATHS").unwrap()
-            );
-            println!(
-                "cargo:rustc-link-search={}\\lib\\{}",
-                std::env::var("FFMPEG_DIR").unwrap(),
-                std::env::var("FFMPEG_ARCH").unwrap_or("x64".into())
-            );
-            println!(
-                "cargo:rustc-link-search={}\\lib",
-                std::env::var("FFMPEG_DIR").unwrap()
-            );
-            let mut res = winres::WindowsResource::new();
-            res.set_icon("resources/app_icon.ico");
-            res.set("FileVersion", env!("CARGO_PKG_VERSION"));
-            res.set("ProductVersion", env!("CARGO_PKG_VERSION"));
-            res.set("ProductName", "Gyroflow");
-            res.set(
-                "FileDescription",
-                &format!("Gyroflow v{}", env!("CARGO_PKG_VERSION")),
-            );
-            res.compile().unwrap();
-        }
-        tos => panic!("unknown target os {:?}!", tos),
-    }
-
     if let Ok(time) = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
     {
         println!(
             "cargo:rustc-env=BUILD_TIME={}",
             (time.as_secs() - 1642516578) / 600
-        ); // New version every 10 minutes
+        );
     }
 
-    // !IMPORTANT
     config.include(&qt_include_path).build("src/main.rs");
-
-    if target_os == "ios" {
-        let out_dir = env::var("OUT_DIR").unwrap();
-        for entry in Path::new(&out_dir).read_dir().unwrap() {
-            let path = entry.unwrap().path();
-            if path.is_file() && path.to_string_lossy().contains("qml_plugins.o") {
-                println!("cargo:rustc-link-arg=-force_load");
-                println!("cargo:rustc-link-arg={}", path.to_string_lossy());
-                break;
-            }
-        }
-    }
 
     compile_bridge(&qt_include_path);
     compile_uxplay();

@@ -21,16 +21,16 @@ Item {
         // Layout.fillHeight : true
         
         ColumnLayout {
-            Layout.fillWidth : true
+            // Layout.fillWidth : true
             Layout.fillHeight : true
             Layout.preferredWidth: 220
             Repeater {
                 model: App.DeviceContext.devices
-                delegate: Item {
-                    SidebarTabButton {
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: 220
-                        Layout.preferredHeight: 40
+                delegate:SidebarTabButton {
+                        Layout.fillHeight : true
+                        Layout.preferredWidth: 200
+                        Layout.alignment: Qt.AlignHCenter
+                        currentSection: root.currentSection 
                         // udid: model.udid
                
                         // anchors.fill: parent
@@ -41,7 +41,6 @@ Item {
                             //     root.currentDeviceUdid  = udid
                             if (root.currentSection !== sectionIndex)
                                 root.currentSection = sectionIndex
-                        }
                     }
                 } 
             }

@@ -3,6 +3,7 @@ import QtQuick.Window 2.15
 // import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import FluentUI 1.0
+import "../"
 
 FluLauncher {
     id: app
@@ -36,8 +37,11 @@ FluLauncher {
         // FluTheme.darkMode = SettingsHelper.getDarkMode()
         FluTheme.darkMode = false
         FluTheme.animationEnabled = true
+        var indexUrl = Qt.resolvedUrl("Index.qml")
+        console.log("Index URL =", indexUrl)
+
         FluRouter.routes = {
-            "/":"qrc:/src/qml/windows/Index.qml",
+            "/": indexUrl
         }
         var args = Qt.application.arguments
         if(args.length>=2 && args[1].startsWith("-crashed=")){

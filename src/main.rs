@@ -116,12 +116,13 @@ fn main() {
             qputenv("QSG_RENDER_LOOP", "basic");
         #endif
 
-        // FIXME: fluentui example app was forcing OpenGL
-        // but do we need this ?
-        // #if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
-            // QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+        #ifdef Q_OS_WINDOWS
+            // uxplay now uses qml6glsink so we have to use opengl on Windows
+            // Linux is fine with QT_QPA_PLATFORM=xcb
+            QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+            QQuickStyle::setStyle("FluentWinUI3");
+        #endif
             // QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
-        // #endif
         #if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
             QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
             QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
@@ -228,9 +229,14 @@ fn main() {
 
     let engine_ptr = engine.cpp_ptr();
 
-    // cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
-    //     engine_ptr->rootContext()->setContextProperty("NetworkDeviceProvider", NetworkDeviceProvider::sharedInstance());
-    // });
+    cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
+        // FIXME: workaround to find FluentUI
+        #ifdef Q_OS_WINDOWS
+            engine_ptr->addImportPath("C:/Qt/6.9.3/mingw_64/qml");
+        #endif
+        // #endif
+        // engine_ptr->rootContext()->setContextProperty("NetworkDeviceProvider", NetworkDeviceProvider::sharedInstance());
+    });
 
     let service_factory = QObjectBox::new(crate::service_factory::ServiceFactory::new(engine_ptr));
     engine.set_object_property("serviceFactory".into(), service_factory.pinned());
@@ -258,8 +264,17 @@ fn main() {
             engine.load_url(QString::from("qrc:/src/ui/Main.qml").into());
         }
     } else {
-        engine.load_file(format!("{}/src/ui/Main.qml", env!("CARGO_MANIFEST_DIR")).into());
-        let ui_path = QString::from(format!("{}/src/ui", env!("CARGO_MANIFEST_DIR")));
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+
+        let main_qml_path = if cfg!(target_os = "windows") {
+            format!("{}/src/ui/windows/Main.qml", manifest_dir).into()
+        } else {
+            format!("{}/src/ui/Main.qml", manifest_dir).into()
+        };
+
+        engine.load_file(main_qml_path);
+
+        let ui_path = QString::from(format!("{}/src/ui", manifest_dir));
         cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *", ui_path as "QString"] { init_live_reload(engine_ptr, ui_path); });
     }
 

@@ -1441,7 +1441,9 @@ dependencies = [
 
 [[package]]
 name = "ipatool"
-version = "0.1.0"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a31e8e647891da3394cfe231ffdfc37b1d95b7aa056f99cc2d375434c9d5199"
 dependencies = [
  "bytes",
  "cookie_store",
