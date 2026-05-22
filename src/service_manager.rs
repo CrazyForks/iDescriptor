@@ -181,9 +181,10 @@ impl ServiceManager {
 
             match res {
                 Some(dict) => {
-                    let mut buf = Vec::new();
-                    // ditch this, and return map instead
-                    if Value::Dictionary(dict).to_writer_xml(&mut buf).is_err() {
+                    //FIXME: return a qvariantmap instead
+                    let val = Value::Dictionary(dict);
+                    let res = serde_json::to_string_pretty(&val);
+                    if res.is_err() {
                         eprintln!(
                             "get_cable_info: Failed to serialize ioregistry values to XML for device {udid}."
                         );
@@ -193,21 +194,11 @@ impl ServiceManager {
                         return;
                     }
 
-                    match String::from_utf8(buf) {
-                        Ok(s) => {
-                            let _ = qt_thread.queue(move |t| {
-                                t.cable_info_retrieved(QString::from(s));
-                            });
-                        }
-                        Err(_) => {
-                            eprintln!(
-                                "get_cable_info: Failed to convert ioregistry XML data to string for device {udid}."
-                            );
-                            let _ = qt_thread.queue(|t| {
-                                t.cable_info_retrieved(QString::from(""));
-                            });
-                        }
-                    }
+                      
+                    let _ = qt_thread.queue(move |t| {
+                        t.cable_info_retrieved(QString::from(res.unwrap()));
+                    });
+                      
                 }
                 None => {
                     eprintln!("get_cable_info: Failed to get ioregistry for device {udid}");
