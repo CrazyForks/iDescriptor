@@ -40,12 +40,19 @@ public:
                            [this]() { m_networkProvider->startBrowsing(); });
     }
 
-    QMap<QString, NetworkDevice> getNetworkDevices()
+    Q_INVOKABLE QMap<QString, QVariant> getNetworkDevices()
     {
-        return m_networkProvider->getNetworkDevices();
+        QMap<QString, QVariant> map;
+
+        for (const NetworkDevice device :
+             m_networkProvider->getNetworkDevices()) {
+            map[device.macAddress] = device.toVariantMap();
+        };
+
+        return map;
     }
 
-    NetworkDevice getNetworkDeviceByMac(const QString &macAddress)
+    Q_INVOKABLE NetworkDevice getNetworkDeviceByMac(const QString &macAddress)
     {
         return m_networkProvider->getNetworkDeviceByMac(macAddress);
     }
@@ -64,11 +71,15 @@ private:
 
     void _deviceAdded(const NetworkDevice &device)
     {
-        emit deviceAdded(device);
+        if (device.isValid()) {
+            emit deviceAdded(device.toVariantMap());
+        } else {
+            qDebug() << "Invalid device in networkdeviceprovider:";
+        }
     };
 
 signals:
-    void deviceAdded(const NetworkDevice &device);
+    void deviceAdded(const QVariantMap &device);
     void deviceRemoved(const QString &deviceName);
 };
 

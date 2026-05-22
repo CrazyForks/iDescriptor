@@ -22,10 +22,12 @@ use once_cell::sync::Lazy;
 use crate::qquickimageprovider_imp::AddImageProvider;
 
 pub mod afc_services;
+pub mod airplay;
 pub mod apps;
 pub mod constants;
 pub mod core;
 pub mod device_ctx;
+pub mod device_db;
 pub mod image_cache;
 pub mod image_loader;
 pub mod image_provider;
@@ -35,7 +37,6 @@ pub mod qt_threading;
 pub mod query_sqlite;
 pub mod service_factory;
 pub mod service_manager;
-pub mod airplay;
 pub mod utils;
 
 pub const POSSIBLE_ROOT: &str = "../../../../";
@@ -58,7 +59,7 @@ cpp! {{
     #include <QIcon>
 
     #include "src/live_reload.cpp"
-    // #include "src/networkdeviceprovider.h"
+    #include "src/networkdeviceprovider.h"
 }}
 
 static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
@@ -97,24 +98,28 @@ fn main() {
     // let _ = util::install_crash_handler();
     // utils::init_logging();
     // qmetaobject::log::init_qt_to_rust();
+    let icons_path = if ui_live_reload {
+        QString::from(format!("{}/resources/icons/", env!("CARGO_MANIFEST_DIR")))
+    } else {
+        QString::from(":/resources/icons/")
+    };
 
-    cpp!(unsafe [] {
+    cpp!(unsafe [icons_path as "QString"] {
 
         #define FLUENTUI_BUILD_STATIC_LIB 1
-
         #ifdef WIN32
             // ::SetUnhandledExceptionFilter(MyUnhandledExceptionFilter);
             qputenv("QT_QPA_PLATFORM", "windows:darkmode=2");
         #endif
-        #if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
-            qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
-        #else
-            qputenv("QT_QUICK_CONTROLS_STYLE", "Default");
-        #endif
-        #ifdef Q_OS_LINUX
-            // fix bug UOSv20 v-sync does not work
-            qputenv("QSG_RENDER_LOOP", "basic");
-        #endif
+        // #if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+        //     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
+        // #else
+        //     qputenv("QT_QUICK_CONTROLS_STYLE", "Default");
+        // #endif
+        // #ifdef Q_OS_LINUX
+        //     // fix bug UOSv20 v-sync does not work
+        //     qputenv("QSG_RENDER_LOOP", "basic");
+        // #endif
 
         #ifdef Q_OS_WINDOWS
             // uxplay now uses qml6glsink so we have to use opengl on Windows
@@ -199,7 +204,6 @@ fn main() {
         cstr::cstr!("Query"),
     );
 
-
     // qml_register_type::<airplay::Airplay>(
     //     cstr::cstr!("iDescriptor"),
     //     1,
@@ -225,8 +229,6 @@ fn main() {
     let airplay = QObjectBox::new(airplay::Airplay::default());
     engine.set_object_property("AirplayImp".into(), airplay.pinned());
 
-
-
     let engine_ptr = engine.cpp_ptr();
 
     cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
@@ -234,6 +236,13 @@ fn main() {
         #ifdef Q_OS_WINDOWS
             engine_ptr->addImportPath("C:/Qt/6.9.3/mingw_64/qml");
         #endif
+
+        static NetworkDeviceProvider* s_networkProvider = nullptr;
+        if (!s_networkProvider) {
+            s_networkProvider = new NetworkDeviceProvider(QCoreApplication::instance());
+            engine_ptr->rootContext()->setContextProperty("NetworkDeviceProvider", s_networkProvider);
+
+        }
         // #endif
         // engine_ptr->rootContext()->setContextProperty("NetworkDeviceProvider", NetworkDeviceProvider::sharedInstance());
     });
@@ -275,8 +284,12 @@ fn main() {
         engine.load_file(main_qml_path);
 
         let ui_path = QString::from(format!("{}/src/ui", manifest_dir));
-        cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *", ui_path as "QString"] { init_live_reload(engine_ptr, ui_path); });
+        // cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *", ui_path as "QString"] { init_live_reload(engine_ptr, ui_path); });
     }
+
+    // cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
+
+    // });
 
     engine.exec();
 }

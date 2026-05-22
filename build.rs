@@ -1,4 +1,5 @@
 use cmake::build;
+use core::panic;
 use std::env;
 use std::fmt::Write;
 use std::path::Path;
@@ -115,39 +116,6 @@ fn compile_qml(dir: &str, qt_include_path: &str, qt_library_path: &str) {
     println!("cargo:rustc-link-lib=static:+whole-archive=qmlcache");
 }
 
-// TODO: we may need to do moc 
-// fn find_moc(qt_library_path: &str) -> String {
-//     let qt_path = Path::new(qt_library_path).parent().unwrap();
-//     let candidates = [
-//         qt_path.join("libexec/moc"),
-//         qt_path.join("../macos/libexec/moc"),
-//         qt_path.join("../msvc2019_64/bin/moc"),
-//     ];
-//     for c in candidates {
-//         if c.exists() {
-//             return c.to_string_lossy().to_string();
-//         }
-//     }
-//     "moc".to_string()
-// }
-
-// fn run_moc(moc: &str, header: &str, out_dir: &Path) -> String {
-//     let base = Path::new(header)
-//         .file_stem()
-//         .unwrap()
-//         .to_string_lossy()
-//         .to_string();
-//     let moc_cpp = out_dir.join(format!("moc_{}.cpp", base));
-//     assert!(
-//         Command::new(moc)
-//             .args([header, "-o", moc_cpp.to_str().unwrap()])
-//             .status()
-//             .unwrap()
-//             .success()
-//     );
-//     moc_cpp.to_string_lossy().to_string()
-// }
-
 fn compile_bridge(qt_include_path: &str) {
     println!("compile_bridge");
     println!("cargo:rerun-if-changed=src/bridge.cpp");
@@ -155,6 +123,7 @@ fn compile_bridge(qt_include_path: &str) {
     println!("cargo:rerun-if-changed=src/networkdeviceprovider.h");
     println!("cargo:rerun-if-changed=src/core/services/avahi/avahi_service.h");
     println!("cargo:rerun-if-changed=src/core/services/avahi/avahi_service.cpp");
+
     let dir_var = env::var("OUT_DIR").unwrap();
     // let out_dir = Path::new(&dir_var);
     // let moc = find_moc(&env::var("DEP_QT_LIBRARY_PATH").unwrap());
@@ -205,11 +174,11 @@ fn compile_bridge(qt_include_path: &str) {
         let _ = pkg_config::Config::new().probe("libavcodec");
         let _ = pkg_config::Config::new().probe("libavutil");
         let _ = pkg_config::Config::new().probe("libswscale");
-    
-        #[cfg(target_os = "linux")] {
+
+        #[cfg(target_os = "linux")]
+        {
             let _ = pkg_config::Config::new().probe("avahi-client");
         }
-        
     }
 
     cc_build.compile("bridge");
@@ -217,17 +186,13 @@ fn compile_bridge(qt_include_path: &str) {
     for lib in ["avformat", "avcodec", "avutil", "swscale"] {
         println!("cargo:rustc-link-lib={}", lib);
     }
-
-    #[cfg(target_os = "linux")] {
-        println!("cargo:rustc-link-lib=avahi-client");
-    }
 }
 
 fn compile_uxplay() {
     let uxplay = cmake::Config::new("lib/uxplay")
         .build_target("uxplay")
         //no need for x11
-        .define("NO_X11_DEPS", "ON") 
+        .define("NO_X11_DEPS", "ON")
         .build();
 
     let build = uxplay.display();
@@ -260,10 +225,13 @@ fn compile_uxplay() {
     pkg_config::Config::new().probe("openssl").unwrap();
 
     // Linux uses avahi
-    #[cfg(target_os = "linux")] {
-        pkg_config::Config::new().probe("avahi-compat-libdns_sd").unwrap();
+    #[cfg(target_os = "linux")]
+    {
+        pkg_config::Config::new()
+            .probe("avahi-compat-libdns_sd")
+            .unwrap();
     }
-    
+
     // FIXME: macOS and Windows
     // println!("cargo:rustc-link-lib=dns_sd");
 
@@ -273,8 +241,87 @@ fn compile_uxplay() {
     pkg_config::Config::new().probe("libplist-2.0").unwrap();
 }
 
+fn add_pkg_includes_cc(build: &mut cc::Build, pkg: &str) {
+    if let Ok(lib) = pkg_config::Config::new().cargo_metadata(false).probe(pkg) {
+        for p in lib.include_paths {
+            build.include(p);
+        }
+    }
+}
+
+fn dirname_and_filename(path: &str) -> (&str, &str) {
+    if let Some(pos) = path.rfind(['/']) {
+        (&path[..pos], &path[pos + 1..])
+    } else {
+        ("", "")
+    }
+}
+
+fn compile_ccp_codebase() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+
+    let moc_dir = format!("{}/{}", out_dir, "moc");
+    let cpp_out_path = Path::new(&moc_dir);
+    std::fs::create_dir_all(cpp_out_path).unwrap();
+
+    match target_os.as_str() {
+        "linux" => {
+            let paths = [
+                "src/core/services/avahi/avahi_service.cpp",
+                "src/core/services/avahi/avahi_service.h",
+                "src/networkdeviceprovider.h",
+            ];
+
+            let mut build = cc::Build::new();
+
+            build.cpp(true);
+
+            // .files([
+            //     moc_out_file_clone,
+            //     "src/core/services/avahi/avahi_service.cpp".to_string(),
+            // ]);
+
+            for path in paths {
+                let (dir_name, file_name) = dirname_and_filename(path);
+                // no need moc for cpp files
+                if file_name.to_ascii_lowercase().ends_with(".cpp") {
+                    build.file(path);
+                    continue;
+                };
+                let file_out_dir = cpp_out_path.join(dir_name);
+                std::fs::create_dir_all(&file_out_dir).unwrap();
+                let moc_out_file =
+                    file_out_dir.to_str().unwrap().to_owned() + &format!("/moc_{}.cpp", &file_name);
+
+                Command::new("/usr/lib/qt6/moc")
+                    .args([path, "-o", &moc_out_file])
+                    .status()
+                    .unwrap();
+                build.file(moc_out_file);
+                build.file(path);
+            }
+
+            add_pkg_includes_cc(&mut build, "Qt6Core");
+            add_pkg_includes_cc(&mut build, "Qt6Gui");
+            add_pkg_includes_cc(&mut build, "Qt6Qml");
+            add_pkg_includes_cc(&mut build, "Qt6Quick");
+            add_pkg_includes_cc(&mut build, "Qt6QuickControls2");
+
+            build.compile("cpp_codebase");
+
+            pkg_config::Config::new()
+                .cargo_metadata(true)
+                .probe("avahi-client")
+                .unwrap();
+        }
+        os_ => panic!("building not supported on this platform"),
+    };
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=src/main.rs");
+    println!("cargo:rerun-if-changed=src/live_reload.cpp");
 
     let qt_include_path = env::var("DEP_QT_INCLUDE_PATH").unwrap();
     let qt_library_path = env::var("DEP_QT_LIBRARY_PATH").unwrap();
@@ -305,7 +352,7 @@ fn main() {
 
     let mut add_pkg_includes = |pkg: &str| {
         let lib = pkg_config::Config::new()
-            .cargo_metadata(false) 
+            .cargo_metadata(false)
             .probe(pkg)
             .unwrap_or_else(|e| panic!("pkg-config probe failed for {pkg}: {e}"));
         for p in lib.include_paths {
@@ -319,7 +366,6 @@ fn main() {
     add_pkg_includes("gstreamer-audio-1.0");
     add_pkg_includes("glib-2.0");
     add_pkg_includes("gobject-2.0");
-
 
     let mut public_include = |name| {
         if cfg!(target_os = "macos") {
@@ -368,4 +414,5 @@ fn main() {
 
     compile_bridge(&qt_include_path);
     compile_uxplay();
+    compile_ccp_codebase();
 }
