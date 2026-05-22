@@ -1,8 +1,10 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import FluentUI
 
-Item {
+
+FluExpander {
     id: root
     property int currentSection : 1
     signal sectionChanged(int sectionIndex)
@@ -16,9 +18,18 @@ Item {
     }
 
     implicitWidth: 200
-    // contentHeight : 40 * 4 + 40
+    contentHeight : 40 * 4 + 40
 
-    Item {
+    headerDelegate: Component {
+        Item {
+            FluToggleButton {
+                anchors.centerIn: parent
+                text: qsTr("TODO")
+            }
+        }
+    }
+
+    content: Item {
         anchors.fill: parent
 
         ListView {
@@ -32,7 +43,23 @@ Item {
             interactive: false
             boundsBehavior: ListView.StopAtBounds
             currentIndex : root.currentSection
-            delegate: Button {
+            highlightMoveDuration: FluTheme.animationEnabled ? 167 : 0
+            highlight: Item{
+                z:99
+                clip: true
+                Rectangle{
+                    height: 18
+                    radius: 1.5
+                    color: FluTheme.primaryColor
+                    width: 3
+                    anchors{
+                        verticalCenter: parent.verticalCenter
+                        left: parent.left
+                        leftMargin: 6
+                    }
+                }
+            }
+            delegate: FluButton {
                 text: name
                 width: nav_list.width
                 height: 40
@@ -41,10 +68,10 @@ Item {
                 background : Rectangle {
                     color : {
                         if (nav_list.currentIndex == index) {
-                            return "blue"
+                            return FluTheme.itemCheckColor
                         }
                         if (hovered) {
-                            return "red"
+                            return FluTheme.itemHoverColor
                         }
 
                         return "transparent"
