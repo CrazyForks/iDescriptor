@@ -116,6 +116,7 @@ Item {
             Layout.fillHeight: true
             visible: albumId ? false : query.albums
             interactive: true
+            clip:true
             // FIXME: only available in Qt 6.9
             acceptedButtons : Qt.NoButton
             cellWidth: 250

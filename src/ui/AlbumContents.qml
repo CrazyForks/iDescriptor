@@ -88,9 +88,10 @@ Item {
         id: gallery
         anchors.fill: parent
         interactive: true
-
+        clip: true
         cellWidth: 250
         cellHeight: 250
+        acceptedButtons : Qt.NoButton
         model: albumContentsModel
 
         delegate: ItemDelegate {
