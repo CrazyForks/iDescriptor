@@ -181,15 +181,13 @@ Item {
 
                 GridView {
                     id: grid
-                    width: parent.width
-                    height: parent.height
-                    cellWidth: Math.max(250, parent.width / 3)
+                    anchors.fill: parent
+                    cellWidth: Math.max(250, width / 3)
                     cellHeight: 140
                     model: appModel
-                    interactive: true
 
                     delegate: Rectangle {
-                        id : rec
+                        id: rec
                         width: grid.cellWidth - 20
                         height: grid.cellHeight - 20
                         radius: 8
@@ -217,6 +215,7 @@ Item {
 
                             ColumnLayout {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 spacing: 6
 
                                 RowLayout {
@@ -226,7 +225,10 @@ Item {
                                     Label {
                                         text: model.name
                                         font.pixelSize: 16
-                                        wrapMode: Text.WordWrap
+                                        wrapMode: Text.NoWrap
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
                                     }
 
                                     Rectangle {
@@ -243,8 +245,6 @@ Item {
                                             padding: 4
                                         }
                                     }
-
-                                    Item { Layout.fillWidth: true }
                                 }
 
                                 Label {
@@ -252,15 +252,21 @@ Item {
                                     color: "#666"
                                     font.pixelSize: 12
                                     wrapMode: Text.WordWrap
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    maximumLineCount: 3
+                                    elide: Text.ElideRight
                                 }
                             }
 
                             ColumnLayout {
                                 spacing: 6
-                                // FIXME: wire up click handling 
+                                 // FIXME: wire up click handling
+                                Layout.alignment: Qt.AlignCenter
+                                Layout.minimumWidth: implicitWidth
+
                                 Button {
                                     text: "Install"
-                                    // color: "#007AFF"
                                     font.pixelSize: 12
                                     font.bold: true
                                 }
