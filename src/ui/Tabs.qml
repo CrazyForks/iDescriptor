@@ -1,36 +1,35 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "./base"
 
 Item {
     id: root
     required property int currentIndex
 
 
-    DeviceTab {
-        id : device
-        anchors.fill: parent
-        visible : currentIndex == 0
-        opacity: root.currentIndex === 0 ? 1 : 0
-        property real slideY: root.currentIndex === 0 ? 0 : 20
-        transform: Translate { y: device.slideY }
-
-        Behavior on opacity {
-            NumberAnimation { duration: 167; easing.type: Easing.OutCubic }
-        }
-        Behavior on slideY {
-            NumberAnimation { duration: 167; easing.type: Easing.OutCubic }
+    AnimatedTab {
+        index: 0
+        currentIndex : root.currentIndex
+        DeviceTab {
+            anchors.fill: parent
         }
     }
 
-    AppsTab {
-        anchors.fill: parent
-        visible : currentIndex == 1
+    AnimatedTab {
+        index: 1
+        currentIndex : root.currentIndex
+        AppsTab {
+            anchors.fill: parent
+        }
     }
 
-
-    Toolbox {
-        anchors.fill: parent
-        visible : currentIndex == 2
+    AnimatedTab {
+        index: 2
+        currentIndex : root.currentIndex
+        Toolbox {
+            anchors.fill: parent
+        }
     }
+
 }
