@@ -1,4 +1,5 @@
 use crate::device_ctx;
+use crate::service_manager::ServiceManager;
 use crate::utils::{empty_qjsvalue, engine_ptr_new_object, vend_app_documents};
 
 use crate::{afc_services::AfcServices, run_sync};
@@ -21,6 +22,7 @@ pub struct ServiceFactory {
     create_afc_client: qt_method!(fn(&self, udid: QString, afc2: bool) -> QJSValue),
     create_hause_arrest_afc_client:
         qt_method!(fn(&self, udid: QString, bundle_id: QString) -> QJSValue),
+    create_service_manager: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
 }
 
 impl ServiceFactory {
@@ -30,6 +32,7 @@ impl ServiceFactory {
             engine_ptr,
             create_afc_client: Default::default(),
             create_hause_arrest_afc_client: Default::default(),
+            create_service_manager: Default::default(),
         }
     }
 
@@ -113,6 +116,27 @@ impl ServiceFactory {
                 );
 
                 return empty_qjsvalue();
+            }
+        }
+    }
+
+    fn create_service_manager(&self, udid: QString, ios_version: u32) -> QJSValue {
+        let engine_ptr: *mut c_void = self.engine_ptr;
+        if engine_ptr.is_null() {
+            eprintln!("ServiceFactory: engine_ptr is null");
+            return empty_qjsvalue();
+        }
+        let udid_clone = udid.to_string();
+        let maybe_device = run_sync(async move { device_ctx::get_device_opt(udid).await });
+        match maybe_device {
+            Some(dev) => {
+                let mng = ServiceManager::from_device(dev, udid_clone, ios_version);
+                let obj_ptr = qmetaobject::into_leaked_cpp_ptr(mng);
+                engine_ptr_new_object(engine_ptr, obj_ptr)
+            }
+            None => {
+                println!("No device in create_service_manager");
+                empty_qjsvalue()
             }
         }
     }
