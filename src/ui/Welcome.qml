@@ -68,21 +68,9 @@ Item {
                 spacing: 12
 
                 // FIXME: implement
-                Rectangle {
+                NetworkDevicesToConnect {
                     Layout.preferredWidth: 360
-                    Layout.preferredHeight: 180
-                    radius: 8
-                    color: "#1e40af" // blue
-                    border.color: "#0b2a7a"
-                    border.width: 1
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "NetworkDevicesToConnectWidget"
-                        color: "white"
-                        font.pixelSize: 14
-                        font.weight: Font.DemiBold
-                    }
+                    Layout.preferredHeight: 580
                 }
 
                 Text {
@@ -97,7 +85,16 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.howToConnectRequested()
+                        onClicked: {
+                            try {
+                                const comp = Qt.createComponent("HowToConnect.qml")
+                                const win = comp.createObject(root)
+                                win.open()
+                            } catch(e) {
+                                console.log("errror",e)
+                            }
+                            
+                        }
                     }
                 }
 

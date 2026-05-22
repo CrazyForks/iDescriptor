@@ -1,12 +1,14 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "./base"
 
 Dialog {
     id: dlg
     modal: true
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    anchors.centerIn: parent
 
     width: 560
     height: 560
@@ -14,17 +16,11 @@ Dialog {
     property int currentIndex: 0
     property bool loading: true
 
-    onOpened: {
-        loading = true
-        currentIndex = 0
-        loadTimer.restart()
-    }
-
     Timer {
         id: loadTimer
-        interval: 500
+        interval: 300
         repeat: false
-        onTriggered: dlg.loading = false
+        onTriggered: stateView.viewState = StateView.State.Content
     }
 
     function updateNav() {
@@ -33,7 +29,10 @@ Dialog {
     }
 
     onCurrentIndexChanged: updateNav()
-    Component.onCompleted: updateNav()
+    Component.onCompleted: {
+        updateNav()
+        loadTimer.start()
+    }
 
     background: Rectangle {
         radius: 10
@@ -42,10 +41,11 @@ Dialog {
         border.width: 1
     }
 
-    contentItem: Item {
+    contentItem: StateView {
+        id: stateView
         anchors.fill: parent
-
-        ColumnLayout {
+        viewState: StateView.State.Loading 
+        contentItem : ColumnLayout {
             anchors.fill: parent
             anchors.margins: 16
             spacing: 12
@@ -135,10 +135,10 @@ Dialog {
                                 Layout.fillWidth: true
                                 text: {
                                     if (Qt.platform.os === "windows")
-                                        return "You can now unplug the device. iDescriptor will connect to it automatically (requires iOS 15 or later and the Bonjour service)."
+                                        return qsTr("You can now unplug the device. iDescriptor will connect to it automatically (requires iOS 15 or later and the Bonjour service).")
                                     if (Qt.platform.os === "linux")
-                                        return "You can now unplug the device. iDescriptor will connect to it automatically (requires iOS 15 or later and the Avahi daemon)."
-                                    return "You can now unplug the device. iDescriptor will connect to it automatically (requires iOS 15 or later)."
+                                        return qsTr("You can now unplug the device. iDescriptor will connect to it automatically (requires iOS 15 or later and the Avahi daemon).")
+                                    return qsTr("You can now unplug the device. iDescriptor will connect to it automatically (requires iOS 15 or later).")
                                 }
                                 horizontalAlignment: Text.AlignHCenter
                                 wrapMode: Text.WordWrap
@@ -161,17 +161,6 @@ Dialog {
                         }
                     }
                 }
-
-                Rectangle {
-                    anchors.fill: parent
-                    visible: dlg.loading
-                    color: Qt.rgba(0, 0, 0, 0.06)
-
-                    BusyIndicator {
-                        anchors.centerIn: parent
-                        running: dlg.loading
-                    }
-                }
             }
 
             RowLayout {
@@ -182,8 +171,7 @@ Dialog {
 
                 Button {
                     id: prevBtn
-                    text: "Previous"
-                    icon.source: "qrc:/resources/icons/MaterialSymbolsArrowLeftAlt.png"
+                    icon.source: "qrc:/resources/icons/material-symbols_arrow-left-alt.svg"
                     Layout.preferredWidth: 48
                     onClicked: {
                         if (dlg.currentIndex > 0) dlg.currentIndex -= 1
@@ -192,8 +180,7 @@ Dialog {
 
                 Button {
                     id: nextBtn
-                    text: "Next"
-                    icon.source: "qrc:/resources/icons/MaterialSymbolsArrowRightAlt.png"
+                    icon.source: "qrc:/resources/icons/material-symbols_arrow-right-alt.svg"
                     Layout.preferredWidth: 48
                     onClicked: {
                         if (dlg.currentIndex < stack.count - 1) dlg.currentIndex += 1
