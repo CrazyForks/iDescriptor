@@ -17,9 +17,19 @@ QtObject {
 
     property bool showWelcomePage : true
 
+    signal device_removed(string udid)
+
     function init() {
         core.init()
+    }
 
+    function getDevice(udid) {
+        return devices.get(udid)
+    }
+
+    // FIXME: doesn't include recovery devices
+    function getDeviceCount() {
+        return devices.count
     }
 
     // workaround to use connections inside a QtObject
@@ -32,7 +42,7 @@ QtObject {
             switch (eventType) {
                 case 1:
                     // FIXME: text should be  `$device_market_name / $udid `
-                    devices.set(udid, { udid: udid, info: info , text: `TODO` })
+                    devices.set(udid, { udid: udid, info: info , text: `TODO`, service_manager : serviceFactory.create_service_manager(udid,15) })
                     root.showWelcomePage = false
                     root.currentDeviceUdid = udid
                     break;
@@ -40,7 +50,7 @@ QtObject {
                     devices.remove(udid)
                     root.showWelcomePage = !!devices.count
                     root.currentDeviceUdid = ""
-
+                    root.device_removed(udid)
                     break;
                 case 3:
                     break;
