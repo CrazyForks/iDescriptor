@@ -8,7 +8,7 @@ Button {
 
     contentItem : Text {
         text : btn.text
-        color : btn.active ? "#888888" : "red"
+        color : btn.active ? "#185ee0" : "#888888" 
         font.pixelSize: 22
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
