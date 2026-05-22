@@ -188,8 +188,8 @@ Item {
                 var name = names[i]
                 var isDir = !!entries[name]
                 var iconSource = isDir
-                    ? "qrc:/resources/icons/MaterialSymbolsFolder.png"
-                    : "qrc:/resources/icons/IcBaselineInsertDriveFile.png"
+                    ? "qrc:/resources/icons/material-symbols_folder.svg"
+                    : "qrc:/resources/icons/ic_baseline-insert-drive-file.svg"
                 var item = { "name": name, "isDir": isDir, "iconSource": iconSource }
                 if (isDir) dirs.push(item); else files.push(item)
             }
@@ -255,11 +255,10 @@ Item {
 
                             contentItem: Item {
                                 anchors.fill: parent
-                                IconImage {
+                                Button {
                                     anchors.fill: parent
-                                    source: "qrc:/resources/icons/MaterialSymbolsArrowLeftAlt.png"
+                                    icon.source: "qrc:/resources/icons/material-symbols_arrow-left-alt.png"
                                     // FIXME:theming
-                                    color: "black"
                                     opacity: backBtn.enabled ? 1.0 : 0.7
                                 }
                             }
@@ -279,11 +278,10 @@ Item {
 
                             contentItem: Item {
                                 anchors.fill: parent
-                                IconImage {
+                                Button {
                                     anchors.fill: parent
-                                    source: "qrc:/resources/icons/MaterialSymbolsArrowRightAlt.png"
+                                    icon.source: "qrc:/resources/icons/material-symbols_arrow-right-alt.svg"
                                     // FIXME:theming
-                                    color: "black"
                                     opacity: forwardBtn.enabled ? 1.0 : 0.7
                                 }
                             }
@@ -302,11 +300,10 @@ Item {
 
                             contentItem: Item {
                                 anchors.fill: parent
-                                IconImage {
+                                Button {
                                     anchors.fill: parent
-                                    source: "qrc:/resources/icons/MaterialSymbolsLightHome.png"
+                                    icon.source: "qrc:/resources/icons/material-symbols_home.svg"
                                     // FIXME:theming
-                                    color: "black"
                                     opacity: homeBtn.enabled ? 1.0 : 0.7
                                 }
                             }
@@ -326,11 +323,10 @@ Item {
 
                             contentItem: Item {
                                 anchors.fill: parent
-                                IconImage {
+                                Button {
                                     anchors.fill: parent
-                                    source: "qrc:/resources/icons/MaterialSymbolsArrowUpwardAltRounded.png"
+                                    icon.source: "qrc:/resources/icons/material-symbols_arrow-upward-rounded.png"
                                     // FIXME:theming
-                                    color: "black"
                                     opacity: upBtn.enabled ? 1.0 : 0.7
                                 }
                             }
@@ -358,11 +354,10 @@ Item {
 
                             contentItem: Item {
                                 anchors.fill: parent
-                                IconImage {
+                                Button {
                                     anchors.fill: parent
-                                    source: "qrc:/resources/icons/LetsIconsImport.png"
+                                    icon.source: "qrc:/resources/icons/lets-icons:import.svg"
                                     // FIXME:theming
-                                    color: "black"
                                     opacity: importBtn.enabled ? 1.0 : 0.7
                                 }
                             }
@@ -381,11 +376,10 @@ Item {
 
                             contentItem: Item {
                                 anchors.fill: parent
-                                IconImage {
+                                Button {
                                     anchors.fill: parent
-                                    source: "qrc:/resources/icons/PhExport.png"
+                                    icon.source: "qrc:/resources/icons/ph_export.svg"
                                     // FIXME:theming
-                                    color: "black"
                                     opacity: exportBtn.enabled ? 1.0 : 0.7
                                 }
                             }
@@ -405,11 +399,10 @@ Item {
 
                             contentItem: Item {
                                 anchors.fill: parent
-                                IconImage {
+                                Button {
                                     anchors.fill: parent
-                                    source: "qrc:/resources/icons/MaterialSymbolsDelete.png"
+                                    icon.source: "qrc:/resources/icons/material-symbols_delete.svg"
                                     // FIXME:theming
-                                    color: "black"
                                     opacity: deleteBtn.enabled ? 1.0 : 0.7
                                 }
                             }
@@ -430,11 +423,10 @@ Item {
 
                             contentItem: Item {
                                 anchors.fill: parent
-                                IconImage {
+                                Button {
                                     anchors.fill: parent
-                                    source: "qrc:/resources/icons/MaterialSymbolsFavorite.png"
+                                    icon.source: "qrc:/resources/icons/material-symbols_favorite.svg"
                                     // FIXME:theming
-                                    color: "black"
                                     opacity: favBtn.enabled ? 1.0 : 0.7
                                 }
                             }
@@ -453,11 +445,10 @@ Item {
 
                             contentItem: Item {
                                 anchors.fill: parent
-                                IconImage {
+                                Button {
                                     anchors.fill: parent
-                                    source: "qrc:/resources/icons/MaterialSymbolsLightKeyboardReturn.png"
+                                    icon.source: "qrc:/resources/icons/material-symbols_keyboard-return.svg"
                                     // FIXME:theming
-                                    color: "black"
                                     opacity: enterBtn.enabled ? 1.0 : 0.7
                                 }
                             }
@@ -512,12 +503,11 @@ Item {
                                 onClicked: root._toggleSelected(row.entryPath, row.entryIsDir)
                             }
 
-                            IconImage {
-                                source: model.iconSource
+                            Button {
+                                icon.source: model.iconSource
                                 Layout.preferredHeight: 34
                                 Layout.preferredWidth: 34
                                 // FIXME:theming
-                                color: "black"
                                 opacity: 1.0
                             }
 

@@ -5,7 +5,6 @@ import QtQuick.Controls.impl
 import QtQuick.Dialogs
 import "." as App
 
-// FIXME: handle window creation logic
 Item {
     id: root
     anchors.fill: parent
@@ -18,36 +17,78 @@ Item {
 
     property string currentDeviceUdid: ""
     readonly property bool hasDevice: App.DeviceContext.devices && App.DeviceContext.devices.count > 0
+    
+    function createComp(loc, args = {}) {
+        const comp = Qt.createComponent(loc)
+        if (comp.status === Component.Ready) {
+            const win = comp.createObject(root,args)    
+            if (win !== null) {
+                win.show()
+            } else {
+                console.error("createObject failed:", comp.errorString())
+            }
+
+        } else if (comp.status === Component.Error) {
+            console.error("Component failed to load:", comp.errorString())
+        }
+    }
 
     // 0 Airplayer, 1 VirtualLocation, 2 LiveScreen, 3 QueryMobileGestalt, 4 DeveloperDiskImages,
     // 5 WirelessGalleryImport, 6 iFuse, 7 CableInfo, 8 NetworkDevices, 9 MountDevImage,
     // 10 Restart, 11 Shutdown, 12 RecoveryMode, 13 EnableWifiConnections
     // signal toolClicked(int toolId, bool requiresDevice)
     function toolClicked(toolId, requiresDevice) {
+        const device = App.DeviceContext.getDevice(currentDeviceUdid)
         
+        if (requiresDevice) {
+            if (!device) {
+                console.log("DEVICE DISAPPERED")
+                return
+            }
+        }
+
+        const createCompWrapped = (loc) => {
+            return createComp(loc, {
+                device,
+                udid: currentDeviceUdid
+            })
+        }
+
         switch (toolId) {
             case 0: 
                 const gl_plugin_loaded = AirplayImp.load_gst_gl()
                 if (!gl_plugin_loaded) {
-                    errorDialog.text = "Failed to load gst gl plugin, make sure you have your GPU drivers installed"
+                    switch (Qt.platform.os) {
+                        case "linux":
+                            errorDialog.text = qsTr("Failed to load gst gl plugin, make sure you are using QT_QPA_PLATFORM=xcb env")
+                            break;
+                        case "windows":
+                            errorDialog.text = qsTr("Failed to load gst gl plugin, make sure you can use OpenGL")
+                            break;
+                        case "macos":
+                            // FIXME:
+                            errorDialog.text = qsTr("FIXME?")
+                            break;
+                        default:
+                            errorDialog.text = qsTr("Failed to load gst gl plugin")
+
+                    }
                     errorDialog.open()
                     return;
                 }
 
-                const comp = Qt.createComponent("./tools/Airplay.qml")
-                if (comp.status === Component.Ready) {
-                    const win = comp.createObject(null,{ 
-                    })
-                    if (win !== null) {
-                        win.show()
-                    } else {
-                        console.error("createObject failed:", comp.errorString())
-                    }
-
-                } else if (comp.status === Component.Error) {
-                    console.error("Component failed to load:", comp.errorString())
-                }
-            break;
+                createCompWrapped("./tools/Airplay.qml")
+                break;
+            case 1: 
+                createCompWrapped("./tools/VirtualLocation.qml")
+                break;
+            case 3:
+                // FIXME: doesnt work iOS 17 and above
+                createCompWrapped("./tools/QueryMobileGestalt.qml")
+                break;
+            case 7:
+                createCompWrapped("./tools/CableInfo.qml")
+                break;
 
             default:
             console.log(`No tool for id ${toolId}`)
@@ -64,7 +105,7 @@ Item {
             title: "Airplayer",
             description: "Cast your device screen",
             requiresDevice: false,
-            iconSource: "qrc:/resources/icons/MaterialSymbolsLightAirplayOutline.png",
+            iconSource: "qrc:/resources/icons/material-symbols_airplay-outline-rounded.svg",
             visible: true
         },
         {
@@ -72,7 +113,7 @@ Item {
             title: "Virtual Location",
             description: "Simulate GPS location on your device",
             requiresDevice: true,
-            iconSource: "qrc:/resources/icons/MaterialSymbolsLocationOnOutline.png",
+            iconSource: "qrc:/resources/icons/material-symbols_location-on-outline.svg",
             visible: true
         },
         {
@@ -80,7 +121,7 @@ Item {
             title: "Live Screen",
             description: "View device screen in real-time",
             requiresDevice: true,
-            iconSource: "qrc:/resources/icons/PepiconsPrintCellphoneEye.png",
+            iconSource: "qrc:/resources/icons/pepicons-print_cellphone-eye.svg",
             visible: true
         },
         {
@@ -88,7 +129,7 @@ Item {
             title: "Query Mobile Gestalt",
             description: "Query device hardware information",
             requiresDevice: true,
-            iconSource: "qrc:/resources/icons/StreamlineProgrammingBrowserSearchSearchWindowGlassAppCodeProgrammingQueryFindMagnifyingApps.png",
+            iconSource: "qrc:/resources/icons/streamline_programming-browser-search-search-window-glass-app-code-programming-query-find-magnifying-apps.svg",
             visible: true
         },
         {
@@ -96,7 +137,7 @@ Item {
             title: "Dev Disk Images",
             description: "Manage developer disk images",
             requiresDevice: false,
-            iconSource: "qrc:/resources/icons/TablerDatabaseExport.png",
+            iconSource: "qrc:/resources/icons/tabler_database-export.svg",
             visible: true
         },
         {
@@ -104,7 +145,7 @@ Item {
             title: "Wireless Gallery Import",
             description: "Import photos wirelessly to your iDevice (requires Shortcuts app)",
             requiresDevice: false,
-            iconSource: "qrc:/resources/icons/MaterialSymbolsAndroidWifi3BarPlus.png",
+            iconSource: "qrc:/resources/icons/material-symbols_android-wifi-3-bar-plus.svg",
             visible: true
         },
         {
@@ -120,7 +161,7 @@ Item {
             title: "Cable Info",
             description: "View detailed cable and connection info",
             requiresDevice: true,
-            iconSource: "qrc:/resources/icons/MaterialSymbolsLightCableRounded.png",
+            iconSource: "qrc:/resources/icons/material-symbols_cable-rounded.svg",
             visible: true
         },
         {
@@ -128,7 +169,7 @@ Item {
             title: "Network Devices",
             description: "Discover and monitor devices on your network",
             requiresDevice: false,
-            iconSource: "qrc:/resources/icons/StreamlineUltimateMultipleUsersNetwork.png",
+            iconSource: "qrc:/resources/icons/streamline_ultimate-multiple-users-network.svg",
             visible: true
         }
     ])
@@ -139,7 +180,7 @@ Item {
             title: "Mount Dev Image",
             description: "Mount a compatible device image with a single click",
             requiresDevice: true,
-            iconSource: "qrc:/resources/icons/MdiDisk.png",
+            iconSource: "qrc:/resources/icons/mdi_disk.svg",
             visible: true
         },
         {
@@ -147,7 +188,7 @@ Item {
             title: "Restart",
             description: "Restart device services",
             requiresDevice: true,
-            iconSource: "qrc:/resources/icons/IcTwotoneRestartAlt.png",
+            iconSource: "qrc:/resources/icons/ic_twotone-restart-alt.svg",
             visible: true
         },
         {
@@ -155,7 +196,7 @@ Item {
             title: "Shutdown",
             description: "Shut down the device",
             requiresDevice: true,
-            iconSource: "qrc:/resources/icons/IcOutlinePowerSettingsNew.png",
+            iconSource: "qrc:/resources/icons/ic_outline-power-settings-new.svg",
             visible: true
         },
         {
@@ -163,7 +204,7 @@ Item {
             title: "Recovery Mode",
             description: "Enter device recovery mode",
             requiresDevice: true,
-            iconSource: "qrc:/resources/icons/HugeiconsWrench01.png",
+            iconSource: "qrc:/resources/icons/hugeicons_wrench-01.svg",
             visible: true
         },
         {
@@ -171,7 +212,7 @@ Item {
             title: "Enable Wi-Fi Connections",
             description: "Make device connectable via Wi-Fi",
             requiresDevice: true,
-            iconSource: "qrc:/resources/icons/StreamlineFreehandChargingFlashWireless.png",
+            iconSource: "qrc:/resources/icons/streamline-freehand_charging-flash-wireless.svg",
             visible: true
         }
     ])
@@ -202,9 +243,21 @@ Item {
                 valueRole: "udid"
 
                 onActivated: (index) => {
+                    console.log("ComboBox activated")
                     const udid = deviceCombo.currentValue || ""
                     root.currentDeviceUdid = udid
                     root.deviceSelectionChanged(udid)
+                }
+
+                /* workaround to avoid connecting to deviceocntext signal*/
+                onCountChanged: {
+                    if (count > 0) {
+                        const lastIndex = count - 1
+                        currentIndex = lastIndex
+                        const udid = deviceCombo.valueAt(lastIndex) || ""
+                        root.currentDeviceUdid = udid
+                        root.deviceSelectionChanged(udid)
+                    }
                 }
             }
 
@@ -221,7 +274,7 @@ Item {
                 spacing: 14
                 Layout.margins: 0
 
-                // Section: Tools
+                /* Section: Tools */
                 Label {
                     text: "Tools"
                     font.bold: true
@@ -248,18 +301,16 @@ Item {
                             requiresDevice: modelData.requiresDevice
                             iconSource: modelData.iconSource
 
-                            // Disabled state (dull look)
                             enabled: !requiresDevice || root.hasDevice
 
                             onClicked: {
-                                // FIXME(connection-logic): implement actual routing / navigation.
                                 root.toolClicked(toolId, requiresDevice)
                             }
                         }
                     }
                 }
 
-                // Section: More Tools
+                /* More Tools */
                 Label {
                     text: "More Tools"
                     font.bold: true
@@ -290,7 +341,6 @@ Item {
                             enabled: !requiresDevice || root.hasDevice
 
                             onClicked: {
-                                // FIXME(connection-logic): implement actual routing / navigation.
                                 root.toolClicked(toolId, requiresDevice)
                             }
                         }
@@ -342,7 +392,7 @@ Item {
             anchors.margins: 12
             spacing: 12
 
-            IconImage {
+            Image {
                 id: icon
                 source: tile.iconSource
 
@@ -350,7 +400,7 @@ Item {
                 Layout.preferredWidth: 34
 
                 // FIXME:theming
-                color: "black"
+                // color: "black"
                 opacity: tile.enabled ? 1.0 : 0.7
             }
 

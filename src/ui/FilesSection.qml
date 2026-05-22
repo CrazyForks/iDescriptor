@@ -89,14 +89,14 @@ Item {
                 model: ListModel {
                     id: sidebarModel
 
-                    ListElement { kind: "header"; title: "Explorer"; icon: "qrc:/resources/icons/MaterialSymbolsFolder.png" }
-                    ListElement { kind: "explorer"; title: "Default"; icon: "qrc:/resources/icons/MaterialSymbolsFolder.png"; afc2: false }
-                    ListElement { kind: "explorer"; title: "Jailbroken (AFC2)"; icon: "qrc:/resources/icons/MaterialSymbolsFolder.png"; afc2: true }
+                    ListElement { kind: "header"; title: "Explorer"; icon: "qrc:/resources/icons/material-symbols_folder.svg" }
+                    ListElement { kind: "explorer"; title: "Default"; icon: "qrc:/resources/icons/material-symbols_folder.svg"; afc2: false }
+                    ListElement { kind: "explorer"; title: "Jailbroken (AFC2)"; icon: "qrc:/resources/icons/material-symbols_folder.svg"; afc2: true }
 
-                    ListElement { kind: "header"; title: "Common Places"; icon: "qrc:/resources/icons/MaterialSymbolsFavorite.png" }
-                    ListElement { kind: "place"; title: "Pictures"; icon: "qrc:/resources/icons/MaterialSymbolsFolder.png"; path: "/DCIM"; afc2: false }
+                    ListElement { kind: "header"; title: "Common Places"; icon: "qrc:/resources/icons/material-symbols_favorite.svg" }
+                    ListElement { kind: "place"; title: "Pictures"; icon: "qrc:/resources/icons/material-symbols_folder.svg"; path: "/DCIM"; afc2: false }
 
-                    ListElement { kind: "header"; title: "Favorite Places"; icon: "qrc:/resources/icons/MaterialSymbolsFavorite.png" }
+                    ListElement { kind: "header"; title: "Favorite Places"; icon: "qrc:/resources/icons/material-symbols_favorite.svg" }
                 }
 
                 delegate: Item {
@@ -119,15 +119,14 @@ Item {
                         anchors.rightMargin: 10
                         spacing: 10
 
-                        IconImage {
-                            id: icon
+                        Image {
                             source: model.icon
 
                             Layout.preferredHeight: 34
                             Layout.preferredWidth: 34
 
                             // FIXME:theming
-                            color: "black"
+                            // color: "black"
                             opacity: 1.0
                         }
 
@@ -136,7 +135,6 @@ Item {
                             text: qsTr(model.title)
                             font.bold: row.isHeader
                             elide: Text.ElideRight
-                            color: "#111"
                         }
 
                         Text {
@@ -189,20 +187,17 @@ Item {
                                     anchors.rightMargin: 10
                                     spacing: 10
 
-                                    IconImage {
-                                        source: "qrc:/resources/icons/MaterialSymbolsFolder.png"
+                                    Image {
+                                        source: "qrc:/resources/icons/material-symbols_folder.svg"
                                         Layout.preferredHeight: 34
                                         Layout.preferredWidth: 34
                                         // FIXME:theming
-                                        color: "black"
-                                        opacity: 1.0
                                     }
 
                                     Text {
                                         Layout.fillWidth: true
                                         text: alias
                                         elide: Text.ElideRight
-                                        color: "#111"
                                     }
 
                                     Text {
