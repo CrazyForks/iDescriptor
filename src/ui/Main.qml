@@ -50,6 +50,9 @@ ApplicationWindow {
             Layout.fillWidth : true
             Layout.fillHeight : true
         }
-    }
 
+        StatusBar {
+            
+        }
+    }
 }
