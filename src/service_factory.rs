@@ -1,4 +1,5 @@
 use crate::device_ctx;
+use crate::query_sqlite::Query;
 use crate::service_manager::ServiceManager;
 use crate::utils::{empty_qjsvalue, engine_ptr_new_object, vend_app_documents};
 
@@ -23,6 +24,7 @@ pub struct ServiceFactory {
     create_hause_arrest_afc_client:
         qt_method!(fn(&self, udid: QString, bundle_id: QString) -> QJSValue),
     create_service_manager: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
+    create_sqlite_query_backend: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
 }
 
 impl ServiceFactory {
@@ -33,6 +35,7 @@ impl ServiceFactory {
             create_afc_client: Default::default(),
             create_hause_arrest_afc_client: Default::default(),
             create_service_manager: Default::default(),
+            create_sqlite_query_backend: Default::default(),
         }
     }
 
@@ -139,5 +142,16 @@ impl ServiceFactory {
                 empty_qjsvalue()
             }
         }
+    }
+
+    fn create_sqlite_query_backend(&self, udid: QString, ios_version: u32) -> QJSValue {
+        let engine_ptr: *mut c_void = self.engine_ptr;
+        if engine_ptr.is_null() {
+            eprintln!("ServiceFactory: engine_ptr is null");
+            return empty_qjsvalue();
+        }
+        let mng = Query::with_device_attr(udid, ios_version);
+        let obj_ptr = qmetaobject::into_leaked_cpp_ptr(mng);
+        engine_ptr_new_object(engine_ptr, obj_ptr)
     }
 }

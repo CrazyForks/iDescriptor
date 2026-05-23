@@ -12,6 +12,19 @@ pub static IOS_15_ALBUM_QUERY_STATEMENT: &str = "SELECT
             WHERE ZGENERICALBUM.ZKEYASSET IS NOT NULL
         ";
 
+pub static IOS_26_ALBUM_QUERY_STATEMENT: &str = "SELECT
+                            ZGENERICALBUM.Z_PK,
+                            ZGENERICALBUM.ZTITLE,
+                            ZGENERICALBUM.ZCACHEDCOUNT,
+                            ZASSET.ZDIRECTORY,
+                            ZASSET.ZFILENAME
+                        FROM ZGENERICALBUM
+                        LEFT JOIN ZASSET ON ZGENERICALBUM.Z_ENT = ZASSET.Z_PK
+                        WHERE ZGENERICALBUM.Z_ENT IS NOT NULL
+                        AND ZGENERICALBUM.ZTITLE IS NOT NULL
+                        AND ZGENERICALBUM.ZCACHEDCOUNT IS NOT 0
+                    ";
+
 pub static RECENTS_ALBUM_QUERY: &str = "
     SELECT 
     ZASSET.ZFILENAME,
@@ -48,3 +61,13 @@ pub static FAVS_QUERY: &str = "
     WHERE ZASSET.ZFAVORITE = 1
     ORDER BY ZASSET.Z_PK DESC
 ";
+//FIXME: is Z_3ASSETS consistent ?
+pub static ALBUM_CONTENTS_QUERY_TEMPLATE: &str = r#"
+    SELECT     
+        ZASSET.ZDIRECTORY,    
+        ZASSET.ZFILENAME  
+    FROM ZGENERICALBUM  
+    LEFT JOIN {table} ON ZGENERICALBUM.Z_PK = {table}.{album}  
+    LEFT JOIN ZASSET ON {table}.Z_3ASSETS = ZASSET.Z_PK    
+    WHERE ZGENERICALBUM.Z_PK = ?
+"#;
