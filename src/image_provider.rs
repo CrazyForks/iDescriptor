@@ -60,7 +60,7 @@ impl QQuickImageProvider for ImageProvider {
                 height: 500,
             },
             QImage::load_from_file(QString::from(
-                ":/resources/icons/MaterialSymbolsLightImageOutlineSharp.png",
+                ":/resources/icons/material-symbols_image-outline-sharp.svg",
             )),
         );
 
