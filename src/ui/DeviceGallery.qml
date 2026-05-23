@@ -7,16 +7,22 @@ import iDescriptor 1.0
 Item {
     id: root
 
-    readonly property Query query : Query {}
+    property var query 
     property bool loading: true
     required property var udid 
     property int albumId
+    property var info
     property bool isMainPage : root.albumId == -1 ? false : root.albumId == -2 ? false : !root.albumId 
 
 
     Component.onCompleted: {
-        console.log("Calling init query")
-        query.init(root.udid);
+        // FIXME: hardcoded iOS version
+        query = serviceFactory.create_sqlite_query_backend(root.udid, 16)
+        if (query) {
+            query.init();
+        } else {
+            console.error("Query is null after create_sqlite_query_backend")
+        }
     }
 
     ListModel {
@@ -68,11 +74,10 @@ Item {
                 const obj = JSON.parse(jsonStr)
 
                 albumModel.append({
-                    albumId : obj.album_id ?  obj.album_id : -1,
+                    albumId : obj.album_id ?  obj.album_id : -99,
                     fileName: key,
                     filePath: obj.file_path,
                     dateTime: new Date(),
-                    fileType: 0,
                     selected: false,
                     thumbVersion: 0
                 })
