@@ -116,10 +116,10 @@ fn main() {
         // #else
         //     qputenv("QT_QUICK_CONTROLS_STYLE", "Default");
         // #endif
-        // #ifdef Q_OS_LINUX
-        //     // fix bug UOSv20 v-sync does not work
-        //     qputenv("QSG_RENDER_LOOP", "basic");
-        // #endif
+        #ifdef Q_OS_LINUX
+            // fix bug UOSv20 v-sync does not work
+            qputenv("QSG_RENDER_LOOP", "basic");
+        #endif
 
         #ifdef Q_OS_WINDOWS
             // uxplay now uses qml6glsink so we have to use opengl on Windows
