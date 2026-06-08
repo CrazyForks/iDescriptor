@@ -7,6 +7,15 @@ pub struct DeviceDatabaseInfo {
     pub display_name: &'static str,
 }
 
+pub static UNKNOWN_DEVICE: DeviceDatabaseInfo = DeviceDatabaseInfo {
+    model_identifier: "Unknown",
+    board: "Unknown",
+    cpid: 0,
+    bdid: 0,
+    marketing_name: "Unknown",
+    display_name: "Unknown",
+};
+
 // https://github.com/libimobiledevice/libirecovery/blob/master/src/libirecovery.c
 pub static DEVICES: &[DeviceDatabaseInfo] = &[
     // iPhone
