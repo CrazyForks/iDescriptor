@@ -18,8 +18,10 @@ use tokio::{
     io::AsyncReadExt,
     sync::{Notify, Semaphore},
 };
+use macros::QtThreading;
 
-#[derive(Default, QObject)]
+
+#[derive(Default, QObject, QtThreading)]
 pub struct ImageLoader {
     base: qt_base_class!(trait QObject),
 
@@ -31,14 +33,6 @@ static SCHEDULER: Lazy<Arc<Scheduler>> = Lazy::new(|| Arc::new(Scheduler::new())
 static WORKER_STARTED: AtomicBool = AtomicBool::new(false);
 static NEXT_SEQ: AtomicU64 = AtomicU64::new(0);
 
-impl QtThreading for ImageLoader {
-    fn qt_thread(&self) -> crate::qt_threading::QtThread<Self>
-    where
-        Self: Sized,
-    {
-        QtThread::new(self)
-    }
-}
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 struct JobKey {
     udid: String,
@@ -103,7 +97,7 @@ fn ensure_worker_started() {
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
     {
-        // FIXME: use std::thread ?
+        // TODO: use std::thread ?
         RUNTIME.spawn(async {
             loop {
                 let Some((key, payload)) = SCHEDULER.pop_next() else {
@@ -220,6 +214,7 @@ async fn file_to_image(afc: &mut AfcClient, path: &str) -> QImage {
         }
     };
 
+    // FIXME: optimize chunk
     let mut chunk = vec![0u8; 8192];
 
     loop {
