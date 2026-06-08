@@ -13,6 +13,7 @@ use idevice::{
 use qmetaobject::{qt_base_class, qt_method};
 use qttypes::QVariantMap;
 
+use std::f64::INFINITY;
 use std::{any::type_name, sync::Arc};
 use std::{collections::HashMap, net::IpAddr};
 use tokio::sync::Mutex;
@@ -29,16 +30,15 @@ use core::pin::Pin;
 use once_cell::sync::Lazy;
 use plist::{Dictionary, Value};
 use qmetaobject::prelude::*;
-
-use crate::device_ctx::{APP_DEVICE_STATE,DeviceServices};
+use crate::device_ctx::{APP_DEVICE_STATE, DeviceServices};
+use crate::device_db;
 use crate::{
-     APP_LABEL, EV_CONNECTED, EV_DISCONNECTED, EV_FAIL,
-    EV_PAIRING_PENDING, POSSIBLE_ROOT, RUNTIME,
+    APP_LABEL, EV_CONNECTED, EV_DISCONNECTED, EV_FAIL, EV_PAIRING_PENDING, POSSIBLE_ROOT, RUNTIME,
     qt_threading::{QtThread, QtThreading},
     utils,
 };
-
-#[derive(Default, QObject)]
+use macros::QtThreading;
+#[derive(Default, QObject , QtThreading)]
 pub struct Core {
     base: qt_base_class!(trait QObject),
 
@@ -46,7 +46,7 @@ pub struct Core {
 
     init_wireless_device:
         qt_method!(fn(&mut self, ip: QString, pairing_file: QString, mac_address: QString)),
-    get_pairing_files : qt_method!(fn (&mut self) -> QVariantMap),
+    get_pairing_files: qt_method!(fn(&mut self) -> QVariantMap),
     // remove_device : qt_method!(fn (&mut self,  udid: QString)),
     device_event: qt_signal!(event_type : u32, udid : QString , info : QVariantMap),
     init_failed: qt_signal!(mac_address : QString),
@@ -54,15 +54,6 @@ pub struct Core {
     sleepy_time_detected: qt_signal!(),
     device_became_wired: qt_signal!(udid: QString),
     // listen : fn (&mut self),
-}
-
-impl QtThreading for Core {
-    fn qt_thread(&self) -> crate::qt_threading::QtThread<Self>
-    where
-        Self: Sized,
-    {
-        QtThread::new(self)
-    }
 }
 
 impl Core {
@@ -115,7 +106,8 @@ impl Core {
                                                     emit_connected(qt_thread.clone(), udid).await;
                                                     return;
                                                 }
-                                                
+
+
                                                 match handle_pairing(qt_thread.clone(), udid.clone()).await {
                                                     Ok(_) => {
                                                         emit_connected(qt_thread.clone(), udid).await;
@@ -184,27 +176,27 @@ impl Core {
                 }
             };
 
-            let addr = match ip_owned.parse::<IpAddr>() {  
-                Ok(addr) => addr,  
-                Err(e) => {  
+            let addr = match ip_owned.parse::<IpAddr>() {
+                Ok(addr) => addr,
+                Err(e) => {
                     //FIXME: emit event for failure
                     eprintln!("Invalid IP address {}: {}", ip_owned, e);  
-                    return;  
-                }  
-            };  
+                    return;
+                }
+            };
 
-            let t = TcpProvider {  
-                addr,  
-                pairing_file,  
+            let t = TcpProvider {
+                addr,
+                pairing_file,
                 label: APP_LABEL.to_string(),
-                scope_id : None  
+                scope_id : None
             };
 
 
             let qt_t_clone = qt_thread.clone();
             let result = tokio::select! {
                 res = init_idescriptor_device(t, qt_t_clone) => res,
-                /* timeout */ 
+                /* timeout */
                 _ = tokio::time::sleep(tokio::time::Duration::from_secs(20)) => {
                     eprintln!("Timeout collecting device info for wireless device mac address: {mac_address_owned}");
                     Err(IdeviceError::Timeout)
@@ -448,12 +440,13 @@ async fn emit_connected(qt_thread: QtThread<Core>, udid: String) {
             Err(e) if is_pairing_related_error(&e) && !retried_after_pair => {
                 match handle_pairing(qt_thread.clone(), udid.clone()).await {
                     Ok(_) => {
+                        // retry init once
                         retried_after_pair = true;
                         println!(
                             "Pairing succeeded for device {}, retrying initialization.",
                             udid
                         );
-                        continue; // retry init once
+                        continue;
                     }
                     Err(e) => {
                         eprintln!("Pairing failed for device {}: {e:?}", udid);
@@ -502,7 +495,9 @@ async fn init_idescriptor_device<
     // FIXME: we may need our own error types here
     // but InternalError should be fine for now
     let def_vals_dict = def_vals.as_dictionary_mut().ok_or_else(|| {
-        IdeviceError::InternalError("Lockdown root is not a dictionary".to_string())
+        IdeviceError::InternalError(
+            "lc.get_value(None, None).await is not a dictionary".to_string(),
+        )
     })?;
 
     let udid = def_vals_dict
@@ -629,6 +624,13 @@ async fn collect_info(
 
     let disk_vals = lc.get_value(None, Some("com.apple.disk_usage")).await?;
 
+    let disk_vals_dict = disk_vals.as_dictionary().ok_or_else(|| {
+        IdeviceError::InternalError(
+            "lc.get_value(None, Some(\"com.apple.disk_usage\")).await is not a dictionary"
+                .to_string(),
+        )
+    })?;
+
     eprintln!("init_idescriptor_device: Attempting to get AFC device info.");
     let afc_info = match afc.get_device_info().await {
         Ok(i) => i,
@@ -638,44 +640,6 @@ async fn collect_info(
         }
     };
     eprintln!("init_idescriptor_device: AFC device info obtained.");
-
-    if let (d_target, Value::Dictionary(d_source)) = (&mut def_vals_dict, disk_vals) {
-        d_target.extend(d_source);
-
-        let mut afc_info_dict = plist::Dictionary::new();
-        afc_info_dict.insert("Model".into(), Value::String(afc_info.model));
-        afc_info_dict.insert(
-            "TotalBytes".into(),
-            Value::Integer((afc_info.total_bytes as u64).into()),
-        );
-        afc_info_dict.insert(
-            "FreeBytes".into(),
-            Value::Integer((afc_info.free_bytes as u64).into()),
-        );
-        afc_info_dict.insert(
-            "BlockSize".into(),
-            Value::Integer((afc_info.block_size as u64).into()),
-        );
-
-        d_target.insert("AFC_INFO".into(), Value::Dictionary(afc_info_dict));
-        d_target.insert(
-            "Jailbroken".into(),
-            Value::Boolean(utils::detect_jailbroken(&mut afc).await),
-        );
-
-        if let Some(battery_info) = utils::get_battery_info(&mut diag_relay).await {
-            d_target.insert("DIAG_INFO".into(), Value::Dictionary(battery_info));
-        }
-
-        d_target.insert(
-            "ConnectionType".into(),
-            Value::String(if is_wireless {
-                "Wireless".into()
-            } else {
-                "USB".into()
-            }),
-        );
-    }
 
     let keys_to_insert_string = [
         "DeviceName",
@@ -692,11 +656,44 @@ async fn collect_info(
         "ProductVersion",
         "WiFiAddress",
         "UniqueDeviceID",
+        "InternationalMobileEquipmentIdentity",
+        "SerialNumber",
+        "ProductType",
+        "ActivationState",
     ];
 
-    let mut insert_string = |key: &str| {
+    // product_type
+    let product_type = def_vals_dict
+        .get("ProductType")
+        .and_then(|v| v.as_string())
+        .unwrap_or_else(|| "");
+
+    let db_info = device_db::find_by_identifier(product_type).unwrap_or(&device_db::UNKNOWN_DEVICE);
+
+    info.insert(
+        QString::from("product_type"),
+        QVariant::from(&QString::from(db_info.display_name)),
+    );
+
+    info.insert(
+        QString::from("marketing_name"),
+        QVariant::from(&QString::from(db_info.marketing_name)),
+    );
+
+    // region
+    let region_info = def_vals_dict
+        .get("RegionInfo")
+        .and_then(|v| v.as_string())
+        .unwrap_or_else(|| "");
+
+    info.insert(
+        QString::from("region"),
+        QVariant::from(&QString::from(device_db::parse_region_info(region_info))),
+    );
+
+    for key in keys_to_insert_string.iter() {
         info.insert(
-            QString::from(key),
+            QString::from(key.to_string()),
             QVariant::from(&QString::from(
                 def_vals_dict
                     .get(key)
@@ -704,11 +701,101 @@ async fn collect_info(
                     .unwrap_or_else(|| ""),
             )),
         );
-    };
-
-    for key in keys_to_insert_string.iter() {
-        insert_string(key);
     }
+
+    let disk_info_keys = [
+        "TotalDiskCapacity",
+        "TotalDataCapacity",
+        "TotalSystemCapacity",
+        "TotalDataAvailable"
+    ];
+
+    for key in disk_info_keys.iter() {
+        info.insert(
+            QString::from(*key),
+            QVariant::from(
+                disk_vals_dict
+                    .get(*key)
+                    .and_then(|v| v.as_unsigned_integer())
+                    .unwrap_or(0),
+            ),
+        );
+    }
+
+    if let (d_target, Value::Dictionary(d_source)) = (&mut def_vals_dict, disk_vals) {
+        // d_target.extend(d_source);
+
+        // let mut afc_info_dict = plist::Dictionary::new();
+        info.insert(
+            QString::from("Model"),
+            QVariant::from(&QString::from(afc_info.model)),
+        );
+        info.insert(
+            QString::from("TotalBytes"),
+            QVariant::from(afc_info.total_bytes as u64),
+        );
+        info.insert(
+            QString::from("FreeBytes"),
+            QVariant::from(afc_info.free_bytes as u64),
+        );
+        info.insert(
+            QString::from("BlockSize"),
+            QVariant::from(afc_info.block_size as u64),
+        );
+
+        // d_target.insert("AFC_INFO".into(), Value::Dictionary(afc_info_dict));
+        info.insert(
+            QString::from("Jailbroken"),
+            QVariant::from(utils::detect_jailbroken(&mut afc).await),
+        );
+
+        // if let Some(battery_info) = utils::get_battery_info(&mut diag_relay).await {
+        //     d_target.insert("DIAG_INFO".into(), Value::Dictionary(battery_info));
+        // }
+
+        info.insert(
+            QString::from("connection_type"),
+            QVariant::from(if is_wireless {
+                QString::from("Wireless")
+            } else {
+                QString::from("USB")
+            }),
+        );
+    }
+
+    // parse ios version
+    let ios_version: Vec<&str> = def_vals_dict
+        .get("ProductVersion")
+        .and_then(|v| v.as_string())
+        .unwrap_or_else(|| "")
+        .split(".")
+        .collect();
+
+    let ios_major = ios_version
+        .get(0)
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    let ios_minor = ios_version
+        .get(1)
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    let ios_patch = ios_version
+        .get(2)
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+
+    info.insert(
+        QString::from("ios_version_major"),
+        QVariant::from(ios_major),
+    );
+    info.insert(
+        QString::from("ios_version_minor"),
+        QVariant::from(ios_minor),
+    );
+    info.insert(
+        QString::from("ios_version_patch"),
+        QVariant::from(ios_patch),
+    );
 
     Ok(info)
 }
