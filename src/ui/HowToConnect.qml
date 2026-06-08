@@ -14,14 +14,6 @@ Dialog {
     height: 560
 
     property int currentIndex: 0
-    property bool loading: true
-
-    Timer {
-        id: loadTimer
-        interval: 300
-        repeat: false
-        onTriggered: stateView.viewState = StateView.State.Content
-    }
 
     function updateNav() {
         prevBtn.enabled = dlg.currentIndex > 0
@@ -31,7 +23,6 @@ Dialog {
     onCurrentIndexChanged: updateNav()
     Component.onCompleted: {
         updateNav()
-        loadTimer.start()
     }
 
     background: Rectangle {
@@ -83,8 +74,8 @@ Dialog {
                                 fillMode: Image.PreserveAspectFit
                                 smooth: true
                                 mipmap: true
-                                Layout.preferredWidth: 200
-                                Layout.preferredHeight: 200
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
                             }
 
                             Item { Layout.fillHeight: true }
@@ -115,8 +106,8 @@ Dialog {
                                 fillMode: Image.PreserveAspectFit
                                 smooth: true
                                 mipmap: true
-                                Layout.preferredWidth: 200
-                                Layout.preferredHeight: 200
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
                             }
 
                             Item { Layout.fillHeight: true }
@@ -153,8 +144,8 @@ Dialog {
                                 fillMode: Image.PreserveAspectFit
                                 smooth: true
                                 mipmap: true
-                                Layout.preferredWidth: 200
-                                Layout.preferredHeight: 200
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
                             }
 
                             Item { Layout.fillHeight: true }
