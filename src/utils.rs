@@ -632,8 +632,7 @@ pub fn force_load_gst_gl() -> bool {
     })
 }
 
-
-pub fn qvariant_to_ptr(item : QVariant) -> usize {
+pub fn qvariant_to_ptr(item: QVariant) -> usize {
     cpp::cpp!(unsafe [item as "QVariant"] -> usize as "uintptr_t" {
         QObject* o = item.value<QObject *>();
         if (!o) return 0;
