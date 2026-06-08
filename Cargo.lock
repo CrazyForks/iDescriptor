@@ -1309,6 +1309,7 @@ name = "idescriptor"
 version = "0.5.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "cc",
  "cmake",
  "cpp",
@@ -1441,9 +1442,9 @@ dependencies = [
 
 [[package]]
 name = "ipatool"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a31e8e647891da3394cfe231ffdfc37b1d95b7aa056f99cc2d375434c9d5199"
+checksum = "12e371ec7c90f641490de5a2d0634f06cf852d72a086f55e4d049850dbb6e807"
 dependencies = [
  "bytes",
  "cookie_store",
