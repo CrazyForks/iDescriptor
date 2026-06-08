@@ -1,10 +1,13 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick 
+import QtQuick.Controls
+import QtQuick.Layouts 
 import Qt5Compat.GraphicalEffects
 import QtQuick.Controls.impl 
+import "./app-store/"
+import "./base"
 
-Item {
+
+StateView {
     id: root
     anchors.fill: parent
 
@@ -16,6 +19,10 @@ Item {
     property string email: ""
     property bool isLoggedIn: email.length > 0
 
+    property string searchTerm: ""
+    property bool searchError: false
+
+    ListModel { id : searchResultsModel }
     ListModel { id: appModel }
 
     function clearApps() { appModel.clear(); }
@@ -95,24 +102,6 @@ Item {
         xhr.send();
     }
 
-    function fetchAppIconFromApple(bundleId, cb) {
-        if (!bundleId) { cb(""); return; }
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", "https://itunes.apple.com/lookup?bundleId=" + encodeURIComponent(bundleId));
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState !== XMLHttpRequest.DONE) return;
-            if (xhr.status !== 200) { cb(""); return; }
-            try {
-                var obj = JSON.parse(xhr.responseText);
-                var results = obj && obj.results ? obj.results : [];
-                var iconUrl = results.length ? (results[0].artworkUrl100 || "") : "";
-                cb(iconUrl);
-            } catch (e) {
-                cb("");
-            }
-        };
-        xhr.send();
-    }
 
     Component.onCompleted: {
         // FIXME: show keychain/cred dialog.
@@ -128,9 +117,42 @@ Item {
             email = s.email || "";
             if (s.init) fetchSponsors();
         }
+
+        function onSearch_ready(searchTerm, success, res) {  
+            if (!success) {
+                console.error("Search failed for term:", searchTerm);
+                searchError = true;
+                return;
+            }
+            searchResultsModel.clear();
+            const parsedRes = JSON.parse(res);
+
+            if (!parsedRes || !parsedRes.results || !Array.isArray(parsedRes.results)) {
+                console.error("Invalid search results format: 'results' array not found or not an array.", res);
+                searchError = true;
+                return;
+            }
+            
+            searchError = false;
+
+            for (var i = 0; i < parsedRes.results.length; ++i) {
+                const item = parsedRes.results[i];
+                searchResultsModel.append({
+                    id : item.id || 0,
+                    bundleId: item.bundle_id || "",
+                    name: item.name || "",
+                    price: item.price || 0,
+                    description: "",
+                    logoUrl: "",
+                    useBundleIdForIcon: true,
+                    sponsorLabel: "",
+                    sponsorColor: ""
+                });
+            }
+        }
     }
 
-    ColumnLayout {
+    contentItem : ColumnLayout {
         anchors.fill: parent
         spacing: 12
 
@@ -140,9 +162,19 @@ Item {
             spacing: 12
 
             TextField {
+                id: searchField
                 Layout.preferredWidth: 240
                 enabled: true
                 placeholderText: isLoggedIn ? "Search for apps..." : "Sign in to search"
+                onTextChanged: {
+                    if (!apps) return;
+                    searchTerm = searchField.text
+                    searchResultsModel.clear();
+                    // if (searchTerm.length === 0) return;
+
+                    apps.search(searchTerm)
+
+                }  
             }
 
             Item { Layout.fillWidth: true }
@@ -182,103 +214,26 @@ Item {
                 GridView {
                     id: grid
                     anchors.fill: parent
+                    anchors.margins: 16
                     cellWidth: Math.max(250, width / 3)
                     cellHeight: 140
                     model: appModel
 
-                    delegate: Rectangle {
-                        id: rec
-                        width: grid.cellWidth - 20
-                        height: grid.cellHeight - 20
-                        radius: 8
-                        border.color: "#ddd"
-                        color: "transparent"
+                    delegate: Item {
+                        width: grid.cellWidth - 12
+                        height: grid.cellHeight - 12
 
-                        property string iconSource: ""
-
-                        Component.onCompleted: {
-                            if (model.logoUrl && !model.useBundleIdForIcon) {
-                                iconSource = model.logoUrl;
-                            } else if (model.bundleId) {
-                                fetchAppIconFromApple(model.bundleId, function(url) { iconSource = url; });
-                            }
-                        }
-
-                        RowLayout {
+                        AppItem {
                             anchors.fill: parent
-                            anchors.margins: 12
-                            spacing: 10
-
-                            IconLoader {
-                                iconSource: rec.iconSource
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Layout.minimumWidth: 0
-                                spacing: 6
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 8
-
-                                    Label {
-                                        text: model.name
-                                        font.pixelSize: 16
-                                        wrapMode: Text.NoWrap
-                                        elide: Text.ElideRight
-                                        Layout.fillWidth: true
-                                        Layout.minimumWidth: 0
-                                    }
-
-                                    Rectangle {
-                                        visible: model.sponsorLabel && model.sponsorLabel.length > 0
-                                        color: model.sponsorColor
-                                        radius: 4
-                                        height: 16
-
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: model.sponsorLabel
-                                            font.pixelSize: 10
-                                            color: "#333"
-                                            padding: 4
-                                        }
-                                    }
-                                }
-
-                                Label {
-                                    text: model.description
-                                    color: "#666"
-                                    font.pixelSize: 12
-                                    wrapMode: Text.WordWrap
-                                    Layout.fillWidth: true
-                                    Layout.minimumWidth: 0
-                                    maximumLineCount: 3
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            ColumnLayout {
-                                spacing: 6
-                                 // FIXME: wire up click handling
-                                Layout.alignment: Qt.AlignCenter
-                                Layout.minimumWidth: implicitWidth
-
-                                Button {
-                                    text: "Install"
-                                    font.pixelSize: 12
-                                    font.bold: true
-                                }
-
-                                Button {
-                                    text: (model.websiteUrl && model.websiteUrl.length) ? "Website" : "Download IPA"
-                                    font.pixelSize: 12
-                                    font.bold: true
-                                }
-                            }
+                            name: model.name
+                            bundleId: model.bundleId
+                            description: model.description
+                            logoUrl: model.logoUrl
+                            websiteUrl: model.websiteUrl
+                            useBundleIdForIcon: model.useBundleIdForIcon
+                            sponsorLabel: model.sponsorLabel
+                            sponsorColor: model.sponsorColor
                         }
-
                     }
                 }
             }
