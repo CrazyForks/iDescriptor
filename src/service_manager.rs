@@ -1,9 +1,9 @@
-use qmetaobject::prelude::*;
-use qttypes::{QVariantMap,QStringList};
-use crate::device_ctx::{DeviceServices,get_device_opt};
-use crate::{RUNTIME, run_sync, utils,qt_threading::{QtThread,QtThreading}};
-use macros::QtThreading;
-use idevice::{afc::opcode::AfcFopenMode, provider};
+use crate::device_ctx::{DeviceServices, get_device_opt};
+use crate::{
+    RUNTIME,
+    qt_threading::{QtThread, QtThreading},
+    run_sync, utils,
+};
 use idevice::services::core_device_proxy::CoreDeviceProxy;
 use idevice::{
     IdeviceService, RsdService, amfi,
@@ -15,7 +15,11 @@ use idevice::{
     simulate_location::LocationSimulationService,
     springboardservices::SpringBoardServicesClient,
 };
+use idevice::{afc::opcode::AfcFopenMode, provider};
+use macros::QtThreading;
 use plist::Value;
+use qmetaobject::prelude::*;
+use qttypes::{QStringList, QVariantMap};
 
 use plist_macro::plist;
 use serde_json;
@@ -32,7 +36,6 @@ pub struct ServiceManager {
     get_mounted_image: qt_method!(fn(&self)),
     fetch_installed_apps: qt_method!(fn(&self)),
     set_location: qt_method!(fn(&self, latitude: QString, longitude: QString) -> i32),
-    fetch_app_icon: qt_method!(fn(&self, bundle_id: QString)),
     fetch_disk_usage: qt_method!(fn(&self)),
     restart: qt_method!(fn(&self) -> bool),
     shutdown: qt_method!(fn(&self) -> bool),
@@ -51,8 +54,7 @@ pub struct ServiceManager {
         sig: QByteArray,
         sig_length: u64
     ),
-    installed_apps_retrieved: qt_signal!(apps: QVariantMap),
-    app_icon_loaded: qt_signal!(bundle_id: QString, icon_data: QByteArray),
+    installed_apps_retrieved: qt_signal!(success : bool,apps: QVariantMap),
     battery_info_updated: qt_signal!(info: QString),
     disk_usage_retrieved: qt_signal!(success: bool, apps_usage: u64),
     install_ipa_init: qt_signal!(started: bool, state: QString),
@@ -61,21 +63,20 @@ pub struct ServiceManager {
 
     udid: String,
     ios_version: u32,
-    /*
-    *    TODO: default cannot be implemented for
-    *    DeviceServices, so we have to wrap inside Option
-    */
-    device : Option<DeviceServices>
+    device: Option<DeviceServices>,
 }
 
 impl ServiceManager {
-    
-    /* unwrap on self.device must 
-    *  be safe as from_device literally 
-    *  receives a device not an option */
-    pub fn from_device(device : DeviceServices, udid : String, ios_version : u32) -> Self {
-        Self { device: Some(device) , udid : udid, ios_version : ios_version ,..Default::default() }
-    } 
+    /* unwrap on self.device must
+     *  be safe as from_device literally
+     *  receives a device not an option */
+    pub fn from_device(device: DeviceServices, udid: String, ios_version: u32) -> Self {
+        let mut s = Self::default();
+        s.device = Some(device);
+        s.udid = udid;
+        s.ios_version = ios_version;
+        s
+    }
 
     pub fn start_update_battery_info_interval(&self) {
         let udid = self.udid.clone();
@@ -105,10 +106,9 @@ impl ServiceManager {
                         let mut buf = Vec::new();
                         if Value::Dictionary(info).to_writer_xml(&mut buf).is_ok() {
                             if let Ok(s) = String::from_utf8(buf) {
-                                qt_thread
-                                    .queue(move |t| {
-                                        t.battery_info_updated(QString::from(s));
-                                    });
+                                qt_thread.queue(move |t| {
+                                    t.battery_info_updated(QString::from(s));
+                                });
                             }
                         }
                     });
@@ -137,7 +137,7 @@ impl ServiceManager {
                          let mobilegestalt_value = root_dict.remove("MobileGestalt");
 
                          let inner_mobilegestalt_dict = match mobilegestalt_value {
-                            Some(Value::Dictionary(dict)) => dict, 
+                            Some(Value::Dictionary(dict)) => dict,
                             _ => {
                                 eprintln!(
                                     "query_mobilegestalt: MobileGestalt key not found or not a dictionary for device {udid}."
@@ -194,11 +194,10 @@ impl ServiceManager {
                         return;
                     }
 
-                      
                     let _ = qt_thread.queue(move |t| {
                         t.cable_info_retrieved(QString::from(res.unwrap()));
                     });
-                      
+
                 }
                 None => {
                     eprintln!("get_cable_info: Failed to get ioregistry for device {udid}");
@@ -331,7 +330,7 @@ impl ServiceManager {
                     eprintln!("get_mounted_image: Failed to lookup mounted developer image for device {udid}: device locked");
                     qt_thread.queue(|t| {
                         t.mounted_image_retrieved(false,true,QByteArray::default(), 0);
-                    }); 
+                    });
                 }
                 Err(idevice::IdeviceError::NotFound) => {
                     eprintln!("get_mounted_image: No mounted developer image found for device {udid}");
@@ -354,12 +353,11 @@ impl ServiceManager {
         let udid = self.udid.clone();
         let qt_t = self.qt_thread();
 
-
         let provider_guard = self.device.as_ref().unwrap().clone().provider;
 
         RUNTIME.spawn(async move {
             let qt_thread = qt_t.clone();
-            
+
             let mut amfi_client = match {
                 let provider_guard = provider_guard.lock().await;
                 let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
@@ -401,10 +399,9 @@ impl ServiceManager {
 
         RUNTIME.spawn(async move {
             let qt_thread = qt_t.clone();
-            
+
             let mut all_apps = QVariantMap::default();
 
-        
             let mut ins_client = match {
                 let provider_guard = provider_guard.lock().await;
                 let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
@@ -413,8 +410,8 @@ impl ServiceManager {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!("fetch_installed_apps: Failed to connect to InstallationProxy service for device {udid}: {e}");
-                    let _ = qt_thread.queue( move |t| {
-                        t.installed_apps_retrieved(all_apps);
+                    qt_thread.queue( move |t| {
+                        t.installed_apps_retrieved(false, all_apps);
                     });
                     return;
                 }
@@ -437,7 +434,7 @@ impl ServiceManager {
                     Ok(apps) => apps,
                     Err(e) => {
                         eprintln!("fetch_installed_apps: Failed to browse installed apps for device {udid} and app type {app_type}: {e}");
-                        continue; // Skip this app type 
+                        continue;
                     }
                 };
 
@@ -482,44 +479,9 @@ impl ServiceManager {
                 }
             }
 
-            let _ = qt_thread.queue(move |t| {
-                t.installed_apps_retrieved(all_apps);
+            qt_thread.queue(move |t| {
+                t.installed_apps_retrieved(true, all_apps);
             });
-        });
-    }
-
-    fn fetch_app_icon(&self, bundle_id: QString) {
-        let udid = self.udid.clone();
-        let qt_t = self.qt_thread();
-        let bundle_id_owned = bundle_id.clone();
-
-
-        let provider_guard = self.device.as_ref().unwrap().clone().provider;
-
-        RUNTIME.spawn(async move {
-           
-            let mut springboard_client = match {
-                let provider_guard = provider_guard.lock().await;
-                let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
-                SpringBoardServicesClient::connect(provider_ref).await
-            } {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("fetch_app_icon: Failed to connect to InstallationProxy service for device {udid}: {e}");
-                    return;
-                }
-            };
-
-            match springboard_client.get_icon_pngdata(bundle_id_owned.to_string()).await {
-                Ok(icon_data) => {
-                    qt_t.queue(move |t| {
-                        t.app_icon_loaded(bundle_id_owned, QByteArray::from(&icon_data[..]));
-                    });
-                }
-                Err(e) => {
-                    eprintln!("fetch_app_icon: Failed to fetch app icon for bundle ID {} on device {udid}: {e}", bundle_id_owned);
-                }
-            };
         });
     }
 
@@ -585,7 +547,7 @@ impl ServiceManager {
         RUNTIME.spawn(async move {
             let qt_thread = qt_t.clone();
 
-            let mut instproxy = {                
+            let mut instproxy = {
                 let provider_guard = provider_guard.lock().await;
 
                 match InstallationProxyClient::connect(provider_guard.as_ref()).await {
@@ -599,10 +561,9 @@ impl ServiceManager {
                     }
                 }
             };
-            
 
             match utils::calculate_apps_usage(&mut instproxy).await {
-                Ok(apps_usage) => {                    
+                Ok(apps_usage) => {
                     qt_thread.queue(move |t| {
                         t.disk_usage_retrieved(true, apps_usage);
                     });
@@ -614,7 +575,7 @@ impl ServiceManager {
                     });
                 }
             };
-        
+
 
         });
     }
@@ -641,7 +602,6 @@ impl ServiceManager {
         let diag_guard = self.device.as_ref().unwrap().clone().diag;
         run_sync(async move {
             let mut diag = diag_guard.lock().await;
-            
 
             if let Err(e) = diag.shutdown().await {
                 eprintln!("shutdown: Failed to shutdown device {udid}: {e}");
@@ -686,11 +646,11 @@ impl ServiceManager {
 
         RUNTIME.spawn(async move {
             let qt_thread = qt_t.clone();
-            
+
             let mut ins_client = match {
 
                 let mut afc = afc_guard.lock().await;
-                
+
                 // Create the staging directory
                 match utils::ensure_public_staging(&mut afc).await {
                     Ok(_) => (),
@@ -828,7 +788,6 @@ impl ServiceManager {
         RUNTIME.spawn(async move {
             let qt_thread = qt_t.clone();
 
-
             let mut lc = lc_guard.lock().await;
 
             let value = Value::Boolean(true);
@@ -841,17 +800,15 @@ impl ServiceManager {
                 .await
             {
                 Ok(_) => {
-                    let _ = qt_thread
-                        .queue(|t| {
-                            t.enable_wifi_connections_result(true);
-                        });
+                    let _ = qt_thread.queue(|t| {
+                        t.enable_wifi_connections_result(true);
+                    });
                 }
                 Err(e) => {
                     eprintln!("wireless: LockdownClient::set_value failed: {e:?} udid: {udid}");
-                    let _ = qt_thread
-                        .queue(|t| {
-                            t.enable_wifi_connections_result(false);
-                        });
+                    let _ = qt_thread.queue(|t| {
+                        t.enable_wifi_connections_result(false);
+                    });
                 }
             }
         });
@@ -885,4 +842,10 @@ async fn set_device_location_rsd(
 
     let mut location_client = LocationSimulationClient::new(&mut remote_server).await?;
     location_client.set(latitude, longitude).await
+}
+
+impl Drop for ServiceManager {
+    fn drop(&mut self) {
+        println!("Service manager dropped")
+    }
 }
