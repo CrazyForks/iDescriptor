@@ -14,9 +14,23 @@ Item {
     property int    viewState:      StateView.State.Loading
     property string errorText:      "Something went wrong."
     property bool   retryable:      true
+    property bool  autoSwitchContent: true
+    property int  autoSwitchDelay: 500
     property alias  contentItem:    contentSlot.data
-
+    
     signal retryRequested()
+
+
+    Timer {
+        id: autoSwitchTimer
+        interval: root.autoSwitchDelay
+        repeat: false
+        running: root.autoSwitchContent && root.viewState === StateView.State.Loading
+
+        onTriggered: root.viewState = StateView.State.Content
+    }
+
+
 
     StackLayout {
         anchors.fill: parent
