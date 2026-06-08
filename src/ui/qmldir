@@ -1,1 +1,3 @@
 singleton DeviceContext 1.0 DeviceContext.qml
+singleton StatusWindow 1.0 StatusWindow.qml
+singleton Helpers 1.0 Helpers.qml
