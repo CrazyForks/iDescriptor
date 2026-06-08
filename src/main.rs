@@ -37,6 +37,7 @@ pub mod qt_threading;
 pub mod query_sqlite;
 pub mod service_factory;
 pub mod service_manager;
+pub mod springboard_services;
 pub mod utils;
 
 pub const POSSIBLE_ROOT: &str = "../../../../";
