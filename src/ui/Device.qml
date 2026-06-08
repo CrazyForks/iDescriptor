@@ -1,29 +1,75 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import "./installed-apps"
+
 
 Item {
     id: root
+
     property var info: ({})
-    property var udid: "" 
+    property string udid: ""
     required property int currentSection
-    
+    required property var device
 
-    DeviceInfo {
+    StackLayout {
         anchors.fill: parent
-        visible : currentSection == 0
-        info: root.info
+        currentIndex: root.currentSection
+
+        Loader {
+            active: root.currentSection === 0 || item
+            sourceComponent: deviceInfoComponent
+        }
+
+        Loader {
+            active: root.currentSection === 1 || item
+            sourceComponent: installedAppsComponent
+        }
+
+        Loader {
+            active: root.currentSection === 2 || item
+            sourceComponent: galleryComponent
+        }
+
+        Loader {
+            active: root.currentSection === 3 || item
+            sourceComponent: filesComponent
+        }
     }
 
-    DeviceGallery {
-        visible : currentSection == 2
-        anchors.fill: parent
-        udid: root.udid
-        // info: root.info
+    /* lazy load all comps */
+    Component {
+        id: deviceInfoComponent
+
+        DeviceInfo {
+            info: root.info
+            device: root.device
+        }
     }
 
-    FilesSection {
-        visible : currentSection == 3
-        udid : root.udid
+    Component {
+        id: installedAppsComponent
+
+        InstalledApps {
+            udid: root.udid
+            device: root.device
+        }
+    }
+
+    Component {
+        id: galleryComponent
+
+        DeviceGallery {
+            udid: root.udid
+            info: root.info
+        }
+    }
+
+    Component {
+        id: filesComponent
+
+        FilesSection {
+            udid: root.udid
+        }
     }
 }
