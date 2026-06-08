@@ -7,29 +7,55 @@ Item {
     id: root
     required property int currentIndex
 
+    StackLayout {
+        anchors.fill: parent
+        currentIndex: root.currentIndex
 
-    AnimatedTab {
-        index: 0
-        currentIndex : root.currentIndex
-        DeviceTab {
-            anchors.fill: parent
+        /* 
+            let's not lazy load the main device tab
+            this way it's a bit faster to show the device
+        */
+        AnimatedTab {
+            index: 0
+            currentIndex : root.currentIndex
+            DeviceTab {
+                anchors.fill: parent
+            }
+        }
+
+        Loader {
+            active: root.currentIndex === 1 || item
+            sourceComponent: appsTabComponent
+        }
+
+        Loader {
+            active: root.currentIndex === 2 || item
+            sourceComponent: toolboxTabComponent
         }
     }
 
-    AnimatedTab {
-        index: 1
-        currentIndex : root.currentIndex
-        AppsTab {
-            anchors.fill: parent
+
+    Component {
+        id: appsTabComponent
+        AnimatedTab {
+            index: 1
+            currentIndex : root.currentIndex
+            AppsTab {
+                anchors.fill: parent 
+            }
         }
     }
 
-    AnimatedTab {
-        index: 2
-        currentIndex : root.currentIndex
-        Toolbox {
-            anchors.fill: parent
+    Component {
+        id: toolboxTabComponent
+        AnimatedTab {
+            index: 2
+            currentIndex : root.currentIndex
+            Toolbox {
+                anchors.fill: parent
+            }
         }
-    }
+     }
+
 
 }
