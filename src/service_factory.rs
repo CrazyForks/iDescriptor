@@ -1,10 +1,14 @@
 use crate::device_ctx;
 use crate::query_sqlite::Query;
 use crate::service_manager::ServiceManager;
+use crate::springboard_services::SpringBoardServices;
+
 use crate::utils::{empty_qjsvalue, engine_ptr_new_object, vend_app_documents};
 
 use crate::{afc_services::AfcServices, run_sync};
+use idevice::IdeviceService;
 use idevice::afc::AfcClient;
+use idevice::{provider::IdeviceProvider, springboardservices::SpringBoardServicesClient};
 use qmetaobject::{QJSValue, prelude::*};
 use std::ffi::c_void;
 use std::sync::Arc;
@@ -25,6 +29,7 @@ pub struct ServiceFactory {
         qt_method!(fn(&self, udid: QString, bundle_id: QString) -> QJSValue),
     create_service_manager: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
     create_sqlite_query_backend: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
+    create_springboard_services_client: qt_method!(fn(&self, udid: QString) -> QJSValue),
 }
 
 impl ServiceFactory {
@@ -36,6 +41,7 @@ impl ServiceFactory {
             create_hause_arrest_afc_client: Default::default(),
             create_service_manager: Default::default(),
             create_sqlite_query_backend: Default::default(),
+            create_springboard_services_client: Default::default(),
         }
     }
 
@@ -153,5 +159,34 @@ impl ServiceFactory {
         let mng = Query::with_device_attr(udid, ios_version);
         let obj_ptr = qmetaobject::into_leaked_cpp_ptr(mng);
         engine_ptr_new_object(engine_ptr, obj_ptr)
+    }
+
+    fn create_springboard_services_client(&self, udid: QString) -> QJSValue {
+        let engine_ptr: *mut c_void = self.engine_ptr;
+        if engine_ptr.is_null() {
+            eprintln!("ServiceFactory: engine_ptr is null");
+            return empty_qjsvalue();
+        }
+        let udid_clone = udid.to_string();
+        let sp_res: anyhow::Result<SpringBoardServicesClient> = run_sync(async move {
+            let device = device_ctx::get_device(udid).await?;
+            let provider_guard = device.provider.lock().await;
+            let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
+            Ok(SpringBoardServicesClient::connect(provider_ref).await?)
+        });
+        match sp_res {
+            Ok(sp) => {
+                let sp_wrapper = SpringBoardServices::new_with_sp_client(sp);
+                let obj_ptr = qmetaobject::into_leaked_cpp_ptr(sp_wrapper);
+                engine_ptr_new_object(engine_ptr, obj_ptr)
+            }
+            Err(err) => {
+                println!(
+                    "Failed to create SpringBoardServicesClient for device {}: {}",
+                    udid_clone, err
+                );
+                empty_qjsvalue()
+            }
+        }
     }
 }
