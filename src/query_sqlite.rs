@@ -7,24 +7,17 @@ use crate::constants::{
     RECENTS_ALBUM_QUERY, RECENTS_QUERY,
 };
 use crate::device_ctx;
-use crate::qt_threading::{QtThread, QtThreading};
+use crate::qt_threading::{QtThreading};
 use crate::utils::create_album_info;
-use crate::{RUNTIME, run_sync};
-use idevice::afc::{AfcClient, opcode::AfcFopenMode};
-use rusqlite::{Connection, OptionalExtension, Rows};
-use serde_json::json;
-use std::default;
-use std::fmt::format;
-use std::path::PathBuf;
+use crate::{RUNTIME};
+use idevice::afc::{opcode::AfcFopenMode};
+use rusqlite::{Connection, OptionalExtension,};
 use std::sync::Arc;
-use std::{io::SeekFrom, pin::Pin};
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
-use tokio::net::TcpListener;
 use tokio::sync::Mutex;
+use macros::QtThreading;
 
-use tokio::sync::oneshot;
 
-#[derive(QObject, Default)]
+#[derive(QObject, Default, QtThreading)]
 pub struct Query {
     base: qt_base_class!(trait QObject),
     udid: String,
@@ -41,15 +34,6 @@ pub struct Query {
     read_albums: qt_method!(fn(&mut self)),
     query_album: qt_method!(fn(&mut self, id: i32)),
     album_queried: qt_signal!(id: i32, items: QStringList),
-}
-
-impl QtThreading for Query {
-    fn qt_thread(&self) -> crate::qt_threading::QtThread<Self>
-    where
-        Self: Sized,
-    {
-        QtThread::new(self)
-    }
 }
 
 impl Query {
