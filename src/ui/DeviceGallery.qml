@@ -11,16 +11,16 @@ Item {
     property bool loading: true
     required property var udid 
     property int albumId
-    property var info
+    required property var info
     property bool isMainPage : root.albumId == -1 ? false : root.albumId == -2 ? false : !root.albumId 
 
 
     Component.onCompleted: {
-        // FIXME: hardcoded iOS version
-        query = serviceFactory.create_sqlite_query_backend(root.udid, 16)
+        query = serviceFactory.create_sqlite_query_backend(root.udid, info.ios_version_major) 
         if (query) {
             query.init();
         } else {
+            // FIXME:show error
             console.error("Query is null after create_sqlite_query_backend")
         }
     }
@@ -114,126 +114,125 @@ Item {
             }
         }
 
-
-        GridView {
-            id: gallery
+        ScrollView {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            visible: albumId ? false : query.albums
-            interactive: true
-            clip:true
-            // FIXME: only available in Qt 6.9
-            acceptedButtons : Qt.NoButton
-            cellWidth: 250
-            cellHeight: 250
-            model: albumModel
 
-            delegate: ItemDelegate {
-                // required property int index
-                // required property string filePath
-                // required property int albumId
+            Item { 
+                width: parent.width
+                height: parent.height
 
-                width: 250
-                height: 250
-                highlighted: selected
-
-                MouseArea {
+                GridView {
+                    id: gallery
                     anchors.fill: parent
-                    onDoubleClicked: {
-                        console.log("delegate double-click", index, albumId)
-                        root.albumId = albumId
-                    }
-                }
+                    visible: albumId ? false : query.albums
+                    cellWidth: 250
+                    cellHeight: 250
+                    model: albumModel
+                    ScrollBar.vertical: ScrollBar {}
+                    delegate: ItemDelegate {
+                        width: 250
+                        height: 250
+                        highlighted: selected
 
-                Rectangle {
-                    anchors.fill: parent
-                    color: selected ? "#4FC3F7" : "transparent"
-                    opacity : 0.3
-                    z : 1
-                }
+                        MouseArea {
+                            anchors.fill: parent
+                            onDoubleClicked: {
+                                console.log("delegate double-click", index, albumId)
+                                root.albumId = albumId
+                            }
+                        }
 
-                Image {
-                    cache: false
-                    anchors.fill: parent
-                    //FIXME:use encodeuricomp
-                    source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
-                    fillMode: Image.PreserveAspectFit
-                }
+                        Rectangle {
+                            anchors.fill: parent
+                            color: selected ? "#4FC3F7" : "transparent"
+                            opacity : 0.3
+                            z : 1
+                        }
 
-                Text {
-                    anchors.bottom: parent.bottom
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    text: fileName + albumId
-                    font.pixelSize: 10
-                    color: "white"
-                    elide: Text.ElideMiddle
-                }
-            }
+                        Image {
+                            cache: false
+                            anchors.fill: parent
+                            //FIXME:use encodeuricomp
+                            source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
+                            fillMode: Image.PreserveAspectFit
+                        }
 
-            //rubber band
-            Item {
-                anchors.fill: parent
-
-                Rectangle {
-                    id: selectionRect
-                    color: "transparent"
-                    border.color: "blue"
-                    border.width: 1
-                    visible: false
-                    
-                    opacity: 0.3
-                    Rectangle { anchors.fill: parent; color: "blue"; opacity: 0.2 }
-                }
-
-                MouseArea {
-                    id: mouseArea
-                    anchors.fill: parent
-                    property point startPos
-                    
-                    propagateComposedEvents: true 
-
-                    onPressed: (mouse) => {
-                        // mouse.accepted = false  
-                        startPos = Qt.point(mouse.x, mouse.y)
-                        selectionRect.x = startPos.x
-                        selectionRect.y = startPos.y
-                        selectionRect.width = 0
-                        selectionRect.height = 0
-                        selectionRect.visible = true
+                        Text {
+                            anchors.bottom: parent.bottom
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            text: fileName + albumId
+                            font.pixelSize: 10
+                            color: "white"
+                            elide: Text.ElideMiddle
+                        }
                     }
 
-                    onPositionChanged: {
-                        selectionRect.x = Math.min(mouse.x, startPos.x)
-                        selectionRect.y = Math.min(mouse.y, startPos.y)
-                        selectionRect.width = Math.abs(mouse.x - startPos.x)
-                        selectionRect.height = Math.abs(mouse.y - startPos.y)
+                }
+                //rubber band
+                Item {
+                    anchors.fill: parent
+
+                    Rectangle {
+                        id: selectionRect
+                        color: "transparent"
+                        border.color: "blue"
+                        border.width: 1
+                        visible: false
+                        
+                        opacity: 0.3
+                        Rectangle { anchors.fill: parent; color: "blue"; opacity: 0.2 }
                     }
 
-                    onReleased: {
-                        selectionRect.visible = false
+                    MouseArea {
+                        id: mouseArea
+                        anchors.fill: parent
+                        property point startPos
+                        
+                        propagateComposedEvents: true 
 
-                        const append = mouse.modifiers & Qt.ControlModifier
+                        onPressed: (mouse) => {
+                            // mouse.accepted = false  
+                            startPos = Qt.point(mouse.x, mouse.y)
+                            selectionRect.x = startPos.x
+                            selectionRect.y = startPos.y
+                            selectionRect.width = 0
+                            selectionRect.height = 0
+                            selectionRect.visible = true
+                        }
 
-                        selectItemsInRect({
-                            x: selectionRect.x,
-                            y: selectionRect.y,
-                            width: selectionRect.width,
-                            height: selectionRect.height
-                        }, append)
+                        onPositionChanged: {
+                            selectionRect.x = Math.min(mouse.x, startPos.x)
+                            selectionRect.y = Math.min(mouse.y, startPos.y)
+                            selectionRect.width = Math.abs(mouse.x - startPos.x)
+                            selectionRect.height = Math.abs(mouse.y - startPos.y)
+                        }
+
+                        onReleased: {
+                            selectionRect.visible = false
+
+                            const append = mouse.modifiers & Qt.ControlModifier
+
+                            selectItemsInRect({
+                                x: selectionRect.x,
+                                y: selectionRect.y,
+                                width: selectionRect.width,
+                                height: selectionRect.height
+                            }, append)
+                        }
                     }
+                }
+            
+                AlbumContents {
+                    visible : !isMainPage
+                    query : root.query
+                    udid : root.udid
+                    albumId: root.albumId
+                    anchors.fill: parent
                 }
             }
         }
 
-
-        AlbumContents {
-            visible : !isMainPage
-            query : root.query
-            udid : root.udid
-            albumId: root.albumId
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-        }
     }
 }
