@@ -1,8 +1,8 @@
 pragma Singleton
-import QtQml 2.15
-import QtQml.Models 2.15
-import QtQuick 2.15
-import iDescriptor 1.0
+import QtQml
+import QtQml.Models
+import QtQuick
+import iDescriptor
 
 /* 
     core is a global obj set from rust side
@@ -41,14 +41,23 @@ QtObject {
             
             switch (eventType) {
                 case 1:
-                    // FIXME: text should be  `$device_market_name / $udid `
-                    devices.set(udid, { udid: udid, info: info , text: `TODO`, service_manager : serviceFactory.create_service_manager(udid,15) })
+                    const service_manager = serviceFactory.create_service_manager(udid, info.ios_version_major)
+                    const sb_client = serviceFactory.create_springboard_services_client(udid)
+                    const text = `${info.marketing_name} / ${udid.slice(0,10)}...`
+                    devices.append({ udid: udid, info: info , text , service_manager, sb_client })
                     root.showWelcomePage = false
                     root.currentDeviceUdid = udid
                     break;
                 case 2:
-                    devices.remove(udid)
-                    root.showWelcomePage = !!devices.count
+                    // FIXME: find an O(1) solution 
+                    for (let i = 0; i < devices.count; i++) {
+                        const device = devices.get(i)
+                        if (device.udid === udid) {
+                            devices.remove(i)
+                            break
+                        }
+                    }
+                    root.showWelcomePage = devices.count === 0
                     root.currentDeviceUdid = ""
                     root.device_removed(udid)
                     break;
@@ -59,6 +68,9 @@ QtObject {
                 default:
 
             }
+            /* force garbage collection otherwise 
+            things get cleaned up after a long time */
+            gc();
         }
     }
 
