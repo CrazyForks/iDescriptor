@@ -55,9 +55,8 @@ Item {
             albumContentsModel.clear()
 
             for (const item of items) {
-                console.log("item",item)
                 albumContentsModel.append({
-                    fileName : "wtf",
+                    fileName : item,
                     filePath : item,
                     thumbVersion : 0,
                     selected : false
@@ -84,120 +83,126 @@ Item {
     }
 
 
-    GridView {
-        id: gallery
+    ScrollView {
         anchors.fill: parent
-        interactive: true
-        clip: true
-        cellWidth: 250
-        cellHeight: 250
-        acceptedButtons : Qt.NoButton
-        model: albumContentsModel
+        Item {
+            width: parent.width
+            height: parent.height
 
-        delegate: ItemDelegate {
-            width: 250
-            height: 250
-            highlighted: selected
-
-            MouseArea {
+            GridView {
+                id: gallery
                 anchors.fill: parent
-                onDoubleClicked: {
-                    const comp = Qt.createComponent("PreviewWindow.qml")
+                cellWidth: 250
+                cellHeight: 250
+                model: albumContentsModel
+                ScrollBar.vertical: ScrollBar {}
 
-                    if (comp.status === Component.Ready) {
-                        const win = comp.createObject(null,{ 
-                            filePath,
-                            udid : root.udid
-                        })
-                        if (win !== null) {
-                            win.show()
-                        } else {
-                            console.error("createObject failed:", comp.errorString())
+                delegate: ItemDelegate {
+                    width: 250
+                    height: 250
+                    highlighted: selected
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onDoubleClicked: {
+                            const comp = Qt.createComponent("PreviewWindow.qml")
+
+                            if (comp.status === Component.Ready) {
+                                const win = comp.createObject(null,{ 
+                                    filePath,
+                                    udid : root.udid
+                                })
+                                if (win !== null) {
+                                    win.show()
+                                } else {
+                                    console.error("createObject failed:", comp.errorString())
+                                }
+
+                            } else if (comp.status === Component.Error) {
+                                console.error("Component failed to load:", comp.errorString())
+                            }
+
                         }
-
-                    } else if (comp.status === Component.Error) {
-                        console.error("Component failed to load:", comp.errorString())
                     }
 
-                }
-            }
+                    Rectangle {
+                        anchors.fill: parent
+                        color: selected ? "#4FC3F7" : "transparent"
+                        opacity : 0.3
+                        z : 1
+                    }
 
-            Rectangle {
-                anchors.fill: parent
-                color: selected ? "#4FC3F7" : "transparent"
-                opacity : 0.3
-                z : 1
-            }
+                    Image {
+                        cache: false
+                        anchors.fill: parent
+                        //FIXME:use encodeuricomp
+                        source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
+                        fillMode: Image.PreserveAspectFit
+                    }
 
-            Image {
-                cache: false
-                anchors.fill: parent
-                //FIXME:use encodeuricomp
-                source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
-                fillMode: Image.PreserveAspectFit
-            }
-
-            Text {
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                text: fileName
-                font.pixelSize: 10
-                color: "white"
-                elide: Text.ElideMiddle
-            }
-        }
-
-        //rubber band
-        Item {
-            anchors.fill: parent
-
-            Rectangle {
-                id: selectionRect
-                color: "transparent"
-                border.color: "blue"
-                border.width: 1
-                visible: false
-                
-                opacity: 0.3
-                Rectangle { anchors.fill: parent; color: "blue"; opacity: 0.2 }
-            }
-
-            MouseArea {
-                id: mouseArea
-                anchors.fill: parent
-                property point startPos
-                
-                propagateComposedEvents: true 
-
-                onPressed: (mouse) => {
-                    // mouse.accepted = false  
-                    startPos = Qt.point(mouse.x, mouse.y)
-                    selectionRect.x = startPos.x
-                    selectionRect.y = startPos.y
-                    selectionRect.width = 0
-                    selectionRect.height = 0
-                    selectionRect.visible = true
+                    Text {
+                        anchors.bottom: parent.bottom
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        text: fileName
+                        font.pixelSize: 10
+                        color: "white"
+                        elide: Text.ElideMiddle
+                    }
                 }
 
-                onPositionChanged: {
-                    selectionRect.x = Math.min(mouse.x, startPos.x)
-                    selectionRect.y = Math.min(mouse.y, startPos.y)
-                    selectionRect.width = Math.abs(mouse.x - startPos.x)
-                    selectionRect.height = Math.abs(mouse.y - startPos.y)
+            }
+            //rubber band
+            Item {
+                anchors.fill: parent
+
+                Rectangle {
+                    id: selectionRect
+                    color: "transparent"
+                    border.color: "blue"
+                    border.width: 1
+                    visible: false
+                    
+                    opacity: 0.3
+                    Rectangle { anchors.fill: parent; color: "blue"; opacity: 0.2 }
                 }
 
-                onReleased: {
-                    selectionRect.visible = false
+                MouseArea {
+                    id: mouseArea
+                    anchors.fill: parent
+                    property point startPos
+                    
+                    propagateComposedEvents: true 
 
-                    const append = mouse.modifiers & Qt.ControlModifier
+                    onPressed: (mouse) => {
+                        // mouse.accepted = false  
+                        startPos = Qt.point(mouse.x, mouse.y)
+                        selectionRect.x = startPos.x
+                        selectionRect.y = startPos.y
+                        selectionRect.width = 0
+                        selectionRect.height = 0
+                        selectionRect.visible = true
+                    }
 
-                    selectItemsInRect({
-                        x: selectionRect.x,
-                        y: selectionRect.y,
-                        width: selectionRect.width,
-                        height: selectionRect.height
-                    }, append)
+                    onPositionChanged: {
+                        selectionRect.x = Math.min(mouse.x, startPos.x)
+                        selectionRect.y = Math.min(mouse.y, startPos.y)
+                        selectionRect.width = Math.abs(mouse.x - startPos.x)
+                        selectionRect.height = Math.abs(mouse.y - startPos.y)
+                    }
+
+                    onReleased: {
+                        selectionRect.visible = false
+
+                        const append = mouse.modifiers & Qt.ControlModifier
+
+                        selectItemsInRect({
+                            x: selectionRect.x,
+                            y: selectionRect.y,
+                            width: selectionRect.width,
+                            height: selectionRect.height
+                        }, append)
+                    }
                 }
             }
         }
