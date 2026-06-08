@@ -7,70 +7,77 @@ import "." as App
 Item {
     id: root
     // default info section
-    property int currentSection : 2
+    property int currentSection : 0
 
     Component.onCompleted: {
         App.DeviceContext.init()
     }
 
-
-    RowLayout {
+    StackLayout {
         anchors.fill: parent
-        spacing: 10
-        // Layout.fillWidth : true
-        // Layout.fillHeight : true
-        
-        ColumnLayout {
-            // Layout.fillWidth : true
-            Layout.fillHeight : true
-            Layout.preferredWidth: 220
-            Repeater {
-                model: App.DeviceContext.devices
-                delegate:SidebarTabButton {
+        currentIndex:  App.DeviceContext.showWelcomePage ? 1 : 0
+
+        RowLayout {
+            anchors.fill: parent
+            spacing: 0
+            
+            ColumnLayout {
+                Layout.fillHeight : true
+                Layout.preferredWidth: 220
+                Repeater {
+                    model: App.DeviceContext.devices
+                    delegate: Item {
                         Layout.fillHeight : true
+                        // implicitHeight: button.implicitHeight
                         Layout.preferredWidth: 200
                         Layout.alignment: Qt.AlignHCenter
-                        currentSection: root.currentSection 
-                        // udid: model.udid
-               
-                        // anchors.fill: parent
-                        // info: model.info 
-                        onSectionChanged: {
-                            console.log("sectionIndex", sectionIndex)
-                            // if (root.currentDeviceUdid  !== udid) 
-                            //     root.currentDeviceUdid  = udid
-                            if (root.currentSection !== sectionIndex)
-                                root.currentSection = sectionIndex
+                        readonly property string deviceUdid: model.udid
+                            
+                        SidebarTabButton {
+                            id : button
+                            anchors.fill: parent
+                            currentSection: root.currentSection 
+                            onSectionChanged: {
+                                if (root.currentSection !== sectionIndex)
+                                    root.currentSection = sectionIndex
+
+                            App.DeviceContext.currentDeviceUdid  = deviceUdid                             
+                            }
+                        }
+                    } 
+                }
+                // spacer taker
+                Item {
+                    Layout.fillHeight : true
+                }
+                    
+            }
+
+
+
+            Repeater {
+                model: App.DeviceContext.devices
+                delegate:Item {
+                    Layout.fillWidth : true
+                    Layout.fillHeight : true
+                    visible : model.udid === App.DeviceContext.currentDeviceUdid 
+                    Device {
+                        device: model
+                        udid: model.udid
+                        anchors.fill: parent
+                        info: model.info 
+                        currentSection: root.currentSection
                     }
                 } 
             }
-                
         }
 
 
-
-        Repeater {
-            model: App.DeviceContext.devices
-            delegate:Item {
-                Layout.fillWidth : true
-                Layout.fillHeight : true
-                visible : model.udid === App.DeviceContext.currentDeviceUdid 
-                Device {
-                    udid: model.udid
-                    anchors.fill: parent
-                    info: model.info 
-                    currentSection: root.currentSection
-                }
-            } 
+        Welcome {
+            id: welcomePage
+            Layout.fillWidth: true
+            Layout.fillHeight: true
         }
-    }
-
-
-    Welcome {
-        id: welcomePage
-        visible : App.DeviceContext.showWelcomePage
-        Layout.fillWidth: true
-        Layout.fillHeight: true
     }
 
 }
