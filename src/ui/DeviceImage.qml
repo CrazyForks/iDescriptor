@@ -7,12 +7,13 @@ Item {
     // width: 500
     // height: 500
 
-    implicitWidth: 500
+    implicitWidth: 300
     implicitHeight: 500
 
-    property string mockupName: "16"
+    required property var displayName
+    property string mockupName: getMockupNameFromDisplayName(displayName)
 
-    readonly property int iosVersion: 26
+    required property int iosVersion
 
     readonly property int cornerRadiusPx: 35
 
@@ -25,9 +26,41 @@ Item {
         return "qrc:/resources/iphone-mockups/iphone-" + name + ".png"
     }
 
+
+    function getMockupNameFromDisplayName(displayName) {
+        if (displayName.includes("iPhone 16") ||
+            displayName.includes("iPhone 17")) {
+            return "16";
+        } else if (displayName.includes("iPhone 15") ||
+                displayName.includes("iPhone 14")) {
+            return "15";
+        } else if (displayName.includes("iPhone X") ||
+                displayName.includes("iPhone 11") ||
+                displayName.includes("iPhone 12") ||
+                displayName.includes("iPhone 13")) {
+            return "x";
+        } else if (displayName.includes("iPhone 6") ||
+                displayName.includes("iPhone 7") ||
+                displayName.includes("iPhone 8") ||
+                displayName.includes("iPhone SE 2nd") ||
+                displayName.includes("iPhone SE 3rd")) {
+            return "6";
+        } else if (displayName.includes("iPhone 5") ||
+                displayName.includes("iPhone SE")) {
+            return "5";
+        } else if (displayName.includes("iPhone 4")) {
+            return "4";
+        } else if (displayName.includes("iPhone 3")) {
+            return "3";
+        } else if (displayName.includes("iPad")) {
+            return "iPad";
+        } else {
+            return "unknown";
+        }
+    }
+
     function wallpaperSourceForIos(version) {
-        // FIXME: hardcoded
-        return "qrc:/resources/ios-wallpapers/iphone-ios26.png"
+        return `qrc:/resources/ios-wallpapers/iphone-ios${version}.png`
     }
 
     function screenRectForMockup(name, srcW, srcH) {
