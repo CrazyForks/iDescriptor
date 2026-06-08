@@ -257,7 +257,7 @@ Item {
                                 anchors.fill: parent
                                 Button {
                                     anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/material-symbols_arrow-left-alt.png"
+                                    icon.source: "qrc:/resources/icons/material-symbols_arrow-left-alt.svg"
                                     // FIXME:theming
                                     opacity: backBtn.enabled ? 1.0 : 0.7
                                 }
@@ -325,7 +325,7 @@ Item {
                                 anchors.fill: parent
                                 Button {
                                     anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/material-symbols_arrow-upward-rounded.png"
+                                    icon.source: "qrc:/resources/icons/material-symbols_arrow-upward-rounded.svg"
                                     // FIXME:theming
                                     opacity: upBtn.enabled ? 1.0 : 0.7
                                 }
