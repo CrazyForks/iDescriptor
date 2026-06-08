@@ -29,10 +29,6 @@ using u_int64_t = uint64_t;
 #include <QDebug>
 #include <QImage>
 #include <QJsonObject>
-#include <QNetworkAccessManager>
-#include <QRegularExpression>
-#include <QThread>
-#include <QtCore/QObject>
 
 #include "service.h"
 #include <mutex>
@@ -75,24 +71,6 @@ using u_int64_t = uint64_t;
 #define HEARTBEAT_RETRY_LIMIT 2
 
 #define DONATE_URL "https://opencollective.com/idescriptor"
-
-#ifdef __linux__
-#define LOCKDOWN_PATH "/var/lib/lockdown"
-#elif __APPLE__
-#define LOCKDOWN_PATH "/var/db/lockdown"
-#else
-/* Windows */
-#define LOCKDOWN_PATH qgetenv("PROGRAMDATA") + "/Apple/Lockdown"
-#endif
-
-// rust codebase
-// #include "idescriptor_rust_codebase/src/afc2_services.cxxqt.h"
-// #include "idescriptor_rust_codebase/src/afc_services.cxxqt.h"
-// #include "idescriptor_rust_codebase/src/hause_arrest.cxxqt.h"
-// #include "idescriptor_rust_codebase/src/io_manager.cxxqt.h"
-// #include "idescriptor_rust_codebase/src/lib.cxxqt.h"
-// #include "idescriptor_rust_codebase/src/screenshot.cxxqt.h"
-// #include "idescriptor_rust_codebase/src/service_manager.cxxqt.h"
 
 namespace iDescriptor
 {
@@ -289,10 +267,6 @@ struct ImageInfo {
     bool isMounted = false;
 };
 
-void fetchAppIconFromApple(
-    QNetworkAccessManager *manager, const QString &bundleId,
-    std::function<void(const QPixmap &, const QJsonObject &)> callback);
-
 struct NetworkDevice {
     QString name;       // service name
     QString hostname;   // e.g., iPhone-2.local
@@ -311,13 +285,23 @@ struct NetworkDevice {
 
     bool isValid() const
     {
-        return !name.isEmpty() && !address.isEmpty() && !macAddress.isEmpty() &&
-               port > 0;
+        return !name.isEmpty() && !address.isEmpty() && !macAddress.isEmpty();
     }
 
     bool operator==(const NetworkDevice &other) const
     {
         return name == other.name && address == other.address;
+    }
+
+    QVariantMap toVariantMap() const
+    {
+        QVariantMap map;
+        map["name"] = name;
+        map["address"] = address;
+        map["port"] = port;
+        map["macAddress"] = macAddress;
+        map["hostname"] = hostname;
+        return map;
     }
 };
 
@@ -390,14 +374,14 @@ inline bool versionMatches(const QString &currentVersionStr,
     return currentVersion == conditionVersion;
 }
 
-inline QJsonObject getVersionedConfig(const QJsonObject &rootObj)
-{
-    QStringList keys = rootObj.keys();
-    for (const QString &key : keys) {
-        if (versionMatches(APP_VERSION, key)) {
-            qDebug() << "getVersionedConfig picked version:" << key;
-            return rootObj[key].toObject();
-        }
-    }
-    return QJsonObject();
-}
+// inline QJsonObject getVersionedConfig(const QJsonObject &rootObj)
+// {
+//     QStringList keys = rootObj.keys();
+//     for (const QString &key : keys) {
+//         if (versionMatches(APP_VERSION, key)) {
+//             qDebug() << "getVersionedConfig picked version:" << key;
+//             return rootObj[key].toObject();
+//         }
+//     }
+//     return QJsonObject();
+// }
