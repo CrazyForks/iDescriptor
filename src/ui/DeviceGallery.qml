@@ -1,8 +1,8 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-import iDescriptor 1.0
-
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import iDescriptor
+import "./base"
 
 Item {
     id: root
@@ -96,143 +96,141 @@ Item {
         }
     }
 
-    BusyIndicator {
-        running: !query.albums
-        anchors.centerIn: parent
-    }
+    StateView {
+        anchors.fill: parent
+        autoSwitchContent: false
+        viewState: query.albums ? StateView.State.Content : StateView.State.Loading
+        contentItem : ColumnLayout {
+            anchors.fill : parent
 
-
-    ColumnLayout {
-
-        anchors.fill : parent
-
-        Button {
-            text: isMainPage ? "BACK" : "BACK TO MAIN"
-            enabled : root.albumId != 0
-            onClicked : {
-                root.albumId = 0
+            Button {
+                text: isMainPage ? "BACK" : "BACK TO MAIN"
+                enabled : root.albumId != 0
+                onClicked : {
+                    root.albumId = 0
+                }
             }
-        }
 
-        ScrollView {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
 
-            Item { 
-                width: parent.width
-                height: parent.height
+                Item { 
+                    width: parent.width
+                    height: parent.height
 
-                GridView {
-                    id: gallery
-                    anchors.fill: parent
-                    visible: albumId ? false : query.albums
-                    cellWidth: 250
-                    cellHeight: 250
-                    model: albumModel
-                    ScrollBar.vertical: ScrollBar {}
-                    delegate: ItemDelegate {
-                        width: 250
-                        height: 250
-                        highlighted: selected
+                    GridView {
+                        id: gallery
+                        anchors.fill: parent
+                        visible: albumId ? false : query.albums
+                        cellWidth: 250
+                        cellHeight: 250
+                        model: albumModel
+                        ScrollBar.vertical: ScrollBar {}
+                        delegate: ItemDelegate {
+                            width: 250
+                            height: 250
+                            highlighted: selected
 
-                        MouseArea {
-                            anchors.fill: parent
-                            onDoubleClicked: {
-                                console.log("delegate double-click", index, albumId)
-                                root.albumId = albumId
+                            MouseArea {
+                                anchors.fill: parent
+                                onDoubleClicked: {
+                                    console.log("delegate double-click", index, albumId)
+                                    root.albumId = albumId
+                                }
+                            }
+
+                            Rectangle {
+                                anchors.fill: parent
+                                color: selected ? "#4FC3F7" : "transparent"
+                                opacity : 0.3
+                                z : 1
+                            }
+
+                            Image {
+                                cache: false
+                                anchors.fill: parent
+                                //FIXME:use encodeuricomp
+                                source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
+                                fillMode: Image.PreserveAspectFit
+                            }
+
+                            Text {
+                                anchors.bottom: parent.bottom
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                text: fileName + albumId
+                                font.pixelSize: 10
+                                color: "white"
+                                elide: Text.ElideMiddle
                             }
                         }
 
-                        Rectangle {
-                            anchors.fill: parent
-                            color: selected ? "#4FC3F7" : "transparent"
-                            opacity : 0.3
-                            z : 1
-                        }
-
-                        Image {
-                            cache: false
-                            anchors.fill: parent
-                            //FIXME:use encodeuricomp
-                            source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
-                            fillMode: Image.PreserveAspectFit
-                        }
-
-                        Text {
-                            anchors.bottom: parent.bottom
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            text: fileName + albumId
-                            font.pixelSize: 10
-                            color: "white"
-                            elide: Text.ElideMiddle
-                        }
                     }
-
-                }
-                //rubber band
-                Item {
-                    anchors.fill: parent
-
-                    Rectangle {
-                        id: selectionRect
-                        color: "transparent"
-                        border.color: "blue"
-                        border.width: 1
-                        visible: false
-                        
-                        opacity: 0.3
-                        Rectangle { anchors.fill: parent; color: "blue"; opacity: 0.2 }
-                    }
-
-                    MouseArea {
-                        id: mouseArea
+                    //rubber band
+                    Item {
                         anchors.fill: parent
-                        property point startPos
-                        
-                        propagateComposedEvents: true 
 
-                        onPressed: (mouse) => {
-                            // mouse.accepted = false  
-                            startPos = Qt.point(mouse.x, mouse.y)
-                            selectionRect.x = startPos.x
-                            selectionRect.y = startPos.y
-                            selectionRect.width = 0
-                            selectionRect.height = 0
-                            selectionRect.visible = true
+                        Rectangle {
+                            id: selectionRect
+                            color: "transparent"
+                            border.color: "blue"
+                            border.width: 1
+                            visible: false
+                            
+                            opacity: 0.3
+                            Rectangle { anchors.fill: parent; color: "blue"; opacity: 0.2 }
                         }
 
-                        onPositionChanged: {
-                            selectionRect.x = Math.min(mouse.x, startPos.x)
-                            selectionRect.y = Math.min(mouse.y, startPos.y)
-                            selectionRect.width = Math.abs(mouse.x - startPos.x)
-                            selectionRect.height = Math.abs(mouse.y - startPos.y)
-                        }
+                        MouseArea {
+                            id: mouseArea
+                            anchors.fill: parent
+                            property point startPos
+                            
+                            propagateComposedEvents: true 
 
-                        onReleased: {
-                            selectionRect.visible = false
+                            onPressed: (mouse) => {
+                                // mouse.accepted = false  
+                                startPos = Qt.point(mouse.x, mouse.y)
+                                selectionRect.x = startPos.x
+                                selectionRect.y = startPos.y
+                                selectionRect.width = 0
+                                selectionRect.height = 0
+                                selectionRect.visible = true
+                            }
 
-                            const append = mouse.modifiers & Qt.ControlModifier
+                            onPositionChanged: {
+                                selectionRect.x = Math.min(mouse.x, startPos.x)
+                                selectionRect.y = Math.min(mouse.y, startPos.y)
+                                selectionRect.width = Math.abs(mouse.x - startPos.x)
+                                selectionRect.height = Math.abs(mouse.y - startPos.y)
+                            }
 
-                            selectItemsInRect({
-                                x: selectionRect.x,
-                                y: selectionRect.y,
-                                width: selectionRect.width,
-                                height: selectionRect.height
-                            }, append)
+                            onReleased: {
+                                selectionRect.visible = false
+
+                                const append = mouse.modifiers & Qt.ControlModifier
+
+                                selectItemsInRect({
+                                    x: selectionRect.x,
+                                    y: selectionRect.y,
+                                    width: selectionRect.width,
+                                    height: selectionRect.height
+                                }, append)
+                            }
                         }
                     }
-                }
-            
-                AlbumContents {
-                    visible : !isMainPage
-                    query : root.query
-                    udid : root.udid
-                    albumId: root.albumId
-                    anchors.fill: parent
+                
+                    AlbumContents {
+                        visible : !isMainPage
+                        query : root.query
+                        udid : root.udid
+                        albumId: root.albumId
+                        anchors.fill: parent
+                    }
                 }
             }
-        }
 
+        }
     }
 }
