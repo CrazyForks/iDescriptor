@@ -392,15 +392,16 @@ Item {
             anchors.margins: 12
             spacing: 12
 
-            Image {
+            IconImage {
                 id: icon
                 source: tile.iconSource
 
                 Layout.preferredHeight: 34
                 Layout.preferredWidth: 34
 
-                // FIXME:theming
-                // color: "black"
+                // FIXME: hardcoded accent color
+                color: "#0078d7"
+
                 opacity: tile.enabled ? 1.0 : 0.7
             }
 
