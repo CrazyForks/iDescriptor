@@ -356,7 +356,7 @@ Item {
                                 anchors.fill: parent
                                 Button {
                                     anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/lets-icons:import.svg"
+                                    icon.source: "qrc:/resources/icons/lets-icons_import.svg"
                                     // FIXME:theming
                                     opacity: importBtn.enabled ? 1.0 : 0.7
                                 }
