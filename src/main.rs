@@ -150,29 +150,6 @@ fn main() {
             //                             "their default values.");
             // }
             // QQmlApplicationEngine engine;
-
-        #ifdef WIN32
-            QString appPath = QCoreApplication::applicationDirPath();
-            QString gstPluginPath =
-                QDir::toNativeSeparators(appPath + "/gstreamer-1.0");
-            QString gstPluginScannerPath = QDir::toNativeSeparators(
-                appPath + "/gstreamer-1.0/libexec/gst-plugin-scanner.exe");
-
-            const char *oldPath = getenv("PATH");
-            QString newPath = appPath + ";" + QString(oldPath);
-            qputenv("PATH", newPath.toUtf8());
-
-            qputenv("GST_PLUGIN_PATH", gstPluginPath.toUtf8());
-            qDebug() << "GST_PLUGIN_PATH=" << gstPluginPath;
-            qputenv("GST_REGISTRY_REUSE_PLUGIN_SCANNER", "no");
-            qDebug() << "GST_REGISTRY_REUSE_PLUGIN_SCANNER=no";
-            qputenv("GST_PLUGIN_SYSTEM_PATH", gstPluginPath.toUtf8());
-            qDebug() << "GST_PLUGIN_SYSTEM_PATH=" << gstPluginPath;
-            qputenv("GST_DEBUG", "GST_PLUGIN_LOADING:5");
-            qDebug() << "GST_DEBUG=GST_PLUGIN_LOADING:5";
-            qputenv("GST_PLUGIN_SCANNER_1_0", gstPluginScannerPath.toUtf8());
-            qDebug() << "GST_PLUGIN_SCANNER_1_0=" << gstPluginScannerPath;
-        #endif
         #ifdef __APPLE__
             QString appPath = QCoreApplication::applicationDirPath();
             QString frameworksPath =
@@ -187,6 +164,34 @@ fn main() {
             setenv("GST_PLUGIN_SCANNER", gstPluginScannerPath.toUtf8().constData(), 1);
         #endif
     });
+
+    // in the release build we bundle gstreamer plugins
+    if !cfg!(debug_assertions) {
+        cpp!(unsafe [] {
+            #ifdef WIN32
+                QString appPath = QCoreApplication::applicationDirPath();
+                QString gstPluginPath =
+                    QDir::toNativeSeparators(appPath + "/gstreamer-1.0");
+                QString gstPluginScannerPath = QDir::toNativeSeparators(
+                    appPath + "/gstreamer-1.0/libexec/gst-plugin-scanner.exe");
+
+                const char *oldPath = getenv("PATH");
+                QString newPath = appPath + ";" + QString(oldPath);
+                qputenv("PATH", newPath.toUtf8());
+
+                qputenv("GST_PLUGIN_PATH", gstPluginPath.toUtf8());
+                qDebug() << "GST_PLUGIN_PATH=" << gstPluginPath;
+                qputenv("GST_REGISTRY_REUSE_PLUGIN_SCANNER", "no");
+                qDebug() << "GST_REGISTRY_REUSE_PLUGIN_SCANNER=no";
+                qputenv("GST_PLUGIN_SYSTEM_PATH", gstPluginPath.toUtf8());
+                qDebug() << "GST_PLUGIN_SYSTEM_PATH=" << gstPluginPath;
+                qputenv("GST_DEBUG", "GST_PLUGIN_LOADING:5");
+                qDebug() << "GST_DEBUG=GST_PLUGIN_LOADING:5";
+                qputenv("GST_PLUGIN_SCANNER_1_0", gstPluginScannerPath.toUtf8());
+                qDebug() << "GST_PLUGIN_SCANNER_1_0=" << gstPluginScannerPath;
+            #endif
+        });
+    }
 
     if cfg!(compiled_qml) {
         // For some reason on some devices QML detects that debugger is connected and fails to load pre-compiled qml files
