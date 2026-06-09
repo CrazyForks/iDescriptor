@@ -3,6 +3,8 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import iDescriptor 1.0
 import "." as App
+// FIXME: this will fail on Linux and macOS
+import "./windows"
 
 Item {
     id: root
@@ -32,11 +34,13 @@ Item {
                         Layout.preferredWidth: 200
                         Layout.alignment: Qt.AlignHCenter
                         readonly property string deviceUdid: model.udid
-                            
+                        readonly property var info: model.info
                         SidebarTabButton {
                             id : button
                             anchors.fill: parent
-                            currentSection: root.currentSection 
+                            currentSection: root.currentSection
+                            title: info.product_type
+                            udid : info["UniqueDeviceID"]
                             onSectionChanged: {
                                 if (root.currentSection !== sectionIndex)
                                     root.currentSection = sectionIndex
