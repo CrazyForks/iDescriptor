@@ -43,7 +43,6 @@ impl Apps {
             match res {
                 Ok((maybe_acc, tool)) => {
                     let acc = maybe_acc.unwrap_or_default();
-                    println!("email :{}", acc.email);
 
                     let mut state = QVariantMap::default();
                     qvariantmap_insert!(state, "init", true);
