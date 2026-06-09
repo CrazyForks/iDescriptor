@@ -30,11 +30,12 @@
 #include <map>
 #include <string>
 
-#ifdef WIN32
+// FIXME
+// #ifdef WIN32
 #include "dns_sd.h"
-#else
-#include <dns_sd.h>
-#endif
+// #else
+// #include <dns_sd.h>
+// #endif
 
 class DnssdService : public QObject
 {
