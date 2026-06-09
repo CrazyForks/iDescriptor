@@ -1,10 +1,12 @@
 use cmake::build;
 use core::panic;
-use std::env;
 use std::fmt::Write;
 use std::path::Path;
 use std::process::Command;
 use walkdir::WalkDir;
+use std::env;
+use std::path::PathBuf;
+
 
 fn compile_qml(dir: &str, qt_include_path: &str, qt_library_path: &str) {
     let mut config = cc::Build::new();
@@ -155,7 +157,7 @@ fn compile_bridge(qt_include_path: &str) {
     //         let moc_cpp = run_moc(&moc, header, out_dir);
     //         cc_build.file(moc_cpp);
     //     }
-    // }
+    // } 
 
     if let Ok(ffmpeg_dir) = std::env::var("FFMPEG_DIR") {
         cc_build.include(format!("{}/include", ffmpeg_dir));
@@ -315,8 +317,74 @@ fn compile_ccp_codebase() {
                 .probe("avahi-client")
                 .unwrap();
         }
+        "windows" => {
+            let paths = [
+                "src/core/services/dnssd/dnssd_service.cpp",
+                "src/core/services/dnssd/dnssd_service.h",
+                "src/networkdeviceprovider.h",
+            ];
+
+            let mut build = cc::Build::new();
+
+            build.cpp(true);
+
+            for path in paths {
+                let (dir_name, file_name) = dirname_and_filename(path);
+                // no need moc for cpp files
+                if file_name.to_ascii_lowercase().ends_with(".cpp") {
+                    build.file(path);
+                    continue;
+                };
+                let file_out_dir = cpp_out_path.join(dir_name);
+                std::fs::create_dir_all(&file_out_dir).unwrap();
+                let moc_out_file =
+                    file_out_dir.to_str().unwrap().to_owned() + &format!("/moc_{}.cpp", &file_name);
+
+                let status = Command::new("C:\\msys64\\mingw64\\share\\qt6\\bin\\moc.exe")
+                    .args([path, "-o", &moc_out_file])
+                    .status()
+                    .unwrap();
+
+                assert!(status.success());
+                
+                build.file(moc_out_file);
+                build.file(path);
+            }
+
+            add_pkg_includes_cc(&mut build, "Qt6Core");
+            add_pkg_includes_cc(&mut build, "Qt6Gui");
+            add_pkg_includes_cc(&mut build, "Qt6Qml");
+            add_pkg_includes_cc(&mut build, "Qt6Quick");
+            add_pkg_includes_cc(&mut build, "Qt6QuickControls2");
+
+
+            let bonjour_sdk = if let Ok(sdk_path) = env::var("BONJOUR_SDK") {
+                PathBuf::from(sdk_path)
+            } else {
+                // Try common Windows installation paths
+                let possible_paths = vec![
+                    "C:/Program Files/Bonjour SDK",
+                    // "C:/Program Files (x86)/Bonjour SDK",
+                    // "C:/Windows/System32",
+                ];
+
+                possible_paths
+                    .iter()
+                    .find(|p| PathBuf::from(p).join("Include/dns_sd.h").exists())
+                    .map(|p| PathBuf::from(p))
+                    .expect("Bonjour SDK not found. Please set BONJOUR_SDK environment variable.")
+            };
+
+            build.include(bonjour_sdk.join("Include")); 
+            // println!("cargo:rustc-link-search=native={}", bonjour_sdk.join("Lib/x64").display());  // add this
+            // println!("cargo:rustc-link-lib=dnssd");  
+            println!("cargo:rustc-link-arg={}", bonjour_sdk.join("Lib/x64/dnssd.lib").display());
+
+            build.compile("cpp_codebase");
+        }
         os_ => panic!("building not supported on this platform"),
     };
+
 }
 
 fn main() {
@@ -326,6 +394,8 @@ fn main() {
     let qt_include_path = env::var("DEP_QT_INCLUDE_PATH").unwrap();
     let qt_library_path = env::var("DEP_QT_LIBRARY_PATH").unwrap();
     let qt_version = env::var("DEP_QT_VERSION").unwrap();
+
+    println!("Qt lib path: {}", qt_library_path);
 
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
 
@@ -410,9 +480,88 @@ fn main() {
         );
     }
 
-    config.include(&qt_include_path).build("src/main.rs");
 
     compile_bridge(&qt_include_path);
     compile_uxplay();
     compile_ccp_codebase();
+
+    // workaround for windows for now, we need to handle this in compile_bridge  
+    if target_os == "windows" {
+        // Look for Bonjour SDK
+        let bonjour_sdk = if let Ok(sdk_path) = env::var("BONJOUR_SDK") {
+            PathBuf::from(sdk_path)
+        } else {
+            let possible_paths = vec![
+                "C:/Program Files/Bonjour SDK",
+                // "C:/Program Files (x86)/Bonjour SDK",
+            ];
+
+            possible_paths
+                .iter()
+                .find(|p| PathBuf::from(p).join("Include/dns_sd.h").exists())
+                .map(|p| PathBuf::from(p))
+                .expect("Bonjour SDK not found. Please set BONJOUR_SDK environment variable.")
+        };
+        println!("Found Bonjour SDK at: {}", bonjour_sdk.display());
+
+        let include_path = bonjour_sdk.join("Include");
+        config.include(&include_path);
+
+
+        let out_dir = env::var("OUT_DIR").unwrap();
+        let moc_dir = format!("{}/moc", out_dir);
+        std::fs::create_dir_all(&moc_dir).unwrap();
+
+        let headers_to_moc = [
+            "src/core/services/dnssd/dnssd_service.h",
+            "src/networkdeviceprovider.h",
+        ];
+
+        for header in &headers_to_moc {
+            let file_name = Path::new(header).file_name().unwrap().to_str().unwrap();
+            let moc_out = format!("{}/moc_{}.cpp", moc_dir, file_name);
+            let status = Command::new("C:\\msys64\\mingw64\\share\\qt6\\bin\\moc.exe")
+                .args([*header, "-o", &moc_out])
+                .status()
+                .unwrap();
+            assert!(status.success(), "MOC failed for {}", header);
+            config.file(&moc_out);
+        }
+
+        config.file("src/core/services/dnssd/dnssd_service.cpp");
+
+        config.file("src/bridge.cpp");
+        config.include(format!("{}/QtGui", qt_include_path));
+        if let Ok(ffmpeg_dir) = std::env::var("FFMPEG_DIR") {
+            config.include(format!("{}/include", ffmpeg_dir));
+            println!("cargo:rustc-link-search={}/lib", ffmpeg_dir);
+            println!("cargo:rustc-link-search={}/lib64", ffmpeg_dir);
+            println!("cargo:rustc-link-arg={}/lib/avformat.lib", ffmpeg_dir);
+            println!("cargo:rustc-link-arg={}/lib/avcodec.lib", ffmpeg_dir);
+            println!("cargo:rustc-link-arg={}/lib/avutil.lib", ffmpeg_dir);
+            println!("cargo:rustc-link-arg={}/lib/swscale.lib", ffmpeg_dir);
+        } else {
+            if let Ok(lib) = pkg_config::Config::new()
+                .cargo_metadata(false)
+                .atleast_version("58")
+                .probe("libavformat")
+            {
+                for path in lib.include_paths {
+                    config.include(path);
+                }
+                for path in lib.link_paths {
+                    println!("cargo:rustc-link-search=native={}", path.display());
+                }
+            }
+            for lib in ["avformat", "avcodec", "avutil", "swscale"] {
+                println!("cargo:rustc-link-arg=-l{}", lib);
+            }
+        }
+
+        println!("cargo:rustc-link-arg={}", bonjour_sdk.join("Lib/x64/dnssd.lib").display());
+
+        println!("cargo:rustc-env=BONJOUR_INCLUDE_PATH={}", include_path.display());
+    }
+
+    config.include(&qt_include_path).build("src/main.rs");
 }
