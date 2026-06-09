@@ -14,7 +14,6 @@ FluWindow {
     minimumHeight: 320
     launchMode: FluWindowType.SingleTask
     fitsAppBarWindows: true
-    property int currentIndex: 0
 
     appBar: FluAppBar {
         height: 28
@@ -24,37 +23,46 @@ FluWindow {
         RowLayout{
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.top: parent.top
+            anchors.top: parent.top 
             anchors.topMargin: 10
             spacing: 0
             TabButton {
                 text: qsTr("iDevice")
-                onClicked: currentIndex = 0
-                active: currentIndex == 0
+                onClicked: DeviceContext.currentTab = 0
+                active: DeviceContext.currentTab == 0
             }
 
             TabButton {
                 text: qsTr("Apps")
-                onClicked: currentIndex = 1
-                active: currentIndex == 1
+                onClicked: DeviceContext.currentTab = 1
+                active:  DeviceContext.currentTab == 1
             }
             TabButton {
                 text: qsTr("Toolbox")
-                onClicked: currentIndex = 2
-                active: currentIndex == 2
+                onClicked:  DeviceContext.currentTab = 2
+                active:  DeviceContext.currentTab == 2
             }
             TabButton {
                 text: qsTr("Jailbroken")
-                onClicked: currentIndex = 3
-                active: currentIndex == 3
+                onClicked:  DeviceContext.currentTab = 3
+                active:  DeviceContext.currentTab == 3
             }
         }
     }
 
-
-    Tabs {
-        currentIndex: window.currentIndex
+    ColumnLayout {
         anchors.fill: parent
-        anchors.topMargin: appBar.height + 25
+        anchors.topMargin: appBar.height + 55
+        Tabs {
+            Layout.fillWidth : true
+            Layout.fillHeight : true
+            
+            currentIndex: DeviceContext.currentTab
+        }
+
+        StatusBar {
+            
+        }
     }
+
 }

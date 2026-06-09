@@ -14,7 +14,7 @@ QtObject {
     property string currentDeviceUdid : ""
     // default to info section
     property int currentSection : 0 
-
+    property int currentTab: 0
     property bool showWelcomePage : true
 
     signal device_removed(string udid)

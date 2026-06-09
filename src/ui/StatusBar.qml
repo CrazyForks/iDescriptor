@@ -6,16 +6,24 @@ import "." as App
 Item {
     Layout.fillWidth: true
     Layout.preferredHeight: 28
+
+    Layout.leftMargin: 10
+    Layout.rightMargin: 10
+    Layout.topMargin: 5
+    Layout.bottomMargin: 5
     
     RowLayout {
         anchors.fill: parent
-        spacing: 12
+        spacing: Qt.platform.os === "windows" ? 2 : 5
         Label {
             text : qsTr("iDescriptor: %1 device(s) connected").arg(App.DeviceContext.devices.count)
-            color: "red"
         }
         Button {
+            visible: App.DeviceContext.currentTab === 0
             icon.source: "qrc:/resources/icons/lets-icons_horizontal-down-left-main-light.svg"
+            HoverHandler {
+                cursorShape: Qt.PointingHandCursor
+            }
             onClicked: {
                 App.DeviceContext.showWelcomePage = !App.DeviceContext.showWelcomePage
             }
@@ -25,6 +33,9 @@ Item {
         }
         Button {
             id: myButton
+            HoverHandler {
+                cursorShape: Qt.PointingHandCursor
+            }
             icon.source: "qrc:/resources/icons/uim_process.svg"
             onClicked: {
                 var globalPos = myButton.mapToGlobal(0, 0)
