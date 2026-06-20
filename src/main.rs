@@ -1,11 +1,13 @@
 #![recursion_limit = "4096"]
-#![windows_subsystem = "windows"]
+// TODO: disable on release build
+// #![windows_subsystem = "windows"]
 
 use cpp::*;
 use idevice::{
     afc::AfcClient, diagnostics_relay::DiagnosticsRelayClient, lockdown::LockdownClient,
 };
 use qmetaobject::*;
+use simplelog::{ColorChoice, ConfigBuilder, LevelFilter, TermLogger, TerminalMode};
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -39,6 +41,7 @@ pub mod service_factory;
 pub mod service_manager;
 pub mod springboard_services;
 pub mod utils;
+pub mod ui_qrc;
 
 pub const POSSIBLE_ROOT: &str = "../../../../";
 pub const APP_LABEL: &str = "iDescriptor";
@@ -46,6 +49,7 @@ pub const EV_CONNECTED: u32 = 1;
 pub const EV_DISCONNECTED: u32 = 2;
 pub const EV_PAIRING_PENDING: u32 = 3;
 pub const EV_FAIL: u32 = 4;
+
 
 // TODO
 // #[global_allocator]
@@ -86,8 +90,18 @@ where
     rx.recv().expect("Tokio runtime worker panicked")
 }
 
+
 fn main() {
-    let ui_live_reload = true;
+    TermLogger::init(
+        LevelFilter::Debug,
+        ConfigBuilder::new()
+            .build(),
+        TerminalMode::Mixed, 
+        ColorChoice::Auto,
+    )
+    .expect("Failed to initialize logger");
+
+    let ui_live_reload = false;
     // #[cfg(target_os = "windows")]
     // unsafe {
     //     use windows::Win32::System::Console::*;
@@ -98,7 +112,7 @@ fn main() {
 
     // let _ = util::install_crash_handler();
     // utils::init_logging();
-    // qmetaobject::log::init_qt_to_rust();
+    qmetaobject::log::init_qt_to_rust();
     let icons_path = if ui_live_reload {
         QString::from(format!("{}/resources/icons/", env!("CARGO_MANIFEST_DIR")))
     } else {
@@ -165,42 +179,36 @@ fn main() {
         #endif
     });
 
-    // in the release build we bundle gstreamer plugins
-    if !cfg!(debug_assertions) {
-        cpp!(unsafe [] {
-            #ifdef WIN32
-                QString appPath = QCoreApplication::applicationDirPath();
-                QString gstPluginPath =
-                    QDir::toNativeSeparators(appPath + "/gstreamer-1.0");
-                QString gstPluginScannerPath = QDir::toNativeSeparators(
-                    appPath + "/gstreamer-1.0/libexec/gst-plugin-scanner.exe");
-
-                const char *oldPath = getenv("PATH");
-                QString newPath = appPath + ";" + QString(oldPath);
-                qputenv("PATH", newPath.toUtf8());
-
-                qputenv("GST_PLUGIN_PATH", gstPluginPath.toUtf8());
-                qDebug() << "GST_PLUGIN_PATH=" << gstPluginPath;
-                qputenv("GST_REGISTRY_REUSE_PLUGIN_SCANNER", "no");
-                qDebug() << "GST_REGISTRY_REUSE_PLUGIN_SCANNER=no";
-                qputenv("GST_PLUGIN_SYSTEM_PATH", gstPluginPath.toUtf8());
-                qDebug() << "GST_PLUGIN_SYSTEM_PATH=" << gstPluginPath;
-                qputenv("GST_DEBUG", "GST_PLUGIN_LOADING:5");
-                qDebug() << "GST_DEBUG=GST_PLUGIN_LOADING:5";
-                qputenv("GST_PLUGIN_SCANNER_1_0", gstPluginScannerPath.toUtf8());
-                qDebug() << "GST_PLUGIN_SCANNER_1_0=" << gstPluginScannerPath;
-            #endif
-        });
-    }
-
-    if cfg!(compiled_qml) {
-        // For some reason on some devices QML detects that debugger is connected and fails to load pre-compiled qml files
-        cpp!(unsafe [] { qputenv("QML_FORCE_DISK_CACHE", "1"); });
-    }
-
     crate::qrc::rsrc();
-    // #[cfg(not(compiled_qml))]
-    // crate::resources_qml::rsrc_qml();
+    crate::ui_qrc::qml();
+
+
+    // workaround for gstreamer plugins not being loaded on Windows
+    #[cfg(target_os = "windows")] {
+        // in the release build we bundle gstreamer plugins
+        if !cfg!(debug_assertions) {
+            // unsafe is needed because of env::set_var
+            unsafe {
+                use std::env;
+        
+                let exe_dir = std::env::current_exe()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .to_path_buf();
+        
+                let gst_plugin_path = exe_dir.join("gstreamer-1.0");
+        
+                env::set_var(
+                    "GST_PLUGIN_PATH",
+                    gst_plugin_path.to_string_lossy().to_string(),
+                );
+        
+            }
+        }
+
+        crate::ui_qrc::windows_qml();
+    }
 
     // qml_register_type::<core::Core>(cstr::cstr!("iDescriptor"), 1, 0, cstr::cstr!("Core"));
     qml_register_type::<query_sqlite::Query>(
@@ -256,15 +264,22 @@ fn main() {
     let service_factory = QObjectBox::new(crate::service_factory::ServiceFactory::new(engine_ptr));
     engine.set_object_property("serviceFactory".into(), service_factory.pinned());
 
+    let windows_qml_entry = "src/ui/windows/Main.qml";
+    let other_qml_entry = "src/ui/Main.qml";
+
+    let entry = if cfg!(target_os = "windows") {
+        windows_qml_entry
+    } else {
+        other_qml_entry
+    };
+
+
     if !ui_live_reload {
         use std::path::PathBuf;
         // Try to load from disk first
         let path = (|| -> Option<String> {
-            let path = if cfg!(any(target_os = "macos", target_os = "ios")) {
-                PathBuf::from("../Resources/ui/Main.qml")
-            } else {
-                PathBuf::from("./ui/Main.qml")
-            };
+            let path =   PathBuf::from(entry);
+        
             let final_path = std::env::current_exe().ok()?.parent()?.join(path);
             if final_path.exists() {
                 Some(String::from(final_path.to_str()?))
@@ -276,20 +291,15 @@ fn main() {
             engine.load_file(path.into());
         } else {
             // Load from resources
-            engine.load_url(QString::from("qrc:/src/ui/Main.qml").into());
+            engine.load_url(QString::from(format!("qrc:/{}",entry)).into());        
         }
+
     } else {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
 
-        let main_qml_path = if cfg!(target_os = "windows") {
-            format!("{}/src/ui/windows/Main.qml", manifest_dir).into()
-        } else {
-            format!("{}/src/ui/Main.qml", manifest_dir).into()
-        };
+        engine.load_file(format!("{}/{}", manifest_dir, entry).into());
 
-        engine.load_file(main_qml_path);
-
-        let ui_path = QString::from(format!("{}/src/ui", manifest_dir));
+        // let ui_path = QString::from(format!("{}/src/ui", manifest_dir));
         // cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *", ui_path as "QString"] { init_live_reload(engine_ptr, ui_path); });
     }
 
