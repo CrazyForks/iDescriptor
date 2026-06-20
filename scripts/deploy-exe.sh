@@ -86,7 +86,9 @@ WANTED_PLUGINS=(
     "libgstvideoconvertscale"
     "libgstmultifile"
     "libgstjpeg"
+    # GL plugin
     "libgstqml6"
+    "libgstopengl"
 )
 
 mkdir -p "${OUTPUT_DIR}/gstreamer-1.0"
@@ -240,7 +242,11 @@ ADDITIONAL_DLLS=(
     "libmd4c.dll"
     "zlib1.dll"
     "libsharpyuv-0.dll"
+    #gl plugins dependencies
     "libgstapp-1.0-0.dll"
+    "libgstgl-1.0-0.dll"
+    "libgstcontroller-1.0-0.dll"
+    "libgraphene-1.0-0.dll"
 )
 
 echo "Copying additional MinGW runtime DLLs from MSYS2..."
