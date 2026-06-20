@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import "./installed-apps"
+import "installed-apps"
 
 
 Item {
