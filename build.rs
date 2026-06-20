@@ -8,116 +8,6 @@ use std::env;
 use std::path::PathBuf;
 
 
-fn compile_qml(dir: &str, qt_include_path: &str, qt_library_path: &str) {
-    let mut config = cc::Build::new();
-    config.include(qt_include_path);
-    config.include(&format!("{}/QtCore", qt_include_path));
-    config.include(&format!("{}/QtQml", qt_include_path));
-
-    println!("cargo:rerun-if-changed=src/live_reload.cpp");
-    println!("cargo:rerun-if-changed=src/utils.rs");
-
-    if cfg!(target_os = "macos") {
-        config.include(format!("{}/QtCore.framework/Headers/", qt_library_path));
-        config.include(format!("{}/QtQml.framework/Headers/", qt_library_path));
-    }
-    for f in std::env::var("DEP_QT_COMPILE_FLAGS")
-        .unwrap()
-        .split_terminator(';')
-    {
-        config.flag(f);
-    }
-
-    println!("cargo:rerun-if-changed={}", dir);
-
-    let out_dir = env::var("OUT_DIR").unwrap();
-    let out_dir = Path::new(&out_dir);
-    let main_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-
-    let mut files = Vec::new();
-    let mut qrc = "<RCC>\n<qresource prefix=\"/\">\n".to_string();
-    WalkDir::new(dir).into_iter().flatten().for_each(|entry| {
-        let f_name = entry.path().to_string_lossy().replace('\\', "/");
-        if f_name.ends_with(".qml") || f_name.ends_with(".js") {
-            let _ = writeln!(qrc, "<file>{}</file>", f_name);
-
-            let cpp_name = f_name
-                .replace('/', "_")
-                .replace(".qml", ".cpp")
-                .replace(".js", ".cpp");
-            let cpp_path = out_dir.join(cpp_name).to_string_lossy().to_string();
-
-            config.file(&cpp_path);
-            files.push((f_name, cpp_path));
-        }
-    });
-
-    let qt_path = std::path::Path::new(qt_library_path).parent().unwrap();
-    let compiler_path = if qt_path.join("libexec/qmlcachegen").exists() {
-        qt_path
-            .join("libexec/qmlcachegen")
-            .to_string_lossy()
-            .to_string()
-    } else if qt_path.join("../macos/libexec/qmlcachegen").exists() {
-        qt_path
-            .join("../macos/libexec/qmlcachegen")
-            .to_string_lossy()
-            .to_string()
-    } else if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows"
-        && env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "aarch64"
-    {
-        qt_path
-            .join("../msvc2019_64/bin/qmlcachegen")
-            .to_string_lossy()
-            .to_string()
-    } else {
-        "qmlcachegen".to_string()
-    };
-
-    qrc.push_str("</qresource>\n</RCC>");
-    let qrc_path = Path::new(&main_dir)
-        .join("ui.qrc")
-        .to_string_lossy()
-        .to_string();
-    std::fs::write(&qrc_path, qrc).unwrap();
-
-    for (qml, cpp) in &files {
-        assert!(
-            Command::new(&compiler_path)
-                .args(["--resource", &qrc_path, "-o", cpp, qml])
-                .status()
-                .unwrap()
-                .success()
-        );
-    }
-
-    let loader_path = out_dir
-        .join("qmlcache_loader.cpp")
-        .to_str()
-        .unwrap()
-        .to_string();
-    assert!(
-        Command::new(&compiler_path)
-            .args([
-                "--resource-file-mapping",
-                &qrc_path,
-                "-o",
-                &loader_path,
-                "ui.qrc"
-            ])
-            .status()
-            .unwrap()
-            .success()
-    );
-
-    config.file(&loader_path);
-
-    std::fs::remove_file(&qrc_path).unwrap();
-
-    config.cargo_metadata(false).compile("qmlcache");
-    println!("cargo:rustc-link-lib=static:+whole-archive=qmlcache");
-}
-
 fn compile_bridge(qt_include_path: &str) {
     println!("compile_bridge");
     println!("cargo:rerun-if-changed=src/bridge.cpp");
@@ -399,17 +289,6 @@ fn main() {
 
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
 
-    if let Ok(out_dir) = env::var("OUT_DIR") {
-        println!("cargo::rustc-check-cfg=cfg(compiled_qml)");
-        if out_dir.contains("\\deploy\\build\\")
-            || out_dir.contains("/deploy/build/")
-            || target_os == "android"
-            || target_os == "ios"
-        {
-            compile_qml("src/ui/", &qt_include_path, &qt_library_path);
-            println!("cargo:rustc-cfg=compiled_qml");
-        }
-    }
 
     let mut config = cpp_build::Config::new();
 
