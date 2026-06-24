@@ -1,5 +1,5 @@
 {
-  ">0.0.0": {
+  "<0.6.0": {
     "6.0": {
       "Image": [
         "https://github.com/filsv/iOSDeviceSupport/raw/master/6.0/DeveloperDiskImage.dmg"
@@ -515,5 +515,69 @@
         "https://github.com/mspvirajpatel/Xcode_Developer_Disk_Images/raw/master/Developer%20Disk%20Image/%@/DeveloperDiskImage.dmg.signature"
       ]
     }
+  },
+  ">0.5.0" : {
+    "6.0": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/6.0.zip"],
+    "6.1": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/6.1.zip"],
+    "7.0": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/7.0.zip"],
+    "7.1": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/7.1.zip"],
+    "8.0": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/8.0.zip"],
+    "8.1": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/8.1.zip"],
+    "8.2": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/8.2.zip"],
+    "8.3": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/8.3.zip"],
+    "8.4": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/8.4.zip"],
+    "9.0": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/9.0.zip"],
+    "9.1": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/9.1.zip"],
+    "9.2": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/9.2.zip"],
+    "9.3": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/9.3.zip"],
+    "10.0": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/10.0.zip"],
+    "10.1": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/10.1.zip"],
+    "10.2": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/10.2.zip"],
+    "10.3": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/10.3.zip"],
+    "11.0": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/11.0.zip"],
+    "11.1": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/11.1.zip"],
+    "11.2": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/11.2.zip"],
+    "11.3": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/11.3.zip"],
+    "11.4": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/11.4.zip"],
+    "12.0": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/12.0.zip"],
+    "12.1": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/12.1.zip"],
+    "12.2": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/12.2.zip"],
+    "12.3": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/12.3.zip"],
+    "12.4": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/12.4.zip"],
+    "12.5": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/12.5.zip"],
+    "13.0": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/13.0.zip"],
+    "13.1": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/13.1.zip"],
+    "13.2": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/13.2.zip"],
+    "13.3": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/13.3.zip"],
+    "13.4": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/13.4.zip"],
+    "13.5": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/13.5.zip"],
+    "13.6": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/13.6.zip"],
+    "13.7": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/13.7.zip"],
+    "14.0": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/14.0.zip"],
+    "14.1": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/14.1.zip"],
+    "14.2": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/14.2.zip"],
+    "14.3": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/14.3.zip"],
+    "14.4": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/14.4.zip"],
+    "14.5": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/14.5.zip"],
+    "14.6": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/14.6.zip"],
+    "14.7": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/14.7.zip"],
+    "14.8": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/14.8.zip"],
+    "15.0": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/15.0.zip"],
+    "15.1": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/15.1.zip"],
+    "15.2": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/15.2.zip"],
+    "15.3": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/15.3.zip"],
+    "15.4": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/15.4.zip"],
+    "15.5": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/15.5.zip"],
+    "15.6": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/15.6.zip"],
+    "15.7": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/15.7.zip"],
+    "15.8": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/15.8.zip"],
+    "16.0": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/16.0.zip"],
+    "16.1": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/16.1.zip"],
+    "16.2": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/16.2.zip"],
+    "16.3": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/16.3.zip"],
+    "16.4": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/16.4.zip"],
+    "16.5": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/16.5.zip"],
+    "16.6": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/16.6.zip"],
+    "16.7": ["https://github.com/tempx-x/ios-devdiskimages/raw/main/16.7.zip"]
   }
 }
