@@ -27,9 +27,6 @@ use tokio::task::JoinHandle;
 
 use core::pin::Pin;
 
-use once_cell::sync::Lazy;
-use plist::{Dictionary, Value};
-use qmetaobject::prelude::*;
 use crate::device_ctx::{APP_DEVICE_STATE, DeviceServices};
 use crate::device_db;
 use crate::{
@@ -38,7 +35,9 @@ use crate::{
     utils,
 };
 use macros::QtThreading;
-#[derive(Default, QObject , QtThreading)]
+use plist::{Dictionary, Value};
+use qmetaobject::prelude::*;
+#[derive(Default, QObject, QtThreading)]
 pub struct Core {
     base: qt_base_class!(trait QObject),
 
@@ -508,6 +507,14 @@ async fn init_idescriptor_device<
         })?
         .to_string();
 
+    let ios_version = def_vals_dict
+        .get("ProductVersion")
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| {
+            IdeviceError::InternalError("Missing ProductVersion in Lockdown response".to_string())
+        })?
+        .to_string();
+
     if udid.is_empty() {
         eprintln!("init_idescriptor_device: UDID is empty.");
         return Err(IdeviceError::InvalidHostID);
@@ -563,6 +570,7 @@ async fn init_idescriptor_device<
         video_streams: Arc::new(Mutex::new(HashMap::new())),
         provider: Arc::new(Mutex::new(Box::new(provider))),
         lockdown: Arc::new(Mutex::new(lc)),
+        ios_version,
     };
 
     // FIXME: use device_ctx
@@ -707,7 +715,7 @@ async fn collect_info(
         "TotalDiskCapacity",
         "TotalDataCapacity",
         "TotalSystemCapacity",
-        "TotalDataAvailable"
+        "TotalDataAvailable",
     ];
 
     for key in disk_info_keys.iter() {
