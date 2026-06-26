@@ -22,13 +22,16 @@ anyhow = "1.0.102"
 ipatool = { version = "0.1.2", default-features = false }
 cpp = "0.5.11"
 cstr = "0.2.12"
-qmetaobject = "0.2.10"
+qmetaobject = { version = "0.2.10", features = ["log"]}
 qttypes     = { version = "0.2.12", default-features = false, features = ["required", "qtquick", "qtquickcontrols2"]}
 simplelog = "0.12.2"
 url = "2.5.8"
 oneshot = "0.2.1"
 macros = { path = "lib/macros"}
 base64 = "0.22.1"
+reqwest = "0.13.4"
+zip = "8.6.0"
+log = "0.4.33"
 
 [build-dependencies]
 cc = "1.2.61"
