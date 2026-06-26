@@ -1,4 +1,5 @@
 use crate::{POSSIBLE_ROOT, run_sync};
+use ::log::{debug, error, info, warn};
 use cpp::*;
 use idevice::{
     IdeviceError, IdeviceService,
@@ -643,4 +644,32 @@ pub fn qvariant_to_ptr(item: QVariant) -> usize {
 
         return reinterpret_cast<uintptr_t>(q);
     })
+}
+
+pub fn compare_signatures(version: &str, mounted_sig: &[u8]) -> bool {
+    let local_sig = match std::fs::read(format!(
+        "{}{}/DeveloperDiskImage.dmg.signature",
+        crate::dev_imgs_manager::IMG_BASE_PATH,
+        version
+    )) {
+        Ok(data) => data,
+        Err(e) => {
+            error!("Failed to read signature file {}: {}", version, e);
+            return false;
+        }
+    };
+
+    if mounted_sig == local_sig {
+        debug!(
+            "Signature match for {}: mounted and local signatures are identical.",
+            version
+        );
+        true
+    } else {
+        warn!(
+            "Signature mismatch for {}: mounted and local signatures differ.",
+            version
+        );
+        false
+    }
 }
