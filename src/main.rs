@@ -28,11 +28,15 @@ pub mod airplay;
 pub mod apps;
 pub mod constants;
 pub mod core;
+pub mod dev_imgs;
+pub mod dev_imgs_manager;
 pub mod device_ctx;
 pub mod device_db;
+pub mod ifuse;
 pub mod image_cache;
 pub mod image_loader;
 pub mod image_provider;
+pub mod list_model;
 pub mod qquickimageprovider_imp;
 pub mod qrc;
 pub mod qt_threading;
@@ -40,16 +44,18 @@ pub mod query_sqlite;
 pub mod service_factory;
 pub mod service_manager;
 pub mod springboard_services;
-pub mod utils;
 pub mod ui_qrc;
+pub mod utils;
+pub mod web_wireless_gallery_import;
 
+// FIXME: branch
+pub const IMAGE_LIST_URL: &str = "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/qmeta-qml/DeveloperDiskImages.json";
 pub const POSSIBLE_ROOT: &str = "../../../../";
 pub const APP_LABEL: &str = "iDescriptor";
 pub const EV_CONNECTED: u32 = 1;
 pub const EV_DISCONNECTED: u32 = 2;
 pub const EV_PAIRING_PENDING: u32 = 3;
 pub const EV_FAIL: u32 = 4;
-
 
 // TODO
 // #[global_allocator]
@@ -90,13 +96,11 @@ where
     rx.recv().expect("Tokio runtime worker panicked")
 }
 
-
 fn main() {
     TermLogger::init(
         LevelFilter::Debug,
-        ConfigBuilder::new()
-            .build(),
-        TerminalMode::Mixed, 
+        ConfigBuilder::new().build(),
+        TerminalMode::Mixed,
         ColorChoice::Auto,
     )
     .expect("Failed to initialize logger");
@@ -182,28 +186,27 @@ fn main() {
     crate::qrc::rsrc();
     crate::ui_qrc::qml();
 
-
     // workaround for gstreamer plugins not being loaded on Windows
-    #[cfg(target_os = "windows")] {
+    #[cfg(target_os = "windows")]
+    {
         // in the release build we bundle gstreamer plugins
         if !cfg!(debug_assertions) {
             // unsafe is needed because of env::set_var
             unsafe {
                 use std::env;
-        
+
                 let exe_dir = std::env::current_exe()
                     .unwrap()
                     .parent()
                     .unwrap()
                     .to_path_buf();
-        
+
                 let gst_plugin_path = exe_dir.join("gstreamer-1.0");
-        
+
                 env::set_var(
                     "GST_PLUGIN_PATH",
                     gst_plugin_path.to_string_lossy().to_string(),
                 );
-        
             }
         }
 
@@ -243,6 +246,15 @@ fn main() {
     let airplay = QObjectBox::new(airplay::Airplay::default());
     engine.set_object_property("AirplayImp".into(), airplay.pinned());
 
+    let dev_imgs_manager = QObjectBox::new(dev_imgs_manager::DevImgsManager::default());
+    engine.set_object_property("DevImgsManager".into(), dev_imgs_manager.pinned());
+
+    let wireless_import = QObjectBox::new(web_wireless_gallery_import::WebWirelessGalleryImport::new_with_state());
+    engine.set_object_property("WebWirelessGalleryImport".into(), wireless_import.pinned());
+
+    let ifuse = QObjectBox::new(ifuse::IFuse::new_with_state());
+    engine.set_object_property("iFuse".into(), ifuse.pinned());
+
     let engine_ptr = engine.cpp_ptr();
 
     cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
@@ -273,13 +285,12 @@ fn main() {
         other_qml_entry
     };
 
-
     if !ui_live_reload {
         use std::path::PathBuf;
         // Try to load from disk first
         let path = (|| -> Option<String> {
-            let path =   PathBuf::from(entry);
-        
+            let path = PathBuf::from(entry);
+
             let final_path = std::env::current_exe().ok()?.parent()?.join(path);
             if final_path.exists() {
                 Some(String::from(final_path.to_str()?))
@@ -291,9 +302,8 @@ fn main() {
             engine.load_file(path.into());
         } else {
             // Load from resources
-            engine.load_url(QString::from(format!("qrc:/{}",entry)).into());        
+            engine.load_url(QString::from(format!("qrc:/{}", entry)).into());
         }
-
     } else {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
 
