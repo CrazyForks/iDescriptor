@@ -41,6 +41,10 @@ qrc!(pub qml,
         "src/ui/tools/CableInfo.qml",
         "src/ui/tools/QueryMobileGestalt.qml",
         "src/ui/tools/VirtualLocation.qml",
+        "src/ui/tools/DevDiskImages.qml",
+        "src/ui/tools/WirelessGalleryImport.qml",
+        "src/ui/tools/IFuse.qml",
+        "src/ui/tools/NetworkDevices.qml",
 
         // app-store/
         "src/ui/app-store/AppItem.qml",
@@ -51,12 +55,11 @@ qrc!(pub qml,
     }
 );
 
-
 #[cfg(target_os = "windows")]
-    qrc!(pub windows_qml, 
+qrc!(pub windows_qml,
     "/" {
         "src/ui/windows/Index.qml",
         "src/ui/windows/Main.qml",
         "src/ui/windows/SidebarTabButton.qml",
-    }   
+    }
 );
