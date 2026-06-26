@@ -32,7 +32,7 @@ pub struct ServiceManager {
     get_cable_info: qt_method!(fn(&self)),
     reveal_developer_mode_option_in_ui: qt_method!(fn(&self)),
     query_mobilegestalt: qt_method!(fn(&self, keys: QStringList)),
-    mount_dev_image: qt_method!(fn(&self, image_path: QString, sig: QString)),
+    mount_dev_image: qt_method!(fn(&self, version: QString, image_path: QString, sig: QString)),
     get_mounted_image: qt_method!(fn(&self)),
     fetch_installed_apps: qt_method!(fn(&self)),
     set_location: qt_method!(fn(&self, latitude: QString, longitude: QString) -> i32),
@@ -46,7 +46,7 @@ pub struct ServiceManager {
     // Signals
     cable_info_retrieved: qt_signal!(info: QString),
     mobilegestalt_info_retrieved: qt_signal!(info: QVariantMap),
-    dev_image_mounted: qt_signal!(success: bool, is_locked: bool),
+    dev_image_mounted: qt_signal!(version: QString, success: bool, is_locked: bool),
     developer_mode_option_revealed: qt_signal!(success: bool),
     mounted_image_retrieved: qt_signal!(
         success: bool,
@@ -208,7 +208,7 @@ impl ServiceManager {
             }
         });
     }
-    fn mount_dev_image(&self, image_path: QString, sig: QString) {
+    fn mount_dev_image(&self, version: QString, image_path: QString, sig: QString) {
         let udid = self.udid.clone();
         let qt_t = self.qt_thread();
         let image = image_path.to_string();
@@ -227,7 +227,7 @@ impl ServiceManager {
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to connect to ImageMounter for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(false,false);
+                        t.dev_image_mounted(version, false, false);
                     });
                     return;
                 }
@@ -238,7 +238,7 @@ impl ServiceManager {
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to open image file {image} for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(false,false);
+                        t.dev_image_mounted(version, false, false);
                     });
                     return;
                 }
@@ -247,7 +247,7 @@ impl ServiceManager {
             if let Err(e) = file.read_to_end(&mut buf) {
                 eprintln!("mount_dev_image: Failed to read image file {image} for device {udid}: {e}");
                 let _ = qt_thread.queue(|t| {
-                    t.dev_image_mounted(false,false);
+                    t.dev_image_mounted(version, false, false);
                 });
                 return;
             }
@@ -257,7 +257,7 @@ impl ServiceManager {
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to open signature file {signature} for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(false,false);
+                        t.dev_image_mounted(version,false,false);
                     });
                     return;
                 }
@@ -267,7 +267,7 @@ impl ServiceManager {
             if let Err(e) = sig_file.read_to_end(&mut sig_buf) {
                 eprintln!("mount_dev_image: Failed to read signature file {signature} for device {udid}: {e}");
                 let _ = qt_thread.queue(|t| {
-                    t.dev_image_mounted(false,false);
+                    t.dev_image_mounted(version, false,false);
                 });
                 return;
             }
@@ -275,19 +275,19 @@ impl ServiceManager {
             match mounter.mount_developer(&buf, sig_buf).await {
                 Ok(_) => {
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(true ,false);
+                        t.dev_image_mounted(version, true ,false);
                     });
                 }
                 Err(idevice::IdeviceError::DeviceLocked) => {
                     eprintln!("mount_dev_image: Failed to mount developer image for device {udid}: device locked");
                     qt_thread.queue(|t| {
-                        t.dev_image_mounted(false,true);
+                        t.dev_image_mounted(version, false, true);
                     });
                 }
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to mount developer image for device {udid}: {e}");
                     qt_thread.queue(|t| {
-                        t.dev_image_mounted(false,false);
+                        t.dev_image_mounted(version, false, false);
                     });
                 }
             };
