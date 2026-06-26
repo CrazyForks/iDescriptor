@@ -38,4 +38,15 @@ QtObject {
 
         return `${size.toFixed(2)} ${root.size_units[unit_index]}`;
     }
+
+    // single-shot connection helper
+    // since this does not exist in QML
+    function connectOnce(signal, handler) {
+        var wrapper = function() {
+            handler.apply(this, arguments)
+            signal.disconnect(wrapper)  
+        }
+        signal.connect(wrapper)
+    }
+
 }
