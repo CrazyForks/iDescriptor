@@ -8,9 +8,12 @@ Window {
     id: root
     required property string udid
     required property var device
+    property bool auto_close: true
     Component.onCompleted : {
-        App.DeviceContext.device_removed.connect((udid) => {
-            if (root.udid === udid) {root.close()}
-        })
+        if (root.auto_close) {
+            App.DeviceContext.device_removed.connect((udid) => {
+                if (root.udid === udid) {root.close()}
+            })
+        }
     }
 }

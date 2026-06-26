@@ -47,11 +47,13 @@ Item {
             }
         }
 
-        const createCompWrapped = (loc) => {
-            return createComp(loc, {
+        const createCompWrapped = (loc, _args) => {
+            const args = {
                 device,
                 udid: currentDeviceUdid
-            })
+            }
+            Object.assign(args, _args || {})
+            return createComp(loc, args)
         }
 
         switch (toolId) {
@@ -86,8 +88,20 @@ Item {
                 // FIXME: doesnt work iOS 17 and above
                 createCompWrapped("./tools/QueryMobileGestalt.qml")
                 break;
+            case 4:
+                createCompWrapped("./tools/DevDiskImages.qml", { auto_close : false })
+                break;
+            case 5:
+                createCompWrapped("./tools/WirelessGalleryImport.qml", { auto_close : false })
+                break;
+            case 6:
+                createCompWrapped("./tools/IFuse.qml", { auto_close : false })
+                break;
             case 7:
                 createCompWrapped("./tools/CableInfo.qml")
+                break;
+            case 8:
+                createCompWrapped("./tools/NetworkDevices.qml", { auto_close : false })
                 break;
 
             default:
