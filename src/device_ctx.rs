@@ -17,6 +17,7 @@ pub struct DeviceServices {
     pub video_streams: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
     pub provider: Arc<Mutex<Box<dyn idevice::provider::IdeviceProvider>>>,
     pub lockdown: Arc<Mutex<LockdownClient>>,
+    pub ios_version: String,
 }
 
 // FIXME: shouldn't be public
