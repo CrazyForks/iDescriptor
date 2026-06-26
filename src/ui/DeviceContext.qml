@@ -4,10 +4,6 @@ import QtQml.Models
 import QtQuick
 import iDescriptor
 
-/* 
-    core is a global obj set from rust side
-    engine.set_object_property("core".into(), core_obj.pinned());
-*/
 QtObject {
     id: root
     property ListModel devices: ListModel {}
@@ -20,11 +16,18 @@ QtObject {
     signal device_removed(string udid)
 
     function init() {
+        /* core is a global obj set from rust side*/
         core.init()
     }
 
     function getDevice(udid) {
-        return devices.get(udid)
+        for (let i = 0; i < devices.count; i++) {
+            const device = devices.get(i)
+            if (device.udid === udid) {
+                return device
+            }
+        }
+        return null
     }
 
     // FIXME: doesn't include recovery devices
