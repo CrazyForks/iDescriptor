@@ -21,6 +21,8 @@ qrc!(pub qml,
         "src/ui/Main.qml",
         "src/ui/NetworkDevicesToConnect.qml",
         "src/ui/PreviewWindow.qml",
+        "src/ui/Theme.qml",
+        "src/ui/Settings.qml",
         "src/ui/SidebarTabButton.qml",
         "src/ui/StatusBar.qml",
         "src/ui/StatusWindow.qml",
@@ -44,9 +46,13 @@ qrc!(pub qml,
         "src/ui/tools/DevDiskImages.qml",
         "src/ui/tools/WirelessGalleryImport.qml",
         "src/ui/tools/IFuse.qml",
+        "src/ui/tools/LiveScreen.qml",
         "src/ui/tools/NetworkDevices.qml",
 
         // app-store/
+        "src/ui/app-store/AppDetails.qml",
+        "src/ui/app-store/GetIpaPopup.qml",
+        "src/ui/app-store/InstallAppPopup.qml",
         "src/ui/app-store/AppItem.qml",
 
         // installed-apps/

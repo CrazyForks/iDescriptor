@@ -32,17 +32,22 @@ pub mod dev_imgs;
 pub mod dev_imgs_manager;
 pub mod device_ctx;
 pub mod device_db;
+#[cfg(not(target_os = "macos"))]
 pub mod ifuse;
 pub mod image_cache;
 pub mod image_loader;
 pub mod image_provider;
 pub mod list_model;
+pub mod platform;
+pub mod qml_utils;
 pub mod qquickimageprovider_imp;
 pub mod qrc;
 pub mod qt_threading;
 pub mod query_sqlite;
+pub mod screenshot;
 pub mod service_factory;
 pub mod service_manager;
+pub mod settings_manager;
 pub mod springboard_services;
 pub mod ui_qrc;
 pub mod utils;
@@ -220,6 +225,12 @@ fn main() {
         0,
         cstr::cstr!("Query"),
     );
+    qml_register_type::<screenshot::ScreenshotBackend>(
+        cstr::cstr!("iDescriptor"),
+        1,
+        0,
+        cstr::cstr!("ScreenshotBackend"),
+    );
 
     // qml_register_type::<airplay::Airplay>(
     //     cstr::cstr!("iDescriptor"),
@@ -249,11 +260,18 @@ fn main() {
     let dev_imgs_manager = QObjectBox::new(dev_imgs_manager::DevImgsManager::default());
     engine.set_object_property("DevImgsManager".into(), dev_imgs_manager.pinned());
 
-    let wireless_import = QObjectBox::new(web_wireless_gallery_import::WebWirelessGalleryImport::new_with_state());
+    let wireless_import =
+        QObjectBox::new(web_wireless_gallery_import::WebWirelessGalleryImport::new_with_state());
     engine.set_object_property("WebWirelessGalleryImport".into(), wireless_import.pinned());
 
-    let ifuse = QObjectBox::new(ifuse::IFuse::new_with_state());
-    engine.set_object_property("iFuse".into(), ifuse.pinned());
+    #[cfg(not(target_os = "macos"))]
+    {
+        let ifuse = QObjectBox::new(ifuse::IFuse::new_with_state());
+        engine.set_object_property("iFuse".into(), ifuse.pinned());
+    }
+
+    let qml_utils = QObjectBox::new(qml_utils::QmlUtils::default());
+    engine.set_object_property("QmlUtils".into(), qml_utils.pinned());
 
     let engine_ptr = engine.cpp_ptr();
 
