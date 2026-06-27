@@ -16,13 +16,14 @@ Rectangle {
     required property var sponsorColor;
     
     id: root
-    width: grid.cellWidth - 20
-    height: grid.cellHeight - 20
+    width: parent ? parent.width : 260
+    height: parent ? parent.height : 120
     radius: 8
     border.color: "#ddd"
     color: "transparent"
 
     property string iconSource: ""
+    signal selected(var app)
 
     Component.onCompleted: {
         console.log("Name:", root.name)
@@ -33,7 +34,23 @@ Rectangle {
         }
     }
 
+    MouseArea {
+        anchors.fill: parent
+        z: 0
+        onClicked: root.selected({
+            name: root.name,
+            bundleId: root.bundleId,
+            description: root.description,
+            logoUrl: root.logoUrl,
+            websiteUrl: root.websiteUrl,
+            useBundleIdForIcon: root.useBundleIdForIcon,
+            sponsorLabel: root.sponsorLabel,
+            sponsorColor: root.sponsorColor
+        })
+    }
+
     RowLayout {
+        z: 1
         anchors.fill: parent
         anchors.margins: 12
         spacing: 10
@@ -102,6 +119,16 @@ Rectangle {
                     color:  "#0076FF"
                     radius: 4
                 }
+                onClicked: root.selected({
+                    name: root.name,
+                    bundleId: root.bundleId,
+                    description: root.description,
+                    logoUrl: root.logoUrl,
+                    websiteUrl: root.websiteUrl,
+                    useBundleIdForIcon: root.useBundleIdForIcon,
+                    sponsorLabel: root.sponsorLabel,
+                    sponsorColor: root.sponsorColor
+                })
             }
 
             Button {
@@ -109,6 +136,16 @@ Rectangle {
                 text: (root.websiteUrl && root.websiteUrl.length) ? "Website" : "Get IPA"
                 font.pixelSize: 12
                 font.bold: true
+                onClicked: root.selected({
+                    name: root.name,
+                    bundleId: root.bundleId,
+                    description: root.description,
+                    logoUrl: root.logoUrl,
+                    websiteUrl: root.websiteUrl,
+                    useBundleIdForIcon: root.useBundleIdForIcon,
+                    sponsorLabel: root.sponsorLabel,
+                    sponsorColor: root.sponsorColor
+                })
             }
         }
     }
