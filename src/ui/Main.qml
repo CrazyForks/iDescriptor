@@ -1,29 +1,37 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import "."
 
 ApplicationWindow {
-
-    id:window
+    id: window
     title: "iDescriptor"
     width: 1000
-    height: 668 
+    height: 668
     minimumWidth: 668
     minimumHeight: 320
     visible: true
     property int currentIndex: 0
+
+    // FIXME: doesn't work
+    // Component.onCompleted: {
+    //     if (Qt.platform.os === "osx") {
+    //         Qt.callLater(function () {
+    //             QmlUtils.setup_main_window(window.contentItem.Window.window)
+    //         })
+    //     }
+    // }
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: 10
+            Layout.topMargin: Qt.platform.os === "osx" ? 30 : 10
             spacing: 0
             TabButton {
                 text: qsTr("iDevice")
-                onClicked: currentIndex = 0 
+                onClicked: currentIndex = 0
                 active: currentIndex == 0
             }
 
@@ -44,15 +52,12 @@ ApplicationWindow {
             }
         }
 
-
         Tabs {
             currentIndex: window.currentIndex
-            Layout.fillWidth : true
-            Layout.fillHeight : true
+            Layout.fillWidth: true
+            Layout.fillHeight: true
         }
 
-        StatusBar {
-            
-        }
+        StatusBar {}
     }
 }
