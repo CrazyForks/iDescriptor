@@ -52,7 +52,7 @@ QtObject {
         Object.assign(root.pairing_files, core.get_pairing_files());
     }
 
-    function tryToConnecToNetworkDevice(
+    function tryToConnectToNetworkDevice(
         mac, ip, force_cache, set_as_selection_if_exists
     ){
         console.log("Trying to connect to network device with MAC:", mac, "IP:", ip, `should force cache=${force_cache}`);

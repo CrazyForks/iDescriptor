@@ -1,12 +1,12 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import "." as App
 
 Item {
     id: root
 
-    // device fields expected from NetworkDevice::toVariantMap():
-    // name, address, port, macAddress (may or may not be present)
+    property var network_device_cards : ({})
     ListModel { id: deviceModel }
 
     property string statusText: "Scanning for network devices..."
@@ -91,7 +91,6 @@ Item {
 
     Component.onCompleted: refreshDevices()
 
-    // Live updates from C++ provider
     Connections {
         target: NetworkDeviceProvider
 
@@ -131,17 +130,23 @@ Item {
         // - deviceAlreadyExistsMAC  -> setStatusForMac(mac, "already_exists")
     }
 
-    // eval interval (every 30 seconds)
+    Connections {
+        target: App.DeviceContext
+        // FIXME: implement and wire these events on core (parity with QWidget/AppContext):
+        function onInitStarted(mac) {
+            setStatusForMac(mac, "connecting")
+        }
+        // - deviceAdded(mac)        -> setStatusForMac(mac, "connected")
+        // - deviceAlreadyExistsMAC  -> setStatusForMac(mac, "already_exists")
+    }
+
+    //eval interval, every 30 seconds
     Timer {
         id: evalTimer
         interval: 30000
         repeat: true
         running: true
         onTriggered: {
-            // FIXME: implement auto-connect eval logic + settings gate (like SettingsManager::autoConnectWirelessDevices()).
-            // FIXME: implement events on core to reflect initStarted/connected/already exists.
-            // For now: placeholder to keep behavior parity (timer exists).
-            // console.log("eval tick: devices=", deviceModel.count)
         }
     }
 
@@ -188,6 +193,7 @@ Item {
                             model: deviceModel
 
                             delegate: Rectangle {
+                                id: network_device_card
                                 width: parent.width
                                 implicitHeight: content.implicitHeight + 24
                                 height: implicitHeight
@@ -238,6 +244,8 @@ Item {
                                             text: buttonText
                                             enabled: buttonEnabled
                                             onClicked: {
+                                                //--- tryToConnectToNetworkDevice(mac, ip, force_cache, set_as_selection_if_exists)---
+                                                App.DeviceContext.tryToConnectToNetworkDevice(mac, address, true, true)
                                                 root._setStatusForMac(mac, "connecting")
                                                 resetTimer.stop()
                                                 resetTimer.interval = 10000
@@ -261,7 +269,6 @@ Item {
                                         }
                                     }
 
-                                    // State-driven auto-reset timings (mirrors QWidget roughly)
                                     Connections {
                                         target: deviceModel
                                         function onDataChanged() {
@@ -269,13 +276,6 @@ Item {
                                         }
                                     }
 
-                                    Component.onCompleted: {
-                                        // no-op
-                                    }
-
-                                    onStateChanged: {
-                                        // ...existing code...
-                                    }
 
                                     // react to model.state changes
                                     Binding { target: resetTimer; property: "running"; value: false }
@@ -290,6 +290,11 @@ Item {
                                     //     else if (model.state === "connected") { resetTimer.interval = 10000; resetTimer.start() }
                                     //     else if (model.state === "already_exists") { resetTimer.interval = 3000; resetTimer.start() }
                                     // }
+                                }
+
+                                Component.onCompleted: {
+                                    // FIXME: does gc handle cleanup of this ?
+                                    root.network_device_cards[mac] = network_device_card;
                                 }
                             }
                         }
