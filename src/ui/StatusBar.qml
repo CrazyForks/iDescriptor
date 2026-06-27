@@ -48,6 +48,18 @@ Item {
         }
         
         Item { Layout.fillWidth: true }
+
+        Button {
+            id: settingsButton
+            icon.source: "qrc:/resources/icons/mingcute_settings-7-line.svg"
+            HoverHandler {
+                cursorShape: Qt.PointingHandCursor
+            }
+            onClicked: App.Settings.open()
+            background: Rectangle {
+                color: "transparent"
+            }
+        }
         
     }
 }
