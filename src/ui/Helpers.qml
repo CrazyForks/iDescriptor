@@ -8,18 +8,38 @@ QtObject {
 
     function fetchAppIconFromApple(bundleId, cb) {
         if (!bundleId) { cb(""); return; }
+        fetch_app(bundleId, function(app, error) {
+            if (error || !app) { cb(""); return; }
+            cb(app.artworkUrl100 || app.artworkUrl512 || app.artworkUrl60 || "");
+        });
+    }
+
+    function fetch_app(bundleId, cb) {
+        if (!bundleId) {
+            cb(null, "Missing bundle id");
+            return;
+        }
+
         var xhr = new XMLHttpRequest();
         xhr.open("GET", "https://itunes.apple.com/lookup?bundleId=" + encodeURIComponent(bundleId));
         xhr.onreadystatechange = function() {
             if (xhr.readyState !== XMLHttpRequest.DONE) return;
-            if (xhr.status !== 200) { cb(""); return; }
+
+            if (xhr.status !== 200) {
+                cb(null, "Failed to fetch app details.");
+                return;
+            }
+
             try {
                 var obj = JSON.parse(xhr.responseText);
                 var results = obj && obj.results ? obj.results : [];
-                var iconUrl = results.length ? (results[0].artworkUrl100 || "") : "";
-                cb(iconUrl);
+                if (!results.length) {
+                    cb(null, "No App Store details found for this bundle id.");
+                    return;
+                }
+                cb(results[0], "");
             } catch (e) {
-                cb("");
+                cb(null, "Failed to parse App Store details.");
             }
         };
         xhr.send();
