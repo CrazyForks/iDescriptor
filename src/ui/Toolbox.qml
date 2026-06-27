@@ -84,6 +84,9 @@ Item {
             case 1: 
                 createCompWrapped("./tools/VirtualLocation.qml")
                 break;
+            case 2:
+                createCompWrapped("./tools/LiveScreen.qml")
+                break;
             case 3:
                 // FIXME: doesnt work iOS 17 and above
                 createCompWrapped("./tools/QueryMobileGestalt.qml")
