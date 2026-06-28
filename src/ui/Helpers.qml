@@ -45,6 +45,12 @@ QtObject {
         xhr.send();
     }
 
+    function is_previewable(name) {
+        var lower = (name || "").toLowerCase()
+        return lower.endsWith(".mp4") || lower.endsWith(".m4v") || lower.endsWith(".mov") ||
+               lower.endsWith(".avi") || lower.endsWith(".mkv")
+    }
+
 
     function formatSize(_size) {
         let unit_index = 0;

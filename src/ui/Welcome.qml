@@ -1,6 +1,6 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 
 Item {
     id: root
@@ -69,8 +69,12 @@ Item {
 
                 // FIXME: implement
                 NetworkDevicesToConnect {
-                    Layout.preferredWidth: 360
-                    Layout.preferredHeight: 580
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    //MAX HEIGHT ?
+                    
+                    // Layout.preferredWidth: 360
+                    // Layout.preferredHeight: 580
                 }
 
                 Text {
@@ -134,24 +138,13 @@ Item {
 
         Item { Layout.preferredHeight: 10 }
 
-        // FIXME: implement
-        Rectangle {
+        Loader {
             Layout.alignment: Qt.AlignHCenter
             visible: Qt.platform.os !== "osx"
-            Layout.preferredWidth: 520
-            Layout.preferredHeight: 90
-            radius: 8
-            color: "#b91c1c" // red
-            border.color: "#7f1d1d"
-            border.width: 1
-
-            Text {
-                anchors.centerIn: parent
-                text: "DiagnoseWidget"
-                color: "white"
-                font.pixelSize: 14
-                font.weight: Font.DemiBold
-            }
+            active: visible
+            source: active ? "Diagnose.qml" : ""
+            Layout.preferredWidth: item ? item.implicitWidth : 520
+            Layout.preferredHeight: item ? item.implicitHeight : 0
         }
 
         // bottom stretch

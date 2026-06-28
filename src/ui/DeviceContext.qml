@@ -89,6 +89,21 @@ QtObject {
         root.initStarted(mac);
     }
 
+    function removeDevice(udid) {
+        for (let i = 0; i < devices.count; i++) {
+            const device = devices.get(i)
+            if (device.udid === udid) {
+                devices.remove(i)
+                core.remove_device(udid)
+                // force garbage collection
+                // this may not work due to rust side being async,
+                // but no harm in trying
+                gc()
+                break
+            }
+        }
+    }
+
 
 
     // workaround to use connections inside a QtObject
