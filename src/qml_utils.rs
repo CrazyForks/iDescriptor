@@ -4,6 +4,7 @@ use qmetaobject::{QJSValue, prelude::*};
 pub struct QmlUtils {
     base: qt_base_class!(trait QObject),
     get_lockdown_dir: qt_method!(fn(&self) -> QString),
+    generate_uuid: qt_method!(fn(&self) -> QString),
     // FIXME: implement
     // setup_tool_window: qt_method!(fn(&self, win_id: u64)),
     // setup_main_window: qt_method!(fn(&self, win: QJSValue)),
@@ -12,6 +13,10 @@ pub struct QmlUtils {
 impl QmlUtils {
     fn get_lockdown_dir(&self) -> QString {
         QString::from(crate::utils::get_lockdown_path().to_str().unwrap())
+    }
+
+    fn generate_uuid(&self) -> QString {
+        QString::from(uuid::Uuid::new_v4().to_string())
     }
 
     // fn setup_tool_window(&self, win_id: u64) {
