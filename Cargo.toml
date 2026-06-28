@@ -32,6 +32,11 @@ base64 = "0.22.1"
 reqwest = "0.13.4"
 zip = "8.6.0"
 log = "0.4.33"
+ssh2 = "0.9"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+compress-tools = { version = "0.16", features = ["tokio_support"] }
+md-5 = "0.10"
 
 [build-dependencies]
 cc = "1.2.61"
