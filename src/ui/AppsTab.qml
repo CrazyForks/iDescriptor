@@ -242,7 +242,7 @@ Item {
 
                 TextField {
                     id: searchField
-                    Layout.preferredWidth: 280
+                    Layout.preferredWidth: 200
                     placeholderText: isLoggedIn ? qsTr("Search for apps...") : qsTr("Sign in to search")
                     onTextChanged: {
                         root.searchTerm = text
