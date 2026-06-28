@@ -11,12 +11,84 @@ Item {
 
     MessageDialog {
         id: errorDialog
-        title: "Error"
+        title: qsTr("Error")
         text: ""
+    }
+
+    MessageDialog {
+        id: infoDialog
+        title: qsTr("Information")
+        text: ""
+    }
+
+    Dialog {
+        id: confirmActionDialog
+        modal: true
+        focus: true
+        anchors.centerIn: parent
+        title: ""
+        standardButtons: Dialog.Yes | Dialog.No
+
+        property string action: ""
+        property string message: ""
+
+        Label {
+            text: confirmActionDialog.message
+            wrapMode: Text.WordWrap
+            width: Math.min(root.width - 64, 420)
+        }
+
+        onAccepted: root.performDeviceAction(action)
     }
 
     property string currentDeviceUdid: ""
     readonly property bool hasDevice: App.DeviceContext.devices && App.DeviceContext.devices.count > 0
+
+    function showError(message) {
+        errorDialog.text = message
+        errorDialog.open()
+    }
+
+    function showInfo(message) {
+        infoDialog.text = message
+        infoDialog.open()
+    }
+
+    function confirmDeviceAction(action, title, message) {
+        confirmActionDialog.action = action
+        confirmActionDialog.title = title
+        confirmActionDialog.message = message
+        confirmActionDialog.open()
+    }
+
+    function performDeviceAction(action) {
+        const device = App.DeviceContext.getDevice(currentDeviceUdid)
+        if (!device || !device.service_manager) {
+            showError(qsTr("The device is not available."))
+            return
+        }
+
+        let success = false
+        switch (action) {
+            case "restart":
+                success = device.service_manager.restart()
+                break
+            case "shutdown":
+                success = device.service_manager.shutdown()
+                break
+            case "recovery":
+                success = device.service_manager.enter_recovery_mode()
+                break
+            default:
+                showError(qsTr("Unknown device action."))
+                return
+        }
+
+        if (!success)
+            showError(qsTr("Failed to send the command to the device. Make sure it is connected and unlocked."))
+        else
+            showInfo(qsTr(`Action '${action}' sent successfully.`))
+    }
     
     function createComp(loc, args = {}) {
         const comp = Qt.createComponent(loc)
@@ -105,6 +177,27 @@ Item {
                 break;
             case 8:
                 createCompWrapped("./tools/NetworkDevices.qml", { auto_close : false })
+                break;
+            case 10:
+                confirmDeviceAction(
+                    "restart",
+                    qsTr("Restart Device"),
+                    qsTr("Are you sure you want to restart this device?")
+                )
+                break;
+            case 11:
+                confirmDeviceAction(
+                    "shutdown",
+                    qsTr("Shut Down Device"),
+                    qsTr("Are you sure you want to shut down this device?")
+                )
+                break;
+            case 12:
+                confirmDeviceAction(
+                    "recovery",
+                    qsTr("Enter Recovery Mode"),
+                    qsTr("Are you sure you want to put this device into recovery mode?")
+                )
                 break;
 
             default:
