@@ -9,6 +9,8 @@ Window {
     required property string udid
     required property var device
     property bool auto_close: true
+    color: palette.window
+
     Component.onCompleted : {
         if (root.auto_close) {
             App.DeviceContext.device_removed.connect((udid) => {
