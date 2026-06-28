@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import iDescriptor 1.0
 import "../base"
+import "../"
 
 ToolWindow {
     id: root
@@ -29,8 +30,48 @@ ToolWindow {
         initTimer.restart()
     }
 
-    function handleFailedInitialization(reason) {
+    property var devModeWindow: null
+
+    function showDeveloperModeHelper() {
+        if (!root.devModeWindow) {
+            const comp = Qt.createComponent("../DevMode.qml")
+            root.devModeWindow = comp.createObject(root, {
+                device: root.device
+            })
+
+            if (root.devModeWindow) {
+                root.devModeWindow.open()
+
+                root.devModeWindow.closed.connect(function() {
+                    root.devModeWindow = null
+                })
+            }
+        } else {
+            root.devModeWindow.raise()
+            root.devModeWindow.requestActivate()
+        }
+
+        stateView.errorText = qsTr("Developer Mode is required before Live Screen can start. Enable Developer Mode on the device, then retry.")
+        stateView.viewState = StateView.State.Error
+    }
+
+    function handleFailedInitialization(reason, need) {
         backend.stop_capture()
+
+        if (need === "dev-img") {
+            if (devDiskHelper.visible)
+                return
+
+            root.statusText = qsTr("Developer disk image required...")
+            stateView.viewState = StateView.State.Loading
+            devDiskHelper.start()
+            return
+        }
+
+        if (need === "dev-mode") {
+            showDeveloperModeHelper()
+            return
+        }
 
         if (root.iosVersion < 17) {
             if (root.tries < 2) {
@@ -40,10 +81,6 @@ ToolWindow {
                 return
             }
 
-            // FIXME: The QWidget version used DevDiskImageHelper to mount a developer
-            // disk image here before retrying. QML currently exposes DevDiskImages.qml
-            // and ServiceManager.mount_dev_image, but not the helper's automatic
-            // version selection/download/mount flow.
             stateView.errorText = qsTr("Failed to initialize screenshot capture. Mount a compatible developer disk image, then retry.")
         } else {
             stateView.errorText = qsTr("Failed to initialize screenshot capture. Please ensure the device has developer mode enabled.")
@@ -60,8 +97,35 @@ ToolWindow {
         id: initTimer
         repeat: false
         onTriggered: {
+            if (iosVersion < 6) {
+                stateView.errorText = qsTr("Live Screen is not supported on iOS versions below 6.")
+                stateView.viewState = StateView.State.Error
+                return
+            } else if (iosVersion >= 17 && 
+                root.device.info.developer_mode_enabled !== true) {
+                showDeveloperModeHelper()
+                return
+            }
+
             backend.start_capture()
             root.statusText = qsTr("Capturing")
+        }
+    }
+
+    DevDiskImageHelper {
+        id: devDiskHelper
+        device: root.device
+        // udid: root.udid
+        iosVersion: root.iosVersion
+
+        onMountingCompleted: function(success) {
+            if (success) {
+                root.tries = 0
+                root.startInitialization(800)
+            } else {
+                stateView.errorText = qsTr("Developer disk image was not mounted.")
+                stateView.viewState = StateView.State.Error
+            }
         }
     }
 
@@ -76,8 +140,8 @@ ToolWindow {
             stateView.viewState = StateView.State.Content
         }
 
-        onInit_failed: function(reason) {
-            root.handleFailedInitialization(reason)
+        onInit_failed: function(reason, need) {
+            root.handleFailedInitialization(reason, need)
         }
     }
 
