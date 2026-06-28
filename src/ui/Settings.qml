@@ -5,6 +5,7 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
+import "./base"
 
 Window {
     id: root
@@ -549,36 +550,7 @@ Window {
         }
     }
 
-    component SettingsSection: Rectangle {
-        id: section
-        required property string title
-        default property alias content: body.data
-
+    component SettingsSection: SectionBox {
         Layout.fillWidth: true
-        implicitHeight: sectionLayout.implicitHeight + 26
-        radius: 10
-        color: Qt.rgba(0, 0, 0, 0.035)
-        border.color: Qt.rgba(0, 0, 0, 0.08)
-        border.width: 1
-
-        ColumnLayout {
-            id: sectionLayout
-            anchors.fill: parent
-            anchors.margins: 13
-            spacing: 10
-
-            Label {
-                Layout.fillWidth: true
-                text: section.title
-                font.pixelSize: 15
-                font.bold: true
-            }
-
-            ColumnLayout {
-                id: body
-                Layout.fillWidth: true
-                spacing: 8
-            }
-        }
     }
 }
