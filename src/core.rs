@@ -46,7 +46,7 @@ pub struct Core {
     init_wireless_device:
         qt_method!(fn(&mut self, ip: QString, pairing_file: QString, mac_address: QString)),
     get_pairing_files: qt_method!(fn(&mut self) -> QVariantMap),
-    // remove_device : qt_method!(fn (&mut self,  udid: QString)),
+    remove_device : qt_method!(fn (&mut self, udid: QString)),
     device_event: qt_signal!(event_type : u32, udid : QString , info : QVariantMap),
     init_failed: qt_signal!(mac_address : QString),
     no_pairing_file: qt_signal!(mac_address : QString),
@@ -291,7 +291,7 @@ impl Core {
 
         map
     }
-    fn remove_device(self: Pin<&mut Self>, udid: &QString) {
+    fn remove_device(&mut self, udid: QString) {
         let udid_str = udid.to_string();
         RUNTIME.spawn(async move {
             clean_device_from_app_state(&udid_str).await;
@@ -804,6 +804,25 @@ async fn collect_info(
         QString::from("ios_version_patch"),
         QVariant::from(ios_patch),
     );
+
+    let developer_mode_status = match lc
+        .get_value(
+            Some("DeveloperModeStatus"),
+            Some("com.apple.security.mac.amfi"),
+        )
+        .await
+    {
+        Ok(Value::Boolean(b)) => b,
+        _ => false,
+    };
+
+    // not helpful on iOS 16 and below
+    // as they need dev disk images
+    info.insert(
+        QString::from("developer_mode_enabled"),
+        QVariant::from(developer_mode_status),
+    );
+        
 
     Ok(info)
 }
