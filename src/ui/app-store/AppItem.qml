@@ -19,7 +19,6 @@ Rectangle {
     width: parent ? parent.width : 260
     height: parent ? parent.height : 120
     radius: 8
-    border.color: "#ddd"
     color: "transparent"
 
     property string iconSource: ""
@@ -63,89 +62,107 @@ Rectangle {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             spacing: 6
+  
 
             RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-
-                Label {
-                    text: root.name
-                    font.pixelSize: 16
-                    wrapMode: Text.NoWrap
-                    elide: Text.ElideRight
+                ColumnLayout {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                }
+                    spacing: 6
 
-                Rectangle {
-                    visible: root.sponsorLabel && root.sponsorLabel.length > 0
-                    color: root.sponsorColor
-                    radius: 4
-                    height: 16
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Label {
+                            text: root.name
+                            font.pixelSize: 16
+                            wrapMode: Text.NoWrap
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                        }
+
+                        Rectangle {
+                            visible: root.sponsorLabel && root.sponsorLabel.length > 0
+                            color: root.sponsorColor
+                            radius: 4
+                            height: 16
+
+                            Label {
+                                anchors.centerIn: parent
+                                text: root.sponsorLabel
+                                font.pixelSize: 10
+                                color: "#333"
+                                padding: 4
+                            }
+                        }
+                    }
 
                     Label {
-                        anchors.centerIn: parent
-                        text: root.sponsorLabel
-                        font.pixelSize: 10
-                        color: "#333"
-                        padding: 4
+                        text: root.description
+                        color: "#666"
+                        font.pixelSize: 12
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        maximumLineCount: 3
+                        elide: Text.ElideRight
                     }
                 }
-            }
 
-            Label {
-                text: root.description
-                color: "#666"
-                font.pixelSize: 12
-                wrapMode: Text.WordWrap
+                ColumnLayout {
+                    spacing: 6
+                        // FIXME: wire up click handling
+                    Layout.alignment: Qt.AlignCenter
+                    Layout.minimumWidth: implicitWidth
+
+                    Button {
+                        text: "Install"
+                        font.pixelSize: 12
+                        font.bold: true
+                        background: Rectangle {
+                            color:  "#0076FF"
+                            radius: 4
+                        }
+                        onClicked: root.selected({
+                            name: root.name,
+                            bundleId: root.bundleId,
+                            description: root.description,
+                            logoUrl: root.logoUrl,
+                            websiteUrl: root.websiteUrl,
+                            useBundleIdForIcon: root.useBundleIdForIcon,
+                            sponsorLabel: root.sponsorLabel,
+                            sponsorColor: root.sponsorColor
+                        })
+                    }
+
+                    Button {
+                        // FIXME: move this logic to another qml file
+                        text: (root.websiteUrl && root.websiteUrl.length) ? "Website" : "Get IPA"
+                        font.pixelSize: 12
+                        font.bold: true
+                        onClicked: root.selected({
+                            name: root.name,
+                            bundleId: root.bundleId,
+                            description: root.description,
+                            logoUrl: root.logoUrl,
+                            websiteUrl: root.websiteUrl,
+                            useBundleIdForIcon: root.useBundleIdForIcon,
+                            sponsorLabel: root.sponsorLabel,
+                            sponsorColor: root.sponsorColor
+                        })
+                    }
+                }
+
+            }
+            
+            Rectangle {
+                height: 1
+                color: Theme.textMuted
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
-                maximumLineCount: 3
-                elide: Text.ElideRight
-            }
-        }
-
-        ColumnLayout {
-            spacing: 6
-                // FIXME: wire up click handling
-            Layout.alignment: Qt.AlignCenter
-            Layout.minimumWidth: implicitWidth
-
-            Button {
-                text: "Install"
-                font.pixelSize: 12
-                font.bold: true
-                background: Rectangle {
-                    color:  "#0076FF"
-                    radius: 4
-                }
-                onClicked: root.selected({
-                    name: root.name,
-                    bundleId: root.bundleId,
-                    description: root.description,
-                    logoUrl: root.logoUrl,
-                    websiteUrl: root.websiteUrl,
-                    useBundleIdForIcon: root.useBundleIdForIcon,
-                    sponsorLabel: root.sponsorLabel,
-                    sponsorColor: root.sponsorColor
-                })
-            }
-
-            Button {
-                // FIXME: move this logic to another qml file
-                text: (root.websiteUrl && root.websiteUrl.length) ? "Website" : "Get IPA"
-                font.pixelSize: 12
-                font.bold: true
-                onClicked: root.selected({
-                    name: root.name,
-                    bundleId: root.bundleId,
-                    description: root.description,
-                    logoUrl: root.logoUrl,
-                    websiteUrl: root.websiteUrl,
-                    useBundleIdForIcon: root.useBundleIdForIcon,
-                    sponsorLabel: root.sponsorLabel,
-                    sponsorColor: root.sponsorColor
-                })
+                Layout.topMargin: 10
             }
         }
     }
