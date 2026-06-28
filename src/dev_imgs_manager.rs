@@ -51,6 +51,7 @@ pub struct DevImgsManager {
     download_progress_for_index: qt_signal!(index: u32, version: QString, progress: f64),
     cancel_download: qt_method!(fn(version: QString)),
     get_locations_for_version: qt_method!(fn(version: QString) -> QVariantMap),
+    get_best_compatible_version: qt_method!(fn(ios_major: u32) -> QVariantMap),
 
     image_model: qt_property!(RefCell<ListModel<DiskImageItem>>; NOTIFY image_model_changed),
     image_model_changed: qt_signal!(),
@@ -300,6 +301,60 @@ impl DevImgsManager {
             QString::from(sig_path.to_str().unwrap_or_default())
         );
         qvariantmap_insert!(map, "exists", dmg_path.exists() && sig_path.exists());
+
+        map
+    }
+
+    pub fn get_best_compatible_version(&self, ios_major: u32) -> QVariantMap {
+        let mut map = QVariantMap::default();
+        qvariantmap_insert!(map, "version", QString::default());
+        qvariantmap_insert!(map, "exists", false);
+        qvariantmap_insert!(map, "found", false);
+
+        let images = match crate::run_sync(async { crate::dev_imgs::get().await }) {
+            Ok(images) => images,
+            Err(e) => {
+                warn!(
+                    "get_best_compatible_version: failed to fetch image list for iOS {}: {}",
+                    ios_major, e
+                );
+                return map;
+            }
+        };
+
+        let mut versions: Vec<(u32, u32, String)> = images
+            .keys()
+            .filter_map(|version| {
+                let mut parts = version.splitn(2, '.');
+                let major = parts.next()?.parse::<u32>().ok()?;
+                let minor = parts
+                    .next()
+                    .and_then(|part| part.parse::<u32>().ok())
+                    .unwrap_or(0);
+
+                if major == ios_major {
+                    Some((major, minor, version.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        versions.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| b.2.cmp(&a.2)));
+
+        let Some((_, _, version)) = versions.into_iter().next() else {
+            return map;
+        };
+
+        let version_path = PathBuf::from(IMG_BASE_PATH).join(&version);
+        let exists = version_path.join("DeveloperDiskImage.dmg").exists()
+            && version_path
+                .join("DeveloperDiskImage.dmg.signature")
+                .exists();
+
+        qvariantmap_insert!(map, "version", QString::from(version));
+        qvariantmap_insert!(map, "exists", exists);
+        qvariantmap_insert!(map, "found", true);
 
         map
     }
