@@ -119,14 +119,11 @@ Item {
                         anchors.rightMargin: 10
                         spacing: 10
 
-                        Image {
+                        IconImage {
                             source: model.icon
-
                             Layout.preferredHeight: 34
                             Layout.preferredWidth: 34
-
-                            // FIXME:theming
-                            // color: "black"
+                            color: palette.text
                             opacity: 1.0
                         }
 
@@ -135,6 +132,7 @@ Item {
                             text: qsTr(model.title)
                             font.bold: row.isHeader
                             elide: Text.ElideRight
+                            color: palette.text
                         }
 
                         Text {
