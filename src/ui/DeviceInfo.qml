@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls 
-import QtQuick.Layouts 
+import QtQuick.Layouts
+import "./base"
 
 Item {
     id : root
@@ -95,14 +96,11 @@ Item {
                 
                 Item {
                     Layout.fillWidth: true
-                    implicitHeight: grid.implicitHeight + 20  // match your margins
+                    implicitHeight: grid.implicitHeight + 20
                     // implicitHeight: grid.implicitHeight
 
-                    Rectangle {
+                    SectionBox {
                         anchors.fill: parent
-                        
-                        color: Qt.rgba(255, 255, 255, 0.1)
-                        radius: 4
                         z: -1
                     }
                 
@@ -175,12 +173,13 @@ Item {
                         Label { text: v("UniqueDeviceID", "TODO"); elide: Text.ElideMiddle; Layout.fillWidth: true }
                     }
                 }
+                
+                DiskUsage {
+                    Layout.fillWidth: true
+                    device : root.device
+                }
             }
         }
 
-        DiskUsage {
-            Layout.fillWidth: true
-            device : root.device
-        }
     }
 }
