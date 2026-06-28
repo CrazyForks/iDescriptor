@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "." as App
+import "./base"
 
 Item {
     id: root
@@ -164,13 +165,17 @@ Item {
             wrapMode: Text.WordWrap
         }
 
-        Pane {
+        SectionBox {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            padding: 10
+
+            //FIXMEl: need a better way to limit the size
+            Layout.maximumHeight: 400
+            Layout.maximumWidth: 600
+
+            // padding: 10
 
             ColumnLayout {
-                anchors.fill: parent
                 spacing: 8
 
                 Label {
@@ -197,10 +202,8 @@ Item {
                                 width: parent.width
                                 implicitHeight: content.implicitHeight + 24
                                 height: implicitHeight
-                                radius: 8
-                                color: Qt.rgba(1, 1, 1, 0.04)
-                                border.color: Qt.rgba(1, 1, 1, 0.10)
-                                border.width: 1
+                                color: "transparent"
+
 
                                 Timer {
                                     id: resetTimer
