@@ -28,6 +28,8 @@ pub mod airplay;
 pub mod apps;
 pub mod constants;
 pub mod core;
+#[cfg(not(target_os = "macos"))]
+pub mod diagnose;
 pub mod dev_imgs;
 pub mod dev_imgs_manager;
 pub mod device_ctx;
@@ -37,8 +39,10 @@ pub mod ifuse;
 pub mod image_cache;
 pub mod image_loader;
 pub mod image_provider;
+// pub mod jailbroken;
 pub mod list_model;
-pub mod platform;
+
+// pub mod platform;
 pub mod qml_utils;
 pub mod qquickimageprovider_imp;
 pub mod qrc;
@@ -264,11 +268,17 @@ fn main() {
         QObjectBox::new(web_wireless_gallery_import::WebWirelessGalleryImport::new_with_state());
     engine.set_object_property("WebWirelessGalleryImport".into(), wireless_import.pinned());
 
+    // let jailbroken = QObjectBox::new(jailbroken::Jailbroken::default());
+    // engine.set_object_property("JailbrokenImp".into(), jailbroken.pinned());
+
     #[cfg(not(target_os = "macos"))]
-    {
-        let ifuse = QObjectBox::new(ifuse::IFuse::new_with_state());
-        engine.set_object_property("iFuse".into(), ifuse.pinned());
-    }
+    let ifuse = QObjectBox::new(ifuse::IFuse::new_with_state());
+    #[cfg(not(target_os = "macos"))]
+    engine.set_object_property("iFuse".into(), ifuse.pinned());
+    #[cfg(not(target_os = "macos"))]
+    let diagnose = QObjectBox::new(diagnose::Diagnose::new_with_state());
+    #[cfg(not(target_os = "macos"))]
+    engine.set_object_property("DiagnoseImpl".into(), diagnose.pinned());
 
     let qml_utils = QObjectBox::new(qml_utils::QmlUtils::default());
     engine.set_object_property("QmlUtils".into(), qml_utils.pinned());
