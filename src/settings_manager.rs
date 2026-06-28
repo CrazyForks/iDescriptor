@@ -452,7 +452,7 @@ impl SettingsManager {
     }
 
     fn airplay_no_hold(&self) -> bool {
-        read_bool("airplayNoHold", true)
+        read_bool("airplayNoHold", false)
     }
 
     fn set_airplay_no_hold(&self, no_hold: bool) {
@@ -585,6 +585,22 @@ fn read_bool(key: &str, default_value: bool) -> bool {
     cpp!(unsafe [key as "QString", default_value as "bool"] -> bool as "bool" {
         return settings_manager_settings().value(key, default_value).toBool();
     })
+}
+
+pub fn airplay_uxplay_args() -> Vec<String> {
+    let fps = read_i32("airplayFps", 60).clamp(1, 255);
+    let mut args = vec!["uxplay".to_string(), "-fps".to_string(), fps.to_string()];
+
+    if read_bool("airplayNoHold", true) {
+        args.push("-nohold".to_string());
+    }
+
+    #[cfg(target_os = "linux")]
+    if read_bool("airplayUseLegacyPorts", true) {
+        args.push("-p".to_string());
+    }
+
+    args
 }
 
 fn write_bool(key: &str, value: bool) {
