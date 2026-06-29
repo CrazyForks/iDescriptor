@@ -4,8 +4,10 @@ import QtQuick.Layouts
 import "." as App
 
 Item {
+    id: root
     Layout.fillWidth: true
     Layout.preferredHeight: 28
+    property int buttonSize: 26
 
     Layout.leftMargin: 10
     Layout.rightMargin: 10
@@ -20,7 +22,11 @@ Item {
         }
         Button {
             visible: App.DeviceContext.currentTab === 0
+            Layout.preferredWidth: root.buttonSize
+            Layout.preferredHeight: root.buttonSize
             icon.source: "qrc:/resources/icons/lets-icons_horizontal-down-left-main-light.svg"
+            icon.width: root.buttonSize
+            icon.height: root.buttonSize
             HoverHandler {
                 cursorShape: Qt.PointingHandCursor
             }
@@ -33,10 +39,14 @@ Item {
         }
         Button {
             id: myButton
+            Layout.preferredWidth: root.buttonSize
+            Layout.preferredHeight: root.buttonSize
             HoverHandler {
                 cursorShape: Qt.PointingHandCursor
             }
             icon.source: "qrc:/resources/icons/uim_process.svg"
+            icon.width: root.buttonSize
+            icon.height: root.buttonSize
             onClicked: {
                 var globalPos = myButton.mapToGlobal(0, 0)
                
@@ -51,7 +61,11 @@ Item {
 
         Button {
             id: settingsButton
+            Layout.preferredWidth: root.buttonSize
+            Layout.preferredHeight: root.buttonSize
             icon.source: "qrc:/resources/icons/mingcute_settings-7-line.svg"
+            icon.width: root.buttonSize
+            icon.height: root.buttonSize
             HoverHandler {
                 cursorShape: Qt.PointingHandCursor
             }

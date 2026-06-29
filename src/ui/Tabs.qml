@@ -11,7 +11,7 @@ Item {
         anchors.fill: parent
         currentIndex: root.currentIndex
 
-        /* 
+        /*
             let's not lazy load the main device tab
             this way it's a bit faster to show the device
         */
@@ -41,7 +41,7 @@ Item {
             index: 1
             currentIndex : root.currentIndex
             AppsTab {
-                anchors.fill: parent 
+                anchors.fill: parent
             }
         }
     }

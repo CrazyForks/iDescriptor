@@ -1,6 +1,6 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import ".." as App
 
 
@@ -12,6 +12,10 @@ Window {
     color: palette.window
 
     Component.onCompleted : {
+        if (Qt.platform.os === "osx") {
+            QmlUtils.setup_tool_window(root.contentItem.Window.window)
+        }
+
         if (root.auto_close) {
             App.DeviceContext.device_removed.connect((udid) => {
                 if (root.udid === udid) {root.close()}

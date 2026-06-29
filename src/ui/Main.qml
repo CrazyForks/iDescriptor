@@ -11,23 +11,28 @@ ApplicationWindow {
     minimumWidth: 668
     minimumHeight: 320
     visible: true
+    flags: Qt.platform.os === "osx" ? Qt.Window | Qt.NoTitleBarBackgroundHint | Qt.ExpandedClientAreaHint : Qt.Window
+    topPadding: 0
+    leftPadding: 0
+    rightPadding: 0
+    bottomPadding: 0
     property int currentIndex: 0
 
-    // FIXME: doesn't work
-    // Component.onCompleted: {
-    //     if (Qt.platform.os === "osx") {
-    //         Qt.callLater(function () {
-    //             QmlUtils.setup_main_window(window.contentItem.Window.window)
-    //         })
-    //     }
-    // }
+    Component.onCompleted: {
+        if (Qt.platform.os === "osx") {
+            Qt.callLater(function () {
+                QmlUtils.setup_main_window(window.contentItem.Window.window)
+            })
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: Qt.platform.os === "osx" ? 30 : 10
+            // Layout.topMargin: Qt.platform.os === "osx" ? 30 : 10
+            Layout.topMargin: 10
             spacing: 0
             TabButton {
                 text: qsTr("iDevice")
@@ -59,5 +64,21 @@ ApplicationWindow {
         }
 
         StatusBar {}
+    }
+
+    // only needed on macos
+    // allows us to drag the window
+    MouseArea {
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: Qt.platform.os === "osx" ? 30 : 0
+        enabled: Qt.platform.os === "osx"
+        acceptedButtons: Qt.LeftButton
+        z: 1000
+        onPressed: function(mouse) {
+            window.startSystemMove()
+            mouse.accepted = false
+        }
     }
 }
