@@ -4,9 +4,9 @@
 #include <QTimer>
 
 #ifdef __linux__
-#include "core/services/avahi/avahi_service.h"
+#include "services/avahi/avahi_service.h"
 #else
-#include "core/services/dnssd/dnssd_service.h"
+#include "services/dnssd/dnssd_service.h"
 #endif
 
 class NetworkDeviceProvider : public QObject

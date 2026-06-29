@@ -1,5 +1,5 @@
 #pragma once
-#include <QtGui/QImage>
+#include <QImage>
 #include <cstdint>
 
 #ifdef __cplusplus
