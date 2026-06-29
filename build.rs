@@ -34,7 +34,6 @@ fn main() {
 
     // cpp_bridge
     println!("cargo:rustc-link-search=native={}", build_dir.display());
-    println!("cargo:rustc-link-lib=static=cpp_bridge");
 
     // uxplay sub-libs built inside the cmake tree
     for sub in &[
@@ -50,61 +49,6 @@ fn main() {
             sub
         );
     }
-    for lib in &["uxplay", "renderers", "airplay", "llhttp", "playfair"] {
-        println!("cargo:rustc-link-lib=static={}", lib);
-    }
-
-    // These are deps of the static libs (uxplay/airplay/cpp_bridge) that the
-    // Rust linker must resolve explicitly since static libs don't embed deps.
-    pkg_config::Config::new().probe("openssl").unwrap();
-    pkg_config::Config::new().probe("libplist-2.0").unwrap();
-    pkg_config::Config::new().probe("glib-2.0").unwrap();
-    pkg_config::Config::new().probe("gobject-2.0").unwrap();
-
-    // FFmpeg
-    if let Ok(ffmpeg_dir) = env::var("FFMPEG_DIR") {
-        println!("cargo:rustc-link-search={}/lib", ffmpeg_dir);
-        for lib in &["avformat", "avcodec", "avutil", "swscale"] {
-            println!("cargo:rustc-link-lib={}", lib);
-        }
-    } else {
-        let _ = pkg_config::Config::new().probe("libavformat");
-        let _ = pkg_config::Config::new().probe("libavcodec");
-        let _ = pkg_config::Config::new().probe("libavutil");
-        let _ = pkg_config::Config::new().probe("libswscale");
-    }
-
-    // GStreamer
-    for pkg in &[
-        "gstreamer-1.0",
-        "gstreamer-app-1.0",
-        "gstreamer-video-1.0",
-        "gstreamer-audio-1.0",
-    ] {
-        pkg_config::Config::new().probe(pkg).unwrap();
-    }
-
-    // Qt (macOS needs framework search path; Linux/Windows via pkg-config)
-    if target_os == "macos" {
-        println!("cargo:rustc-link-search=framework={}", qt_library_path);
-        for fw in &["QtCore", "QtGui", "QtQml", "QtQuick", "QtQuickControls2"] {
-            println!("cargo:rustc-link-lib=framework={}", fw);
-        }
-    } else {
-        pkg_config::Config::new().probe("Qt6Core").unwrap();
-    }
-
-    // Windows: Bonjour
-    if target_os == "windows" {
-        let bonjour_sdk = env::var("BONJOUR_SDK")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("C:/Program Files/Bonjour SDK"));
-        println!(
-            "cargo:rustc-link-arg={}",
-            bonjour_sdk.join("Lib/x64/dnssd.lib").display()
-        );
-    }
-
     // ------------------------------------------------------------------
     // cpp_build — compiles the cpp! macros in src/main.rs
     // ------------------------------------------------------------------
@@ -200,4 +144,70 @@ fn main() {
     }
 
     config.include(&qt_include_path).build("src/main.rs");
+
+    // Static libraries must be emitted after cpp_build's generated archive and
+    // in dependency order: cpp_bridge references uxplay/renderers/airplay.
+    println!("cargo:rustc-link-lib=static=cpp_bridge");
+    for lib in &["uxplay", "renderers", "airplay", "llhttp", "playfair"] {
+        println!("cargo:rustc-link-lib=static={}", lib);
+    }
+
+    // These are deps of the static libs (uxplay/airplay/cpp_bridge) that the
+    // Rust linker must resolve explicitly since static libs don't embed deps.
+    pkg_config::Config::new().probe("openssl").unwrap();
+    pkg_config::Config::new().probe("libplist-2.0").unwrap();
+    pkg_config::Config::new().probe("glib-2.0").unwrap();
+    pkg_config::Config::new().probe("gobject-2.0").unwrap();
+
+    if target_os == "linux" {
+        pkg_config::Config::new().probe("avahi-client").unwrap();
+        pkg_config::Config::new()
+            .probe("avahi-compat-libdns_sd")
+            .unwrap();
+    }
+
+    // FFmpeg
+    if let Ok(ffmpeg_dir) = env::var("FFMPEG_DIR") {
+        println!("cargo:rustc-link-search={}/lib", ffmpeg_dir);
+        for lib in &["avformat", "avcodec", "avutil", "swscale"] {
+            println!("cargo:rustc-link-lib={}", lib);
+        }
+    } else {
+        let _ = pkg_config::Config::new().probe("libavformat");
+        let _ = pkg_config::Config::new().probe("libavcodec");
+        let _ = pkg_config::Config::new().probe("libavutil");
+        let _ = pkg_config::Config::new().probe("libswscale");
+    }
+
+    // GStreamer
+    for pkg in &[
+        "gstreamer-1.0",
+        "gstreamer-app-1.0",
+        "gstreamer-video-1.0",
+        "gstreamer-audio-1.0",
+    ] {
+        pkg_config::Config::new().probe(pkg).unwrap();
+    }
+
+    // Qt (macOS needs framework search path; Linux/Windows via pkg-config)
+    if target_os == "macos" {
+        println!("cargo:rustc-link-search=framework={}", qt_library_path);
+        for fw in &["QtCore", "QtGui", "QtQml", "QtQuick", "QtQuickControls2"] {
+            println!("cargo:rustc-link-lib=framework={}", fw);
+        }
+    } else {
+        pkg_config::Config::new().probe("Qt6Core").unwrap();
+    }
+
+    // Windows: Bonjour
+    if target_os == "windows" {
+        let bonjour_sdk = env::var("BONJOUR_SDK")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("C:/Program Files/Bonjour SDK"));
+        println!(
+            "cargo:rustc-link-arg={}",
+            bonjour_sdk.join("Lib/x64/dnssd.lib").display()
+        );
+    }
+
 }
