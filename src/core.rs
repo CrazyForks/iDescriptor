@@ -46,7 +46,7 @@ pub struct Core {
     init_wireless_device:
         qt_method!(fn(&mut self, ip: QString, pairing_file: QString, mac_address: QString)),
     get_pairing_files: qt_method!(fn(&mut self) -> QVariantMap),
-    remove_device : qt_method!(fn (&mut self, udid: QString)),
+    remove_device: qt_method!(fn(&mut self, udid: QString)),
     device_event: qt_signal!(event_type : u32, udid : QString , info : QVariantMap),
     init_failed: qt_signal!(mac_address : QString),
     no_pairing_file: qt_signal!(mac_address : QString),
@@ -179,7 +179,7 @@ impl Core {
                 Ok(addr) => addr,
                 Err(e) => {
                     //FIXME: emit event for failure
-                    eprintln!("Invalid IP address {}: {}", ip_owned, e);  
+                    eprintln!("Invalid IP address {}: {}", ip_owned, e);
                     return;
                 }
             };
@@ -256,7 +256,7 @@ impl Core {
 
         #[cfg(target_os = "macos")]
         {
-            let entries: Vec<(String, String)> = run_sync(async {
+            let entries: Vec<(String, String)> = crate::run_sync(async {
                 let mut out = Vec::new();
 
                 if let Ok(mut uc) = UsbmuxdConnection::default().await {
@@ -822,7 +822,6 @@ async fn collect_info(
         QString::from("developer_mode_enabled"),
         QVariant::from(developer_mode_status),
     );
-        
 
     Ok(info)
 }
