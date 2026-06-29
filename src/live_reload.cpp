@@ -5,6 +5,7 @@
 
 #include <QDirIterator>
 #include <QFileSystemWatcher>
+#include <QFileInfo>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQuickItem>
@@ -12,69 +13,100 @@
 #include <QTimer>
 #include <QUrl>
 
-void init_live_reload(QQmlApplicationEngine *engine, const QString &path)
+static void add_watch_paths(QFileSystemWatcher *watcher, const QString &path)
 {
-    QFileSystemWatcher *w = new QFileSystemWatcher();
-    QDirIterator it(path, QDirIterator::Subdirectories);
+    if (!watcher)
+        return;
+
+    QFileInfo rootInfo(path);
+    if (!rootInfo.exists())
+        return;
+
+    if (!watcher->directories().contains(rootInfo.absoluteFilePath()))
+        watcher->addPath(rootInfo.absoluteFilePath());
+
+    QDirIterator it(path, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
+                    QDirIterator::Subdirectories);
     while (it.hasNext()) {
         it.next();
         auto i = it.fileInfo();
-        if (i.isFile())
-            w->addPath(i.absoluteFilePath());
+        const QString absolutePath = i.absoluteFilePath();
+        if (i.isDir()) {
+            if (!watcher->directories().contains(absolutePath))
+                watcher->addPath(absolutePath);
+        } else if (i.isFile()) {
+            const QString suffix = i.suffix().toLower();
+            if ((suffix == "qml" || suffix == "js" || suffix == "mjs") &&
+                !watcher->files().contains(absolutePath)) {
+                watcher->addPath(absolutePath);
+            }
+        }
+    }
+}
+
+void init_live_reload(QQmlApplicationEngine *engine, const QString &watchPath,
+                      const QString &entryPath)
+{
+    if (!engine) {
+        qWarning() << "live reload: engine is null";
+        return;
     }
 
-    QUrl mainPath = QUrl::fromLocalFile(path + "/Main.qml");
+    QFileInfo entryInfo(entryPath);
+    if (!entryInfo.exists()) {
+        qWarning() << "live reload: entry does not exist" << entryPath;
+        return;
+    }
 
-    qDebug() << mainPath;
+    QFileSystemWatcher *w = new QFileSystemWatcher(engine);
+    add_watch_paths(w, watchPath);
 
-    QObject::connect(
-        w, &QFileSystemWatcher::fileChanged, [=](const QString &file) {
-            QTimer::singleShot(50, [=] {
-                static QQuickItem *previousItem = nullptr;
-                auto wnd =
-                    qobject_cast<QQuickWindow *>(engine->rootObjects().first());
-                w->addPath(file);
+    const QUrl mainPath = QUrl::fromLocalFile(entryInfo.absoluteFilePath());
 
-                //   auto children = wnd->contentItem()->childItems();
-                //   if (!children.isEmpty()) {
-                //     auto itm = children.first();
-                //     qDebug() << itm->objectName();
-                //     if (itm->objectName() == "Main" ||
-                //         itm->objectName() == "AppLoader") {
-                //       itm->setParentItem(nullptr);
-                //       if (itm == previousItem)
-                //         previousItem = nullptr;
-                //       delete itm;
-                //     }
-                //   }
+    qDebug() << "live reload: watching" << watchPath << "entry" << mainPath;
 
-                for (auto *itm : wnd->contentItem()->childItems()) {
-                    if (itm->objectName() == "Main" ||
-                        itm->objectName() == "AppLoader") {
+    QString prevFile = "";
+    QTimer *reloadTimer = new QTimer(engine);
+    reloadTimer->setSingleShot(true);
+    reloadTimer->setInterval(180);
 
-                        itm->setParentItem(nullptr);
-                        if (itm == previousItem)
-                            previousItem = nullptr;
+    QObject::connect(reloadTimer, &QTimer::timeout, engine, [=]() mutable {
+        prevFile.clear();
+        add_watch_paths(w, watchPath);
 
-                        delete itm;
-                    }
-                }
+        const auto roots = engine->rootObjects();
+        for (QObject *rootObj : roots) {
+            if (!rootObj)
+                continue;
+            rootObj->setParent(nullptr);
+            rootObj->deleteLater();
+        }
 
-                if (previousItem) {
-                    auto toDelete = previousItem;
-                    QTimer::singleShot(5000, [=] {
-                        toDelete->setParentItem(nullptr);
-                        delete toDelete;
-                    });
-                }
-                engine->clearComponentCache();
+        engine->clearComponentCache();
+        engine->trimComponentCache();
+        engine->load(mainPath);
 
-                QQmlComponent component(engine, mainPath, wnd);
-                previousItem = qobject_cast<QQuickItem *>(component.create());
-                if (previousItem) {
-                    previousItem->setObjectName("Main");
-                    previousItem->setParentItem(wnd->contentItem());
-                }
-            });
-        });
+        if (engine->rootObjects().isEmpty())
+            qWarning() << "live reload: reload produced no root objects" << mainPath;
+    });
+
+    auto scheduleReload = [=](const QString &path) mutable {
+        if (prevFile == path && reloadTimer->isActive())
+            return;
+
+        prevFile = path;
+        qDebug() << "live reload: change" << path;
+        if (QFileInfo::exists(path) && !w->files().contains(path) &&
+            !w->directories().contains(path)) {
+            w->addPath(path);
+        }
+        reloadTimer->start();
+    };
+
+    QObject::connect(w, &QFileSystemWatcher::fileChanged, engine, scheduleReload);
+    QObject::connect(w, &QFileSystemWatcher::directoryChanged, engine,
+                     [=](const QString &path) mutable {
+                         add_watch_paths(w, watchPath);
+                         scheduleReload(path);
+                     });
 }

@@ -115,7 +115,8 @@ fn main() {
     )
     .expect("Failed to initialize logger");
 
-    let ui_live_reload = false;
+    let ui_live_reload = utils::env_flag("IDESCRIPTOR_UI_LIVE_RELOAD");
+    let qml_from_fs = ui_live_reload || utils::env_flag("IDESCRIPTOR_QML_FROM_FS");
     // #[cfg(target_os = "windows")]
     // unsafe {
     //     use windows::Win32::System::Console::*;
@@ -151,11 +152,11 @@ fn main() {
         #endif
 
         #ifdef Q_OS_WINDOWS
-            // Linux is fine with QT_QPA_PLATFORM=xcb
             QQuickStyle::setStyle("FluentWinUI3");
         #endif
         #ifndef Q_OS_LINUX
             // uxplay now uses qml6glsink so we have to use opengl
+            // Linux is fine with QT_QPA_PLATFORM=xcb
             QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
         #endif
 
@@ -317,32 +318,30 @@ fn main() {
         other_qml_entry
     };
 
-    if !ui_live_reload {
-        use std::path::PathBuf;
-        // Try to load from disk first
-        let path = (|| -> Option<String> {
-            let path = PathBuf::from(entry);
+    if ui_live_reload {
+        let ui_path = QString::from(utils::source_qml_path("src/ui"));
+        let entry_path = QString::from(utils::source_qml_path(entry));
 
-            let final_path = std::env::current_exe().ok()?.parent()?.join(path);
-            if final_path.exists() {
-                Some(String::from(final_path.to_str()?))
-            } else {
-                None
-            }
-        })();
-        if let Some(path) = path {
-            engine.load_file(path.into());
-        } else {
-            // Load from resources
-            engine.load_url(QString::from(format!("qrc:/{}", entry)).into());
-        }
+        eprintln!("QML live reload enabled: {}", entry_path.to_string());
+        engine.load_file(entry_path.clone().into());
+
+        cpp!(unsafe [
+            engine_ptr as "QQmlApplicationEngine *",
+            ui_path as "QString",
+            entry_path as "QString"
+        ] {
+            init_live_reload(engine_ptr, ui_path, entry_path);
+        });
+    } else if qml_from_fs {
+        let path = utils::deployed_qml_path(entry).unwrap_or_else(|| utils::source_qml_path(entry));
+        eprintln!("Loading QML from filesystem: {path}");
+        engine.load_file(path.into());
+    } else if let Some(path) = utils::deployed_qml_path(entry) {
+        eprintln!("Loading deployed QML from filesystem: {path}");
+        engine.load_file(path.into());
     } else {
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-
-        engine.load_file(format!("{}/{}", manifest_dir, entry).into());
-
-        // let ui_path = QString::from(format!("{}/src/ui", manifest_dir));
-        // cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *", ui_path as "QString"] { init_live_reload(engine_ptr, ui_path); });
+        eprintln!("Loading QML from resources: qrc:/{entry}");
+        engine.load_url(QString::from(format!("qrc:/{}", entry)).into());
     }
 
     // cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {

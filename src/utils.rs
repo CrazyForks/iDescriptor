@@ -698,3 +698,30 @@ pub fn get_window_id(val: QJSValue) -> usize {
         })
     }
 }
+
+
+pub fn env_flag(name: &str) -> bool {
+    std::env::var(name)
+        .map(|value| {
+            let normalized = value.trim().to_ascii_lowercase();
+            matches!(normalized.as_str(), "1" | "true" | "yes" | "on")
+        })
+        .unwrap_or(false)
+}
+
+pub fn deployed_qml_path(entry: &str) -> Option<String> {
+    let path = std::env::current_exe()
+        .ok()?
+        .parent()?
+        .join(entry);
+
+    if path.exists() {
+        path.to_str().map(str::to_string)
+    } else {
+        None
+    }
+}
+
+pub fn source_qml_path(entry: &str) -> String {
+    format!("{}/{}", env!("CARGO_MANIFEST_DIR"), entry)
+}

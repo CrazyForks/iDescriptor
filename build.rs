@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-changed=src/main.rs");
+    println!("cargo:rerun-if-changed=src/live_reload.cpp");
     println!("cargo:rerun-if-changed=src/bridge.cpp");
     println!("cargo:rerun-if-changed=src/include/bridge.h");
     println!("cargo:rerun-if-changed=src/networkdeviceprovider.h");
