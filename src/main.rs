@@ -1,6 +1,7 @@
 #![recursion_limit = "4096"]
 // TODO: disable on release build
 // #![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 
 use cpp::*;
 use idevice::{
@@ -28,12 +29,12 @@ pub mod airplay;
 pub mod apps;
 pub mod constants;
 pub mod core;
-#[cfg(not(target_os = "macos"))]
-pub mod diagnose;
 pub mod dev_imgs;
 pub mod dev_imgs_manager;
 pub mod device_ctx;
 pub mod device_db;
+#[cfg(not(target_os = "macos"))]
+pub mod diagnose;
 #[cfg(not(target_os = "macos"))]
 pub mod ifuse;
 pub mod image_cache;
@@ -42,7 +43,7 @@ pub mod image_provider;
 // pub mod jailbroken;
 pub mod list_model;
 
-// pub mod platform;
+pub mod platform;
 pub mod qml_utils;
 pub mod qquickimageprovider_imp;
 pub mod qrc;
@@ -79,7 +80,7 @@ cpp! {{
     #include <QIcon>
 
     #include "src/live_reload.cpp"
-    #include "src/networkdeviceprovider.h"
+    #include "src/native/networkdeviceprovider.h"
 }}
 
 static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
@@ -150,12 +151,15 @@ fn main() {
         #endif
 
         #ifdef Q_OS_WINDOWS
-            // uxplay now uses qml6glsink so we have to use opengl on Windows
             // Linux is fine with QT_QPA_PLATFORM=xcb
-            QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
             QQuickStyle::setStyle("FluentWinUI3");
         #endif
-            // QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
+        #ifndef Q_OS_LINUX
+            // uxplay now uses qml6glsink so we have to use opengl
+            QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+        #endif
+
+        // QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
         #if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
             QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
             QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
@@ -177,19 +181,19 @@ fn main() {
             //                             "their default values.");
             // }
             // QQmlApplicationEngine engine;
-        #ifdef __APPLE__
-            QString appPath = QCoreApplication::applicationDirPath();
-            QString frameworksPath =
-                QDir::toNativeSeparators(appPath + "/../Frameworks");
-            QString gstPluginPath =
-                QDir::toNativeSeparators(frameworksPath + "/gstreamer");
-            QString gstPluginScannerPath =
-                QDir::toNativeSeparators(frameworksPath + "/gst-plugin-scanner");
+        // #ifdef __APPLE__
+        //     QString appPath = QCoreApplication::applicationDirPath();
+        //     QString frameworksPath =
+        //         QDir::toNativeSeparators(appPath + "/../Frameworks");
+        //     QString gstPluginPath =
+        //         QDir::toNativeSeparators(frameworksPath + "/gstreamer");
+        //     QString gstPluginScannerPath =
+        //         QDir::toNativeSeparators(frameworksPath + "/gst-plugin-scanner");
 
-            setenv("GST_PLUGIN_PATH", gstPluginPath.toUtf8().constData(), 1);
-            setenv("GST_PLUGIN_SYSTEM_PATH", gstPluginPath.toUtf8().constData(), 1);
-            setenv("GST_PLUGIN_SCANNER", gstPluginScannerPath.toUtf8().constData(), 1);
-        #endif
+        //     setenv("GST_PLUGIN_PATH", gstPluginPath.toUtf8().constData(), 1);
+        //     setenv("GST_PLUGIN_SYSTEM_PATH", gstPluginPath.toUtf8().constData(), 1);
+        //     setenv("GST_PLUGIN_SCANNER", gstPluginScannerPath.toUtf8().constData(), 1);
+        // #endif
     });
 
     crate::qrc::rsrc();

@@ -37,7 +37,7 @@ cpp! {{
     #include <QObject>
     #include <QClipboard>
     #include <QEvent>
-    #include "src/include/bridge.h"
+    #include "src/native/include/bridge.h"
     #include <gst/gst.h>
 
     QCoreApplication *globalApp = nullptr;
@@ -671,5 +671,30 @@ pub fn compare_signatures(version: &str, mounted_sig: &[u8]) -> bool {
             version
         );
         false
+    }
+}
+
+pub fn get_window_id(val: QJSValue) -> usize {
+    let obj_ptr = unsafe {
+        cpp!([val as "QJSValue"] -> *mut c_void as "QObject *" {
+            return val.toQObject();
+        })
+    };
+
+    if obj_ptr.is_null() {
+        debug!("obj_ptr is null in setup_main_window");
+        return 0;
+    }
+
+    unsafe {
+        cpp!([obj_ptr as "QObject*"] -> usize as "size_t" {
+            if (!obj_ptr) return 0;
+            QWindow *window = qobject_cast<QWindow*>(obj_ptr);
+            if (window) {
+                WId native_win_id = window->winId();
+                return (size_t)native_win_id;
+            }
+            return 0;
+        })
     }
 }
