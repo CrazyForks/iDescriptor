@@ -5,7 +5,6 @@ import QtQuick.Layouts 1.15
 import ".."
 
 FluWindow {
-
     id:window
     title: "iDescriptor"
     width: 1000
@@ -15,9 +14,14 @@ FluWindow {
     launchMode: FluWindowType.SingleTask
     fitsAppBarWindows: true
 
+     Component.onCompleted: {  
+        window.effect = "acrylic"
+    }  
+
     appBar: FluAppBar {
         height: 28
-        showDark: true
+        showDark: false
+        showStayTop: false
         z: 7
 
         RowLayout{
@@ -25,6 +29,8 @@ FluWindow {
             anchors.right: parent.right
             anchors.top: parent.top 
             anchors.topMargin: 10
+            anchors.rightMargin: Qt.platform.os === "windows" ? 40 : 0
+            
             spacing: 0
             TabButton {
                 text: qsTr("iDevice")
@@ -52,7 +58,7 @@ FluWindow {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.topMargin: appBar.height + 55
+        anchors.topMargin: appBar.height + 30
         Tabs {
             Layout.fillWidth : true
             Layout.fillHeight : true

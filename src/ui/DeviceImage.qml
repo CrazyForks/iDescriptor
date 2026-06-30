@@ -1,5 +1,5 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Controls
 import Qt5Compat.GraphicalEffects
 
 Item {
@@ -7,7 +7,7 @@ Item {
     // width: 500
     // height: 500
 
-    implicitWidth: 300
+    implicitWidth: 200
     implicitHeight: 500
 
     required property var displayName

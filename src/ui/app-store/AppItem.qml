@@ -118,11 +118,14 @@ Rectangle {
                     Layout.minimumWidth: implicitWidth
 
                     Button {
+                        id : installButton
                         text: "Install"
                         font.pixelSize: 12
                         font.bold: true
                         background: Rectangle {
-                            color:  "#0076FF"
+                            color:  installButton.down ? Theme.pressed
+                                                 : installButton.hovered ? Theme.accentHover
+                                                                        : Theme.accent
                             radius: 4
                         }
                         onClicked: root.selected({

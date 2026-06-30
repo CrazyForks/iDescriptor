@@ -8,6 +8,7 @@ import iDescriptor 1.0
 import org.freedesktop.gstreamer.Qt6GLVideoItem 1.0
 import ".." as App
 import "../base"
+import "../+windows"
 
 ToolWindow {
     id: root

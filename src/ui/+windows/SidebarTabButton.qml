@@ -10,6 +10,7 @@ FluExpander {
     required property string udid
     required property string title 
     property int item_height: 30
+    required property bool wireless
     signal sectionChanged(int sectionIndex)
 
     ListModel {

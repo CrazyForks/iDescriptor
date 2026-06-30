@@ -7,6 +7,8 @@ import "../"
 
 FluLauncher {
     id: app
+    objectName: "Main" 
+
     // Connections{
     //     target: FluTheme
     //     function onDarkModeChanged(){
@@ -37,11 +39,9 @@ FluLauncher {
         // FluTheme.darkMode = SettingsHelper.getDarkMode()
         FluTheme.darkMode = false
         FluTheme.animationEnabled = true
-        var indexUrl = Qt.resolvedUrl("Index.qml")
-        console.log("Index URL =", indexUrl)
 
         FluRouter.routes = {
-            "/": indexUrl
+            "/": "qrc:/ui/+windows/Index.qml",
         }
         var args = Qt.application.arguments
         if(args.length>=2 && args[1].startsWith("-crashed=")){

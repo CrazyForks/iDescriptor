@@ -78,6 +78,7 @@ cpp! {{
     #include <QQmlContext>
     #include <QLoggingCategory>
     #include <QtGui/QGuiApplication>
+    #include <QQmlFileSelector>
     #include <QIcon>
 
     #include "src/live_reload.cpp"
@@ -285,6 +286,8 @@ fn main() {
     engine.set_object_property("QmlUtils".into(), qml_utils.pinned());
 
     cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
+
+        QQmlFileSelector selector(engine_ptr);
         // FIXME: workaround to find FluentUI
         #ifdef Q_OS_WINDOWS
             engine_ptr->addImportPath("C:/Qt/6.9.3/mingw_64/qml");
@@ -303,7 +306,7 @@ fn main() {
     let service_factory = QObjectBox::new(crate::service_factory::ServiceFactory::new(engine_ptr));
     engine.set_object_property("serviceFactory".into(), service_factory.pinned());
 
-    let windows_qml_entry = "src/ui/windows/Main.qml";
+    let windows_qml_entry = "src/ui/+windows/Main.qml";
     let other_qml_entry = "src/ui/Main.qml";
 
     let entry = if cfg!(target_os = "windows") {

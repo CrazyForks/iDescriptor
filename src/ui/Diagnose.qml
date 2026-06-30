@@ -6,7 +6,6 @@ import "./base"
 Item {
     id: root
 
-    visible: Qt.platform.os !== "osx"
     implicitWidth: 520
     implicitHeight: card.implicitHeight
 
@@ -95,10 +94,6 @@ Item {
         height: 500
         standardButtons: Dialog.Close
         onOpened: root.updateStateView()
-
-        background: Rectangle {
-            color: "transparent"
-        }
 
         contentItem: StateView {
             id: diagnosticsState

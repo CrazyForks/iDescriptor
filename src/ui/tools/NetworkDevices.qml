@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../base"
+import "../+windows"
 
 ToolWindow {
     id: root
@@ -76,7 +77,6 @@ ToolWindow {
 
     Component.onCompleted: refreshDevices()
 
-    // Live updates from C++ provider
     Connections {
         target: NetworkDeviceProvider
 
@@ -120,8 +120,10 @@ ToolWindow {
                 wrapMode: Text.WordWrap
             }
 
-            // Device group
             Pane {
+                background: Rectangle {
+                    color: "transparent"
+                }
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 padding: 10
@@ -151,14 +153,10 @@ ToolWindow {
                             Repeater {
                                 model: deviceModel
 
-                                delegate: Rectangle {
+                                delegate: SectionBox {
                                     width: parent.width
                                     implicitHeight: content.implicitHeight + 24
                                     height: implicitHeight
-                                    radius: 8
-                                    color: Qt.rgba(1, 1, 1, 0.04)
-                                    border.color: Qt.rgba(1, 1, 1, 0.10)
-                                    border.width: 1
 
                                     ColumnLayout {
                                         id: content
