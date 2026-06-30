@@ -45,10 +45,22 @@ QtObject {
         xhr.send();
     }
 
-    function is_previewable(name) {
+    function is_video_file(name) {
         var lower = (name || "").toLowerCase()
         return lower.endsWith(".mp4") || lower.endsWith(".m4v") || lower.endsWith(".mov") ||
                lower.endsWith(".avi") || lower.endsWith(".mkv")
+    }
+
+    function is_image_file(name) {
+        var lower = (name || "").toLowerCase()
+        return lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") ||
+               lower.endsWith(".heic") || lower.endsWith(".heif") || lower.endsWith(".gif") ||
+               lower.endsWith(".bmp") || lower.endsWith(".webp") || lower.endsWith(".tif") ||
+               lower.endsWith(".tiff")
+    }
+
+    function is_previewable(name) {
+        return is_video_file(name) || is_image_file(name)
     }
 
 

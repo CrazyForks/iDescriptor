@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
+import "./"
 
 Rectangle {
     id: root
@@ -18,11 +19,12 @@ Rectangle {
     required property string type
     required property string destinationPath
     required property var onComplete
+    signal removeRequested(string processId)
     
     // Internal state
     property int lastBytesTransferred: 0
     property var lastUpdateTime: new Date()
-    property string lastSpeedTex
+    property string lastSpeedText: ""
     property bool isHovered: false
     property bool isRemoveButtonHovered: false
     
@@ -48,7 +50,6 @@ Rectangle {
     width: parent ? parent.width : 300
     height: implicitHeight
     radius: 5
-    // color: isDarkMode() ? "rgba(255, 255, 255, 16)" : "rgba(0, 0, 0, 10)"
     color: "transparent"
     ColumnLayout {
         anchors.fill: parent
@@ -70,26 +71,23 @@ Rectangle {
             
             Item { Layout.fillWidth: true }
             
-            // Remove Button
             Button {
-                // id: myButton
+                id: removeButton
                 icon.source: "qrc:/resources/icons/material-symbols_close-rounded.svg"
-                // background: Rectangle {
-                //     color: "transparent"
-                // }
-                // width: 24
-                // height: 24
-                opacity: (root.isHovered && 
-                         (root.status === "Completed" || 
-                          root.status === "Failed" || 
-                          root.status === "Cancelled")) ? 1.0 : 0.0
+                visible: root.status === "Completed" ||
+                         root.status === "Failed" ||
+                         root.status === "Cancelled"
+                background: Rectangle {
+                    color: "transparent"
+                }
+                opacity: root.isHovered ? 1.0 : 0.0
+                enabled: visible && root.isHovered
                 
                 Behavior on opacity { NumberAnimation { duration: 150 } }
                 
                 onClicked: {
                     console.log("Remove process:", root.processId)
-                    //FIXME
-                    // StatusBalloon.removeProcess(root.processId)
+                    root.removeRequested(root.processId)
                 }
             }
         }
@@ -120,8 +118,7 @@ Rectangle {
                 width: parent.width * (root.progress / 100)
                 height: parent.height
                 radius: 4
-                color: "#3498db"  // COLOR_ACCENT_BLUE
-                
+                color: Theme.accent
                 Behavior on width { NumberAnimation { duration: 200 } }
             }
         }
@@ -155,8 +152,9 @@ Rectangle {
                 text: root.type === "Export" ? "Open Folder" : ""
                 visible: (root.type === "Export" && root.status === "Completed")
                 onClicked: {
+                        console.log("Open destination folder:", root.destinationPath)
                     if (root.destinationPath !== "") {
-                        Qt.openUrlExternally("file:///" + root.destinationPath)
+                        Qt.openUrlExternally(root.localFileUrl(root.destinationPath))
                     }
                 }
                 
@@ -190,7 +188,8 @@ Rectangle {
                 onClicked: {
                     cancelButton.enabled = false
                     console.log("Cancel process:", root.processId)
-                    // IOManagerClient.cancel(root.processId)
+                    if (ioManager)
+                        ioManager.cancel_job(root.processId)
                 }
                 
                 background: Rectangle {
@@ -259,6 +258,15 @@ Rectangle {
         if (bytesPerSecond < 1024 * 1024 * 1024) return (bytesPerSecond / (1024 * 1024)).toFixed(1) + " MB/s"
         return (bytesPerSecond / (1024 * 1024 * 1024)).toFixed(1) + " GB/s"
     }
+
+    function localFileUrl(path) {
+        var normalized = String(path).replace(/\\/g, "/")
+        if (normalized.indexOf("file://") === 0)
+            return normalized
+        if (normalized[0] === "/")
+            return "file://" + normalized
+        return "file:///" + normalized
+    }
     
     // Dark mode detection
     function isDarkMode() {
@@ -281,16 +289,12 @@ Rectangle {
     }
     
     Component.onCompleted: {
-        console.log("Process item:", root.processItem)
         root.lastUpdateTime = new Date()
         updateStats()
     }
     
     // Hover handling
-    MouseArea {
-        anchors.fill: parent
-        hoverEnabled: true
-        onEntered: root.isHovered = true
-        onExited: root.isHovered = false
+    HoverHandler {
+        onHoveredChanged: root.isHovered = hovered
     }
 }

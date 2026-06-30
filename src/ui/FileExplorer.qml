@@ -1,14 +1,17 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import QtQuick.Controls.impl
+import QtQuick.Dialogs
+import "." as App
 
-// FIXME: wire up export logic
 Item {
     id: root
     anchors.fill: parent
 
     property var afcClient: null
+    required property string udid 
+    property bool useAfc2: false
 
     property bool favEnabled: true
     property string rootPath: "/"
@@ -99,25 +102,27 @@ Item {
         return base + "/" + name
     }
 
-    // TODO: maybe call from rust 
-    function _isPreviewable(name) {
-        var lower = (name || "").toLowerCase()
-        return lower.endsWith(".mp4") || lower.endsWith(".m4v") || lower.endsWith(".mov") ||
-               lower.endsWith(".avi") || lower.endsWith(".mkv")
-    }
-
     function _openFileOnDevice(name) {
         if (!afcClient) return
         var path = _fullPath(name)
 
-        if (_isPreviewable(name)) {
-            var url = afcClient.start_video_stream(path)
-            if (url && url.length > 0) {
-                Qt.openUrlExternally(url)
-                return
+        if (Helpers.is_previewable(name)) {
+            const comp = Qt.createComponent("PreviewWindow.qml")
+            if (comp.status === Component.Ready) {
+                const win = comp.createObject(null, {
+                    filePath: path,
+                    udid: root.udid,
+                    afcClient: root.afcClient
+                })
+                if (win !== null) {
+                    win.show()
+                    return
+                }
+                console.error("createObject failed:", comp.errorString())
+            } else if (comp.status === Component.Error) {
+                console.error("Component failed to load:", comp.errorString())
             }
-            // fallthrough to error
-            errorMessage = qsTr("Failed to start stream.")
+            errorMessage = qsTr("Failed to open preview.")
             return
         }
 
@@ -148,19 +153,91 @@ Item {
     ListModel { id: entriesModel }
 
     property var selectedPaths: []
+
+    function _urlToLocalPath(url) {
+        var s = url.toString()
+        if (s.indexOf("file://") === 0)
+            s = s.slice(7)
+        return decodeURIComponent(s)
+    }
+
     function _isSelected(path) { return selectedPaths.indexOf(path) !== -1 }
-    function _toggleSelected(path, isDir) {
-        // FIXME: dir
-        if (isDir) return
+    function _multiSelectModifierPressed(modifiers) {
+        if (Qt.platform.os === "osx" || Qt.platform.os === "darwin")
+            return (modifiers & Qt.MetaModifier) !== 0
+
+        return (modifiers & Qt.ControlModifier) !== 0
+    }
+
+    function _toggleSelectedPath(path) {
         var idx = selectedPaths.indexOf(path)
         if (idx === -1) selectedPaths = selectedPaths.concat([path])
         else selectedPaths = selectedPaths.slice(0, idx).concat(selectedPaths.slice(idx + 1))
         _updateActionEnabled()
     }
 
+    function _selectPath(path, isDir, modifiers) {
+        // FIXME: dir
+        if (isDir) {
+            if (!_multiSelectModifierPressed(modifiers)) {
+                selectedPaths = []
+                _updateActionEnabled()
+            }
+            return
+        }
+
+        if (_multiSelectModifierPressed(modifiers)) {
+            _toggleSelectedPath(path)
+            return
+        }
+
+        selectedPaths = [path]
+        _updateActionEnabled()
+    }
+
     function _updateActionEnabled() {
         exportBtn.enabled = selectedPaths.length > 0 
         deleteBtn.enabled = selectedPaths.length > 0
+    }
+
+    function _startExport(destinationDir) {
+        if (!ioManager || !root.udid || selectedPaths.length === 0)
+            return
+
+        const jobId = QmlUtils.generate_uuid()
+        App.StatusWindow.addProcess(
+            jobId,
+            qsTr("Exporting Files"),
+            "Export",
+            selectedPaths.length,
+            destinationDir
+        )
+        if (afcClient && afcClient.bundle_id)
+            ioManager.start_export_with_hause_arrest_afc(root.udid, jobId, selectedPaths, destinationDir, afcClient.bundle_id)
+        else if (root.useAfc2)
+            ioManager.start_export_with_afc2(root.udid, jobId, selectedPaths, destinationDir)
+        else
+            ioManager.start_export(root.udid, jobId, selectedPaths, destinationDir)
+    }
+
+    function _startImport(localPaths) {
+        if (!ioManager || !root.udid || localPaths.length === 0)
+            return
+
+        const jobId = QmlUtils.generate_uuid()
+        App.StatusWindow.addProcess(
+            jobId,
+            qsTr("Importing Files"),
+            "Import",
+            localPaths.length,
+            currentPath
+        )
+        if (afcClient && afcClient.bundle_id)
+            ioManager.start_import_with_hause_arrest_afc(root.udid, jobId, localPaths, currentPath, afcClient.bundle_id)
+        else if (root.useAfc2)
+            ioManager.start_import_with_afc2(root.udid, jobId, localPaths, currentPath)
+        else
+            ioManager.start_import(root.udid, jobId, localPaths, currentPath)
     }
 
     Connections {
@@ -203,6 +280,7 @@ Item {
             root._updateActionEnabled()
             root._updateNavEnabled()
         }
+
     }
 
     onAfcClientChanged: {
@@ -244,95 +322,35 @@ Item {
                         anchors.margins: 6
                         spacing: 6
 
-                        ToolButton {
+                        ExplorerToolButton {
                             id: backBtn
                             enabled: false
+                            iconSource: "qrc:/resources/icons/material-symbols_arrow-left-alt.svg"
+                            tooltip: qsTr("Go Back")
                             onClicked: root.goBack()
-
-                            padding: 0
-                            implicitHeight: 44
-                            implicitWidth: 44
-
-                            contentItem: Item {
-                                anchors.fill: parent
-                                Button {
-                                    anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/material-symbols_arrow-left-alt.svg"
-                                    // FIXME:theming
-                                    opacity: backBtn.enabled ? 1.0 : 0.7
-                                }
-                            }
-
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Go Back")
                         }
 
-                        ToolButton {
+                        ExplorerToolButton {
                             id: forwardBtn
                             enabled: false
+                            iconSource: "qrc:/resources/icons/material-symbols_arrow-right-alt.svg"
+                            tooltip: qsTr("Go Forward")
                             onClicked: root.goForward()
-
-                            padding: 0
-                            implicitHeight: 44
-                            implicitWidth: 44
-
-                            contentItem: Item {
-                                anchors.fill: parent
-                                Button {
-                                    anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/material-symbols_arrow-right-alt.svg"
-                                    // FIXME:theming
-                                    opacity: forwardBtn.enabled ? 1.0 : 0.7
-                                }
-                            }
-
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Go Forward")
                         }
 
-                        ToolButton {
+                        ExplorerToolButton {
                             id: homeBtn
+                            iconSource: "qrc:/resources/icons/material-symbols_home.svg"
+                            tooltip: qsTr("Go Home")
                             onClicked: root.goHome()
-
-                            padding: 0
-                            implicitHeight: 44
-                            implicitWidth: 44
-
-                            contentItem: Item {
-                                anchors.fill: parent
-                                Button {
-                                    anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/material-symbols_home.svg"
-                                    // FIXME:theming
-                                    opacity: homeBtn.enabled ? 1.0 : 0.7
-                                }
-                            }
-
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Go Home")
                         }
 
-                        ToolButton {
+                        ExplorerToolButton {
                             id: upBtn
                             enabled: false
+                            iconSource: "qrc:/resources/icons/material-symbols_arrow-upward-rounded.svg"
+                            tooltip: qsTr("Go Up")
                             onClicked: root.goUp()
-
-                            padding: 0
-                            implicitHeight: 44
-                            implicitWidth: 44
-
-                            contentItem: Item {
-                                anchors.fill: parent
-                                Button {
-                                    anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/material-symbols_arrow-upward-rounded.svg"
-                                    // FIXME:theming
-                                    opacity: upBtn.enabled ? 1.0 : 0.7
-                                }
-                            }
-
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Go Up")
                         }
 
                         TextField {
@@ -344,117 +362,44 @@ Item {
                             onAccepted: root.navigateToPath(text, true)
                         }
 
-                        ToolButton {
+                        ExplorerToolButton {
                             id: importBtn
-                            enabled: false
-
-                            padding: 0
-                            implicitHeight: 44
-                            implicitWidth: 44
-
-                            contentItem: Item {
-                                anchors.fill: parent
-                                Button {
-                                    anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/lets-icons_import.svg"
-                                    // FIXME:theming
-                                    opacity: importBtn.enabled ? 1.0 : 0.7
-                                }
-                            }
-
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Import (FIXME)")
+                            enabled: !!root.afcClient
+                            iconSource: "qrc:/resources/icons/lets-icons_import.svg"
+                            tooltip: qsTr("Import")
+                            onClicked: importDialog.open()
                         }
 
-                        ToolButton {
+                        ExplorerToolButton {
                             id: exportBtn
                             enabled: false
-
-                            padding: 0
-                            implicitHeight: 44
-                            implicitWidth: 44
-
-                            contentItem: Item {
-                                anchors.fill: parent
-                                Button {
-                                    anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/ph_export.svg"
-                                    // FIXME:theming
-                                    opacity: exportBtn.enabled ? 1.0 : 0.7
-                                }
-                            }
-
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Export (FIXME)")
+                            iconSource: "qrc:/resources/icons/ph_export.svg"
+                            tooltip: qsTr("Export")
+                            onClicked: exportDialog.open()
                         }
 
-                        ToolButton {
+                        ExplorerToolButton {
                             id: deleteBtn
                             enabled: false
+                            iconSource: "qrc:/resources/icons/material-symbols_delete.svg"
+                            tooltip: qsTr("Delete")
                             onClicked: confirmDelete.open()
-
-                            padding: 0
-                            implicitHeight: 44
-                            implicitWidth: 44
-
-                            contentItem: Item {
-                                anchors.fill: parent
-                                Button {
-                                    anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/material-symbols_delete.svg"
-                                    // FIXME:theming
-                                    opacity: deleteBtn.enabled ? 1.0 : 0.7
-                                }
-                            }
-
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Delete")
                         }
 
-                        ToolButton {
+                        ExplorerToolButton {
                             id: favBtn
                             visible: root.favEnabled
                             enabled: true
+                            iconSource: "qrc:/resources/icons/material-symbols_favorite.svg"
+                            tooltip: qsTr("Add to Favorites")
                             onClicked: favDialog.open()
-
-                            padding: 0
-                            implicitHeight: 44
-                            implicitWidth: 44
-
-                            contentItem: Item {
-                                anchors.fill: parent
-                                Button {
-                                    anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/material-symbols_favorite.svg"
-                                    // FIXME:theming
-                                    opacity: favBtn.enabled ? 1.0 : 0.7
-                                }
-                            }
-
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Add to Favorites")
                         }
 
-                        ToolButton {
+                        ExplorerToolButton {
                             id: enterBtn
+                            iconSource: "qrc:/resources/icons/material-symbols_keyboard-return.svg"
+                            tooltip: qsTr("Navigate to path")
                             onClicked: root.navigateToPath(addressBar.text, true)
-
-                            padding: 0
-                            implicitHeight: 44
-                            implicitWidth: 44
-
-                            contentItem: Item {
-                                anchors.fill: parent
-                                Button {
-                                    anchors.fill: parent
-                                    icon.source: "qrc:/resources/icons/material-symbols_keyboard-return.svg"
-                                    // FIXME:theming
-                                    opacity: enterBtn.enabled ? 1.0 : 0.7
-                                }
-                            }
-
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Navigate to path")
                         }
                     }
                 }
@@ -484,7 +429,10 @@ Item {
                         id: row
                         width: ListView.view.width
                         height: 44
-                        color: (mouseArea.containsMouse ? "#0f000000" : "transparent")
+                        radius: 6
+                        color: row.entrySelected
+                               ? App.Theme.selection
+                               : (mouseArea.containsMouse ? App.Theme.hover : "transparent")
 
                         property string entryName: model.name
                         property bool entryIsDir: model.isDir
@@ -497,25 +445,18 @@ Item {
                             anchors.rightMargin: 10
                             spacing: 10
 
-                            CheckBox {
-                                visible: !row.entryIsDir
-                                checked: row.entrySelected
-                                onClicked: root._toggleSelected(row.entryPath, row.entryIsDir)
-                            }
-
-                            Button {
-                                icon.source: model.iconSource
+                            IconImage  {
+                                source: model.iconSource
                                 Layout.preferredHeight: 34
                                 Layout.preferredWidth: 34
-                                // FIXME:theming
-                                opacity: 1.0
+                                color: row.entrySelected ? App.Theme.iconSelected : App.Theme.icon
                             }
 
                             Text {
                                 Layout.fillWidth: true
                                 text: row.entryName
                                 elide: Text.ElideRight
-                                color: "#111"
+                                color: row.entrySelected ? App.Theme.textSelected : palette.text
                             }
                         }
 
@@ -537,15 +478,13 @@ Item {
                                 if (mouse.button === Qt.RightButton) {
                                     contextMenu._name = row.entryName
                                     contextMenu._isDir = row.entryIsDir
+                                    contextMenu._path = row.entryPath
                                     contextMenu.open()
                                     return
                                 }
-                                // single click: toggle selection for files, navigate for dirs (QWidget parity: approximate)
-                                if (row.entryIsDir) {
-                                    // single-click doesn't navigate in the QWidget; keep it inert.
-                                    return
-                                }
-                                root._toggleSelected(row.entryPath, row.entryIsDir)
+                                // Single click selects one file; platform modifier toggles multi-select.
+                                // Directories do not navigate on single-click.
+                                root._selectPath(row.entryPath, row.entryIsDir, mouse.modifiers)
                             }
                         }
                     }
@@ -554,6 +493,7 @@ Item {
                 Menu {
                     id: contextMenu
                     property string _name: ""
+                    property string _path: ""
                     property bool _isDir: false
 
                     MenuItem {
@@ -565,12 +505,18 @@ Item {
                     MenuItem {
                         text: qsTr("Open Externally")
                         enabled: !contextMenu._isDir
-                        onTriggered: root._openFileOnDevice(contextMenu._name) // uses stream + Qt.openUrlExternally for previewables
+                        onTriggered: root._openFileOnDevice(contextMenu._name)
                     }
 
                     MenuItem {
                         text: qsTr("Export")
-                        enabled: false
+                        enabled: !contextMenu._isDir
+                        onTriggered: {
+                            if (!root._isSelected(contextMenu._path))
+                                root.selectedPaths = [contextMenu._path]
+                            root._updateActionEnabled()
+                            exportDialog.open()
+                        }
                     }
                 }
             }
@@ -646,5 +592,65 @@ Item {
         }
 
         onAccepted: root._deleteSelected()
+    }
+
+    FolderDialog {
+        id: exportDialog
+        title: qsTr("Choose Export Folder")
+        onAccepted: root._startExport(root._urlToLocalPath(selectedFolder))
+    }
+
+    FileDialog {
+        id: importDialog
+        title: qsTr("Choose Files to Import")
+        fileMode: FileDialog.OpenFiles
+        onAccepted: {
+            var paths = []
+            for (var i = 0; i < selectedFiles.length; i++)
+                paths.push(root._urlToLocalPath(selectedFiles[i]))
+            root._startImport(paths)
+        }
+    }
+
+    component ExplorerToolButton: ToolButton {
+        id: btn
+
+        property url iconSource: ""
+        property string tooltip: ""
+
+        padding: 0
+        implicitHeight: 36
+        implicitWidth: 36
+
+        transform: Scale {
+            origin.x: btn.width / 2
+            origin.y: btn.height / 2
+            xScale: btn.pressed ? 0.88 : 1.0
+            yScale: btn.pressed ? 0.88 : 1.0
+            Behavior on xScale { NumberAnimation { duration: 80 } }
+            Behavior on yScale { NumberAnimation { duration: 80 } }
+        }
+
+        background: Rectangle {
+            radius: 8
+            color: !btn.enabled
+                   ? "transparent"
+                   : (btn.pressed ? App.Theme.pressed : (btn.hovered ? App.Theme.hover : "transparent"))
+            border.color: btn.activeFocus ? App.Theme.focus : "transparent"
+            border.width: 1
+
+            Behavior on color { ColorAnimation { duration: App.Theme.fastAnimation } }
+        }
+
+        contentItem: IconImage {
+            source: btn.iconSource
+            color: btn.enabled ? App.Theme.icon : App.Theme.textMuted
+            opacity: btn.enabled ? 1.0 : 0.55
+            sourceSize.width: 20
+            sourceSize.height: 20
+        }
+
+        ToolTip.visible: hovered && tooltip.length > 0
+        ToolTip.text: tooltip
     }
 }

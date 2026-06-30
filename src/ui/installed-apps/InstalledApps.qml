@@ -312,6 +312,7 @@ Item {
                     id: explorer
 
                     anchors.fill: parent
+                    udid: root.device.info["UniqueDeviceID"]
                     afcClient: root.houseArrestAfcClient
                     rootPath: "/Documents"
                     favEnabled: false

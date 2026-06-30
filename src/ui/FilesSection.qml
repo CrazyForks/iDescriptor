@@ -260,7 +260,9 @@ Item {
 
                         FileExplorer {
                             id: explorerDefault
+                            udid: root.udid
                             afcClient: root.afcClient
+                            useAfc2: false
                             favEnabled: true
 
                             // onFavoritePlaceAdded: (alias, path) => {
@@ -275,7 +277,9 @@ Item {
                             FileExplorer {
                                 id: explorerAfc2
                                 anchors.fill: parent
+                                udid: root.udid
                                 afcClient: root.afc2Client
+                                useAfc2: true
                                 favEnabled: true
 
                                 visible: root.afc2Available
