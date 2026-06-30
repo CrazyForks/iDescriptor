@@ -20,7 +20,7 @@
 #ifndef AVAHI_SERVICE_H
 #define AVAHI_SERVICE_H
 
-#include "../../../iDescriptor.h"
+#include "../../include/common.h"
 #include <QList>
 #include <QMutex>
 #include <QObject>
