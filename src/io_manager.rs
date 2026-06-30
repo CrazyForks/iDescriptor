@@ -5,7 +5,7 @@ use crate::{
 };
 use idevice::IdeviceService;
 use idevice::afc::{AfcClient, opcode::AfcFopenMode};
-use log::{error, warn};
+use log::{debug, error, info, warn};
 use macros::QtThreading;
 use qmetaobject::prelude::*;
 use qttypes::QStringList;
@@ -132,6 +132,16 @@ enum AfcKind {
     HouseArrest(String),
 }
 
+impl AfcKind {
+    fn description(&self) -> String {
+        match self {
+            AfcKind::Standard => "standard".to_string(),
+            AfcKind::Afc2 => "afc2".to_string(),
+            AfcKind::HouseArrest(bundle_id) => format!("house-arrest:{bundle_id}"),
+        }
+    }
+}
+
 impl IOManager {
     fn start_export(
         &self,
@@ -223,12 +233,16 @@ impl IOManager {
         let job_id_str = job_id.to_string();
         let guard = self.jobs.lock().expect("IOManager jobs map mutex poisoned");
         if let Some(flag) = guard.get(&job_id_str) {
+            info!("IOManager cancel requested: job_id={job_id_str}");
             flag.store(true, Ordering::Relaxed);
+        } else {
+            warn!("IOManager cancel requested for unknown job: job_id={job_id_str}");
         }
     }
 
     fn cancel_all_jobs(&self) {
         let guard = self.jobs.lock().expect("IOManager jobs map mutex poisoned");
+        info!("IOManager cancel all requested: jobs={}", guard.len());
         for flag in guard.values() {
             flag.store(true, Ordering::Relaxed);
         }
@@ -246,15 +260,31 @@ impl IOManager {
         let job_id = job_id.to_string();
         let destination_dir = destination_dir.to_string();
         let items = qstring_list_to_vec(device_paths);
+        let item_count = items.len();
+        let afc_kind_description = afc_kind.description();
+        info!(
+            "IOManager export requested: job_id={job_id} udid={udid} items={item_count} destination_dir={destination_dir} afc={afc_kind_description}"
+        );
+        if item_count == 0 {
+            warn!("IOManager export requested with no items: job_id={job_id}");
+        }
         let cancel_flag = self.register_job(&job_id);
         let jobs = self.jobs.clone();
         let qt_thread = self.qt_thread();
 
         RUNTIME.spawn(async move {
+            debug!(
+                "IOManager export creating AFC client: job_id={job_id} udid={udid} afc={afc_kind_description}"
+            );
             let mut afc = match create_afc_client(&udid, afc_kind).await {
-                Ok(afc) => afc,
+                Ok(afc) => {
+                    debug!("IOManager export AFC client ready: job_id={job_id}");
+                    afc
+                }
                 Err(err) => {
-                    error!("IOManager export: {err}");
+                    error!(
+                        "IOManager export failed to create AFC client: job_id={job_id} udid={udid} afc={afc_kind_description}: {err}"
+                    );
                     finish_export_job(&qt_thread, job_id.clone(), true, 0, 0, 0);
                     unregister_job(&jobs, &job_id);
                     return;
@@ -286,15 +316,31 @@ impl IOManager {
         let job_id = job_id.to_string();
         let destination_dir = destination_dir.to_string();
         let items = qstring_list_to_vec(local_paths);
+        let item_count = items.len();
+        let afc_kind_description = afc_kind.description();
+        info!(
+            "IOManager import requested: job_id={job_id} udid={udid} items={item_count} destination_dir={destination_dir} afc={afc_kind_description}"
+        );
+        if item_count == 0 {
+            warn!("IOManager import requested with no items: job_id={job_id}");
+        }
         let cancel_flag = self.register_job(&job_id);
         let jobs = self.jobs.clone();
         let qt_thread = self.qt_thread();
 
         RUNTIME.spawn(async move {
+            debug!(
+                "IOManager import creating AFC client: job_id={job_id} udid={udid} afc={afc_kind_description}"
+            );
             let mut afc = match create_afc_client(&udid, afc_kind).await {
-                Ok(afc) => afc,
+                Ok(afc) => {
+                    debug!("IOManager import AFC client ready: job_id={job_id}");
+                    afc
+                }
                 Err(err) => {
-                    error!("IOManager import: {err}");
+                    error!(
+                        "IOManager import failed to create AFC client: job_id={job_id} udid={udid} afc={afc_kind_description}: {err}"
+                    );
                     finish_import_job(&qt_thread, job_id.clone(), true, 0, 0, 0);
                     unregister_job(&jobs, &job_id);
                     return;
@@ -317,7 +363,14 @@ impl IOManager {
     fn register_job(&self, job_id: &str) -> Arc<AtomicBool> {
         let cancel_flag = Arc::new(AtomicBool::new(false));
         let mut guard = self.jobs.lock().expect("IOManager jobs map mutex poisoned");
-        guard.insert(job_id.to_string(), cancel_flag.clone());
+        if guard
+            .insert(job_id.to_string(), cancel_flag.clone())
+            .is_some()
+        {
+            warn!("IOManager replaced existing job registration: job_id={job_id}");
+        } else {
+            debug!("IOManager registered job: job_id={job_id}");
+        }
         cancel_flag
     }
 }
@@ -327,6 +380,8 @@ fn qstring_list_to_vec(paths: QStringList) -> Vec<String> {
 }
 
 async fn create_afc_client(udid: &str, afc_kind: AfcKind) -> anyhow::Result<AfcClient> {
+    let afc_kind_description = afc_kind.description();
+    debug!("IOManager resolving device for AFC client: udid={udid} afc={afc_kind_description}");
     let device = device_ctx::get_device_opt(udid)
         .await
         .ok_or_else(|| anyhow::anyhow!("device {udid} not found"))?;
@@ -355,12 +410,19 @@ async fn handle_start_export(
     let mut total_bytes = 0_i64;
     let mut cancelled = false;
 
+    debug!(
+        "IOManager export job started: job_id={job_id} items={}",
+        device_paths.len()
+    );
+
     for device_path in device_paths {
         if cancel_flag.load(Ordering::Relaxed) {
             cancelled = true;
+            info!("IOManager export job cancellation observed: job_id={job_id}");
             break;
         }
 
+        debug!("IOManager export item requested: job_id={job_id} device_path={device_path}");
         match export_single_item(
             afc,
             &device_path,
@@ -374,14 +436,26 @@ async fn handle_start_export(
             Ok(result) if result.success => {
                 successful += 1;
                 total_bytes += result.bytes_transferred;
+                debug!(
+                    "IOManager export item finished: job_id={job_id} device_path={device_path} bytes={}",
+                    result.bytes_transferred
+                );
                 emit_export_item_finished(&qt_thread, &job_id, &device_path, result, true);
             }
             Ok(result) => {
                 failed += 1;
+                warn!(
+                    "IOManager export item did not complete successfully: job_id={job_id} device_path={device_path} bytes={} error={}",
+                    result.bytes_transferred,
+                    result.error_message.as_deref().unwrap_or("cancelled")
+                );
                 emit_export_item_finished(&qt_thread, &job_id, &device_path, result, false);
             }
             Err(err) => {
                 failed += 1;
+                error!(
+                    "IOManager export item failed: job_id={job_id} device_path={device_path}: {err}"
+                );
                 let file_name = file_name_for_path(&device_path);
                 let job_id_signal = job_id.clone();
                 qt_thread.queue(move |mgr| {
@@ -406,6 +480,9 @@ async fn handle_start_export(
         failed,
         total_bytes,
     );
+    info!(
+        "IOManager export job finished: job_id={job_id} cancelled={cancelled} successful={successful} failed={failed} total_bytes={total_bytes}"
+    );
     unregister_job(&jobs, &job_id);
 }
 
@@ -423,12 +500,19 @@ async fn handle_start_import(
     let mut total_bytes = 0_i64;
     let mut cancelled = false;
 
+    debug!(
+        "IOManager import job started: job_id={job_id} items={}",
+        local_paths.len()
+    );
+
     for local_path in local_paths {
         if cancel_flag.load(Ordering::Relaxed) {
             cancelled = true;
+            info!("IOManager import job cancellation observed: job_id={job_id}");
             break;
         }
 
+        debug!("IOManager import item requested: job_id={job_id} local_path={local_path}");
         match import_single_item(
             afc,
             &local_path,
@@ -442,14 +526,27 @@ async fn handle_start_import(
             Ok(result) if result.success => {
                 successful += 1;
                 total_bytes += result.bytes_transferred;
+                debug!(
+                    "IOManager import item finished: job_id={job_id} local_path={local_path} destination_path={} bytes={}",
+                    result.destination_path, result.bytes_transferred
+                );
                 emit_import_item_finished(&qt_thread, &job_id, &local_path, result, true);
             }
             Ok(result) => {
                 failed += 1;
+                warn!(
+                    "IOManager import item did not complete successfully: job_id={job_id} local_path={local_path} destination_path={} bytes={} error={}",
+                    result.destination_path,
+                    result.bytes_transferred,
+                    result.error_message.as_deref().unwrap_or("cancelled")
+                );
                 emit_import_item_finished(&qt_thread, &job_id, &local_path, result, false);
             }
             Err(err) => {
                 failed += 1;
+                error!(
+                    "IOManager import item failed: job_id={job_id} local_path={local_path}: {err}"
+                );
                 let file_name = file_name_for_path(&local_path);
                 let job_id_signal = job_id.clone();
                 qt_thread.queue(move |mgr| {
@@ -474,6 +571,9 @@ async fn handle_start_import(
         failed,
         total_bytes,
     );
+    info!(
+        "IOManager import job finished: job_id={job_id} cancelled={cancelled} successful={successful} failed={failed} total_bytes={total_bytes}"
+    );
     unregister_job(&jobs, &job_id);
 }
 
@@ -495,6 +595,9 @@ async fn export_single_item(
     let base_path = Path::new(destination_dir).join(&file_name);
     let output_path = unique_output_path(&base_path).await;
     let output_path_str = output_path.to_string_lossy().to_string();
+    debug!(
+        "IOManager export item preparing: job_id={job_id} device_path={device_path} output_path={output_path_str}"
+    );
 
     let info = afc
         .get_file_info(device_path.to_string())
@@ -517,6 +620,9 @@ async fn export_single_item(
 
     loop {
         if cancel_flag.load(Ordering::Relaxed) {
+            debug!(
+                "IOManager export item cancellation observed: job_id={job_id} device_path={device_path} bytes={transferred}"
+            );
             break;
         }
 
@@ -576,6 +682,9 @@ async fn import_single_item(
     } else {
         format!("{destination_dir}/{file_name}")
     };
+    debug!(
+        "IOManager import item preparing: job_id={job_id} local_path={local_path} device_path={device_path}"
+    );
 
     let mut local = fs::File::open(local_path)
         .await
@@ -596,6 +705,9 @@ async fn import_single_item(
 
     loop {
         if cancel_flag.load(Ordering::Relaxed) {
+            debug!(
+                "IOManager import item cancellation observed: job_id={job_id} local_path={local_path} bytes={transferred}"
+            );
             break;
         }
 
@@ -763,5 +875,9 @@ fn finish_import_job(
 
 fn unregister_job(jobs: &Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>, job_id: &str) {
     let mut guard = jobs.lock().expect("IOManager jobs map mutex poisoned");
-    guard.remove(job_id);
+    if guard.remove(job_id).is_some() {
+        debug!("IOManager unregistered job: job_id={job_id}");
+    } else {
+        warn!("IOManager tried to unregister unknown job: job_id={job_id}");
+    }
 }
