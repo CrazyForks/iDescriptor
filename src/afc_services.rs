@@ -1,18 +1,14 @@
 use crate::device_ctx;
 use crate::qt_threading::QtThreading;
 use crate::{RUNTIME, run_sync};
-use idevice::{
-    afc::{AfcClient, opcode::AfcFopenMode},
-};
+use idevice::afc::{AfcClient, opcode::AfcFopenMode};
+use log::debug;
 use macros::QtThreading;
-use once_cell::sync::Lazy;
 use qmetaobject::prelude::*;
 use qttypes::{QStringList, QVariantMap};
-use regex::Regex;
 use std::cmp::min;
-use std::{any::type_name, sync::Arc};
-use std::{collections::HashMap, net::IpAddr};
-use std::{io::SeekFrom, pin::Pin};
+use std::io::SeekFrom;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
@@ -31,6 +27,7 @@ pub struct AfcServices {
         entries: QVariantMap
     ),
     start_video_stream: qt_method!(fn(&self, file_path: QString) -> QString),
+    release_video_stream: qt_method!(fn(&self, url: QString)),
     delete_path: qt_method!(fn(&self, path: QString) -> bool),
     //only required for hause_arrest afc
     bundle_id: qt_property!(QString),
@@ -55,6 +52,7 @@ impl AfcServices {
             check_is_dir_and_list: Default::default(),
             check_is_dir_and_list_finished: Default::default(),
             start_video_stream: Default::default(),
+            release_video_stream: Default::default(),
             delete_path: Default::default(),
             bundle_id: bundle_id.map_or_else(QString::default, QString::from),
         }
@@ -323,7 +321,7 @@ impl AfcServices {
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
         let url_for_insert = url.clone();
         let udid_for_insert = udid.clone();
-        // FIXME: should we do it here ?
+
         let inserted = run_sync(async move {
             let maybe_device = device_ctx::get_device_opt(udid_for_insert).await;
             let device = match maybe_device {
@@ -347,6 +345,8 @@ impl AfcServices {
             "start_video_stream: serving {} for udid={} path={}",
             url_clone, udid, cloned_path
         );
+        let cleanup_url = url_clone.clone();
+        let cleanup_udid = udid.clone();
         // accept-loop task
         RUNTIME.spawn(async move {
             loop {
@@ -375,31 +375,49 @@ impl AfcServices {
                     }
                 }
             }
+            if let Some(device) = device_ctx::get_device_opt(&cleanup_udid).await {
+                let mut video_streams = device.video_streams.lock().await;
+                video_streams.remove(&cleanup_url);
+            }
             eprintln!("start_video_stream: accept-loop exiting for udid : {} with url :{}", udid, url_clone);
         });
 
         QString::from(url_clone_for_log)
     }
 
-    fn delete_path(&self, path: QString) -> bool {
+    fn release_video_stream(&self, url: QString) {
         let udid = self.udid.clone();
-        let path_str = path.to_string();
+        let url_str = url.to_string();
 
-        run_sync(async move {
-            let afc_arc = {
-                let maybe_device = device_ctx::get_device_opt(&udid).await;
+        if url_str.is_empty() {
+            return;
+        }
 
-                let device = match maybe_device {
-                    Some(d) => d,
-                    None => {
-                        eprintln!("delete_path: device {udid} not found");
-                        return false;
-                    }
-                };
-
-                device.afc.clone()
+        RUNTIME.spawn(async move {
+            let Some(device) = device_ctx::get_device_opt(&udid).await else {
+                eprintln!("release_video_stream: device {udid} not found");
+                return;
             };
 
+            let maybe_shutdown = {
+                let mut video_streams = device.video_streams.lock().await;
+                video_streams.remove(&url_str)
+            };
+
+            if let Some(shutdown) = maybe_shutdown {
+                eprintln!("release_video_stream: sending shutdown for {}", url_str);
+                let _ = shutdown.send(());
+            } else {
+                eprintln!("release_video_stream: no active stream for {}", url_str);
+            }
+        });
+    }
+
+    fn delete_path(&self, path: QString) -> bool {
+        let path_str = path.to_string();
+        let afc_arc = self.afc.clone();
+
+        run_sync(async move {
             let mut afc = afc_arc.lock().await;
 
             match afc.remove(&path_str).await {
@@ -417,7 +435,6 @@ impl AfcServices {
         path: String,
         mut socket: tokio::net::TcpStream,
     ) {
-        let mut afc = afc.lock().await;
         let mut buf = vec![0u8; 4096];
         let n = match socket.read(&mut buf).await {
             Ok(n) if n > 0 => n,
@@ -499,6 +516,7 @@ impl AfcServices {
             has_range, range_start, range_end, path
         );
 
+        let mut afc = afc.lock().await;
         let file_size = {
             let info = match afc.get_file_info(path.clone()).await {
                 Ok(i) => i,
@@ -543,6 +561,9 @@ impl AfcServices {
             }
             if range_end >= 0 && range_end < file_size {
                 end = range_end;
+            } else if range_end < 0 {
+                const MAX_OPEN_ENDED_RANGE_BYTES: i64 = 1024 * 1024;
+                end = min(file_size - 1, start + MAX_OPEN_ENDED_RANGE_BYTES - 1);
             }
             if start < 0 || start >= file_size || start > end {
                 eprintln!(
@@ -679,5 +700,11 @@ impl AfcServices {
             "handle_http_connection: finished/closed connection for {}",
             path
         );
+    }
+}
+
+impl Drop for AfcServices {
+    fn drop(&mut self) {
+        debug!("AfcServices dropped for udid: {}", self.udid);
     }
 }
