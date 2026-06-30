@@ -1,5 +1,7 @@
 use std::env;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=src/main.rs");
@@ -21,6 +23,8 @@ fn main() {
     let qt_library_path = env::var("DEP_QT_LIBRARY_PATH").unwrap();
     let qt_version = env::var("DEP_QT_VERSION").unwrap();
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+
+    compile_translations(&qt_library_path);
 
     // ------------------------------------------------------------------
     // Build cpp_bridge via CMake
@@ -210,5 +214,120 @@ fn main() {
             bonjour_sdk.join("Lib/x64/dnssd.lib").display()
         );
     }
+}
 
+fn compile_translations(qt_library_path: &str) {
+    let lrelease = find_lrelease(qt_library_path)
+        .unwrap_or_else(|| panic!("lrelease not found for Qt library path {}", qt_library_path));
+
+    let translations_dir = std::path::Path::new("translations");
+    let target_translations_dir = std::path::Path::new("target").join("translations");
+    fs::create_dir_all(&target_translations_dir).unwrap();
+
+    for entry in fs::read_dir(&target_translations_dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().and_then(|ext| ext.to_str()) == Some("qm") {
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    println!("cargo:rerun-if-changed={}", translations_dir.display());
+
+    for entry in fs::read_dir(translations_dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("ts") {
+            continue;
+        }
+
+        println!("cargo:rerun-if-changed={}", path.display());
+
+        let output = target_translations_dir
+            .join(path.file_stem().unwrap())
+            .with_extension("qm");
+        let status = Command::new(&lrelease)
+            .arg(&path)
+            .arg("-qm")
+            .arg(&output)
+            .status()
+            .unwrap_or_else(|err| {
+                panic!("failed to run {}: {}", lrelease.display(), err);
+            });
+
+        if !status.success() {
+            panic!(
+                "{} failed while compiling {}",
+                lrelease.display(),
+                path.display()
+            );
+        }
+    }
+}
+
+fn find_lrelease(qt_library_path: &str) -> Option<PathBuf> {
+    let executable = if cfg!(windows) {
+        "lrelease.exe"
+    } else {
+        "lrelease"
+    };
+
+    for bin_dir in qt_bin_dirs(qt_library_path) {
+        let candidate = bin_dir.join(executable);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn qt_bin_dirs(qt_library_path: &str) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+
+    for query in ["QT_HOST_BINS", "QT_INSTALL_BINS"] {
+        if let Some(dir) = qmake_query(query) {
+            dirs.push(dir);
+        }
+    }
+
+    let qt_library_path = Path::new(qt_library_path);
+    if let Some(parent) = qt_library_path.parent() {
+        dirs.push(parent.join("bin"));
+    }
+
+    dirs.push(qt_library_path.join("bin"));
+    dirs.push(PathBuf::from("/usr/lib/qt6/bin"));
+    dirs.push(PathBuf::from("/usr/lib/qt5/bin"));
+    dirs.push(PathBuf::from("/usr/bin"));
+
+    dirs
+}
+
+fn qmake_query(var: &str) -> Option<PathBuf> {
+    let qmake = env::var("QMAKE")
+        .ok()
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .map_or_else(
+            || vec!["qmake6".into(), "qmake".into(), "qmake-qt5".into()],
+            |qmake| vec![qmake],
+        );
+
+    for candidate in qmake {
+        let output = match Command::new(candidate).arg("-query").arg(var).output() {
+            Ok(output) => output,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(_) => continue,
+        };
+
+        if !output.status.success() {
+            continue;
+        }
+
+        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !value.is_empty() {
+            return Some(PathBuf::from(value));
+        }
+    }
+
+    None
 }

@@ -5,17 +5,13 @@ import "."
 
 ApplicationWindow {
     id: window
-    title: "iDescriptor"
+    title: qsTr("iDescriptor")
     width: 1000
     height: 668
     minimumWidth: 668
     minimumHeight: 320
     visible: true
     flags: Qt.platform.os === "osx" ? Qt.Window | Qt.NoTitleBarBackgroundHint | Qt.ExpandedClientAreaHint : Qt.Window
-    topPadding: 0
-    leftPadding: 0
-    rightPadding: 0
-    bottomPadding: 0
     property int currentIndex: 0
 
     Component.onCompleted: {
@@ -24,6 +20,7 @@ ApplicationWindow {
                 QmlUtils.setup_main_window(window.contentItem.Window.window)
             })
         }
+        Updater.checkAutomatically()
     }
 
     ColumnLayout {

@@ -22,7 +22,7 @@ Item {
         Text {
             id: title
             Layout.fillWidth: true
-            text: "Welcome to iDescriptor"
+            text: qsTr("Welcome to iDescriptor")
             horizontalAlignment: Text.AlignHCenter
             font.pixelSize: 28
             font.weight: Font.DemiBold
@@ -35,7 +35,7 @@ Item {
         Text {
             id: subtitle
             Layout.fillWidth: true
-            text: "Open-Source & Free"
+            text: qsTr("Open-Source & Free")
             horizontalAlignment: Text.AlignHCenter
             font.pixelSize: 10
             font.weight: Font.Normal
@@ -80,7 +80,7 @@ Item {
                 Text {
                     id: howToConnectLink
                     Layout.alignment: Qt.AlignHCenter
-                    text: "How to connect a wireless device?"
+                    text: qsTr("How to connect a wireless device?")
                     color: root.linkColor
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
@@ -111,7 +111,7 @@ Item {
         Text {
             id: instruction
             Layout.fillWidth: true
-            text: "Connect an iDevice to get started"
+            text: qsTr("Connect an iDevice to get started")
             horizontalAlignment: Text.AlignHCenter
             font.pixelSize: 14
             wrapMode: Text.WordWrap
@@ -123,7 +123,7 @@ Item {
         Text {
             id: githubLink
             Layout.alignment: Qt.AlignHCenter
-            text: "Found an issue? Report it on GitHub"
+            text: qsTr("Found an issue? Report it on GitHub")
             color: root.linkColor
             font.pixelSize: 12
             font.weight: Font.DemiBold

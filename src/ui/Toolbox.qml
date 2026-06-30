@@ -87,7 +87,7 @@ Item {
         if (!success)
             showError(qsTr("Failed to send the command to the device. Make sure it is connected and unlocked."))
         else
-            showInfo(qsTr(`Action '${action}' sent successfully.`))
+            showInfo(qsTr("Action '%1' sent successfully.").arg(action))
     }
     
     function createComp(loc, args = {}) {
@@ -212,72 +212,72 @@ Item {
     readonly property var mainToolsModel: ([
         {
             toolId: 0,
-            title: "Airplayer",
-            description: "Cast your device screen",
+            title: qsTr("Airplayer"),
+            description: qsTr("Cast your device screen"),
             requiresDevice: false,
             iconSource: "qrc:/resources/icons/material-symbols_airplay-outline-rounded.svg",
             visible: true
         },
         {
             toolId: 1,
-            title: "Virtual Location",
-            description: "Simulate GPS location on your device",
+            title: qsTr("Virtual Location"),
+            description: qsTr("Simulate GPS location on your device"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/material-symbols_location-on-outline.svg",
             visible: true
         },
         {
             toolId: 2,
-            title: "Live Screen",
-            description: "View device screen in real-time",
+            title: qsTr("Live Screen"),
+            description: qsTr("View device screen in real-time"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/pepicons-print_cellphone-eye.svg",
             visible: true
         },
         {
             toolId: 3,
-            title: "Query Mobile Gestalt",
-            description: "Query device hardware information",
+            title: qsTr("Query Mobile Gestalt"),
+            description: qsTr("Query device hardware information"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/streamline_programming-browser-search-search-window-glass-app-code-programming-query-find-magnifying-apps.svg",
             visible: true
         },
         {
             toolId: 4,
-            title: "Dev Disk Images",
-            description: "Manage developer disk images",
+            title: qsTr("Dev Disk Images"),
+            description: qsTr("Manage developer disk images"),
             requiresDevice: false,
             iconSource: "qrc:/resources/icons/tabler_database-export.svg",
             visible: true
         },
         {
             toolId: 5,
-            title: "Wireless Gallery Import",
-            description: "Import photos wirelessly to your iDevice (requires Shortcuts app)",
+            title: qsTr("Wireless Gallery Import"),
+            description: qsTr("Import photos wirelessly to your iDevice (requires Shortcuts app)"),
             requiresDevice: false,
             iconSource: "qrc:/resources/icons/material-symbols_android-wifi-3-bar-plus.svg",
             visible: true
         },
         {
             toolId: 6,
-            title: "iFuse Mount",
-            description: "Mount your iPhone's filesystem on your PC",
+            title: qsTr("iFuse Mount"),
+            description: qsTr("Mount your iPhone's filesystem on your PC"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/fuse.png",
             visible: (Qt.platform.os !== "osx" && Qt.platform.os !== "darwin")
         },
         {
             toolId: 7,
-            title: "Cable Info",
-            description: "View detailed cable and connection info",
+            title: qsTr("Cable Info"),
+            description: qsTr("View detailed cable and connection info"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/material-symbols_cable-rounded.svg",
             visible: true
         },
         {
             toolId: 8,
-            title: "Network Devices",
-            description: "Discover and monitor devices on your network",
+            title: qsTr("Network Devices"),
+            description: qsTr("Discover and monitor devices on your network"),
             requiresDevice: false,
             iconSource: "qrc:/resources/icons/streamline_ultimate-multiple-users-network.svg",
             visible: true
@@ -287,40 +287,40 @@ Item {
     readonly property var moreToolsModel: ([
         {
             toolId: 9,
-            title: "Mount Dev Image",
-            description: "Mount a compatible device image with a single click",
+            title: qsTr("Mount Dev Image"),
+            description: qsTr("Mount a compatible device image with a single click"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/mdi_disk.svg",
             visible: true
         },
         {
             toolId: 10,
-            title: "Restart",
-            description: "Restart device services",
+            title: qsTr("Restart"),
+            description: qsTr("Restart device services"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/ic_twotone-restart-alt.svg",
             visible: true
         },
         {
             toolId: 11,
-            title: "Shutdown",
-            description: "Shut down the device",
+            title: qsTr("Shutdown"),
+            description: qsTr("Shut down the device"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/ic_outline-power-settings-new.svg",
             visible: true
         },
         {
             toolId: 12,
-            title: "Recovery Mode",
-            description: "Enter device recovery mode",
+            title: qsTr("Recovery Mode"),
+            description: qsTr("Enter device recovery mode"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/hugeicons_wrench-01.svg",
             visible: true
         },
         {
             toolId: 13,
-            title: "Enable Wi-Fi Connections",
-            description: "Make device connectable via Wi-Fi",
+            title: qsTr("Enable Wi-Fi Connections"),
+            description: qsTr("Make device connectable via Wi-Fi"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/streamline-freehand_charging-flash-wireless.svg",
             visible: true
@@ -348,7 +348,7 @@ Item {
                 Layout.preferredWidth: 320
                 enabled: root.hasDevice
 
-                model: root.hasDevice ? App.DeviceContext.devices : [{ text: "No device connected", udid: "" }]
+                model: root.hasDevice ? App.DeviceContext.devices : [{ text: qsTr("No device connected"), udid: "" }]
                 textRole: "text"
                 valueRole: "udid"
 

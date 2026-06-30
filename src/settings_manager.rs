@@ -30,9 +30,24 @@ cpp! {{
     static QString settings_manager_default_language()
     {
         if (QLocale::system().language() == QLocale::German) {
-            return QStringLiteral("German");
+            return QStringLiteral("de");
         }
-        return QStringLiteral("English");
+        return QStringLiteral("en");
+    }
+
+    static QString settings_manager_normalize_language(QString language)
+    {
+        QString normalized = language.trimmed().toLower();
+        if (normalized == QStringLiteral("german")) {
+            return QStringLiteral("de");
+        }
+        if (normalized == QStringLiteral("english")) {
+            return QStringLiteral("en");
+        }
+        if (normalized.startsWith(QStringLiteral("de"))) {
+            return QStringLiteral("de");
+        }
+        return QStringLiteral("en");
     }
 }}
 
@@ -355,17 +370,20 @@ impl SettingsManager {
         write_string("theme", theme);
     }
 
-    fn language(&self) -> QString {
+    pub fn language(&self) -> QString {
         cpp!(unsafe [] -> QString as "QString" {
             auto &settings = settings_manager_settings();
-            return settings.value(
+            return settings_manager_normalize_language(settings.value(
                 QStringLiteral("language"),
                 settings_manager_default_language()
-            ).toString();
+            ).toString());
         })
     }
 
     fn set_language(&self, language: QString) {
+        let language = cpp!(unsafe [language as "QString"] -> QString as "QString" {
+            return settings_manager_normalize_language(language);
+        });
         write_string("language", language);
     }
 

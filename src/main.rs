@@ -40,9 +40,9 @@ pub mod ifuse;
 pub mod image_cache;
 pub mod image_loader;
 pub mod image_provider;
+pub mod io_manager;
 // pub mod jailbroken;
 pub mod list_model;
-
 pub mod platform;
 pub mod qml_utils;
 pub mod qquickimageprovider_imp;
@@ -55,6 +55,7 @@ pub mod service_manager;
 pub mod settings_manager;
 pub mod springboard_services;
 pub mod ui_qrc;
+// pub mod updater;
 pub mod utils;
 pub mod web_wireless_gallery_import;
 
@@ -90,7 +91,6 @@ static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
         .unwrap()
 });
 
-// TODO: handle timeout here
 pub fn run_sync<F, R>(fut: F) -> R
 where
     F: Future<Output = R> + Send + 'static,
@@ -117,16 +117,8 @@ fn main() {
 
     let ui_live_reload = utils::env_flag("IDESCRIPTOR_UI_LIVE_RELOAD");
     let qml_from_fs = ui_live_reload || utils::env_flag("IDESCRIPTOR_QML_FROM_FS");
-    // #[cfg(target_os = "windows")]
-    // unsafe {
-    //     use windows::Win32::System::Console::*;
-    //     if AttachConsole(ATTACH_PARENT_PROCESS).is_err() && cli::will_run_in_console() {
-    //         let _ = AllocConsole();
-    //     }
-    // }
 
     // let _ = util::install_crash_handler();
-    // utils::init_logging();
     qmetaobject::log::init_qt_to_rust();
     let icons_path = if ui_live_reload {
         QString::from(format!("{}/resources/icons/", env!("CARGO_MANIFEST_DIR")))
@@ -227,7 +219,6 @@ fn main() {
         crate::ui_qrc::windows_qml();
     }
 
-    // qml_register_type::<core::Core>(cstr::cstr!("iDescriptor"), 1, 0, cstr::cstr!("Core"));
     qml_register_type::<query_sqlite::Query>(
         cstr::cstr!("iDescriptor"),
         1,
@@ -241,15 +232,17 @@ fn main() {
         cstr::cstr!("ScreenshotBackend"),
     );
 
-    // qml_register_type::<airplay::Airplay>(
-    //     cstr::cstr!("iDescriptor"),
-    //     1,
-    //     0,
-    //     cstr::cstr!("Airplay"),
-    // );
-
     let mut engine = QmlEngine::new();
-    // let mut dpi = cpp!(unsafe[] -> f64 as "double" { return QGuiApplication::primaryScreen()->logicalDotsPerInch() / 96.0; });
+    let engine_ptr = engine.cpp_ptr();
+
+    let settings_manager_impl = settings_manager::SettingsManager::default();
+    let initial_language = settings_manager_impl.language();
+    qml_utils::QmlUtils::apply_language_to_engine(engine_ptr, initial_language);
+    let settings_manager = QObjectBox::new(settings_manager_impl);
+    engine.set_object_property("settingsManager".into(), settings_manager.pinned());
+
+    // let updater = QObjectBox::new(updater::Updater::new_with_state());
+    // engine.set_object_property("UpdaterImp".into(), updater.pinned());
 
     let core_obj = QObjectBox::new(core::Core::default());
     engine.set_object_property("core".into(), core_obj.pinned());
@@ -262,6 +255,9 @@ fn main() {
 
     let provider_ref_cell = QObjectBox::new(image_provider::ImageProvider::default(obj));
     engine.add_image_provider("thumb", provider_ref_cell);
+
+    let io_manager = QObjectBox::new(io_manager::IOManager::default());
+    engine.set_object_property("ioManager".into(), io_manager.pinned());
 
     let airplay = QObjectBox::new(airplay::Airplay::default());
     engine.set_object_property("AirplayImp".into(), airplay.pinned());
@@ -285,10 +281,8 @@ fn main() {
     #[cfg(not(target_os = "macos"))]
     engine.set_object_property("DiagnoseImpl".into(), diagnose.pinned());
 
-    let qml_utils = QObjectBox::new(qml_utils::QmlUtils::default());
+    let qml_utils = QObjectBox::new(qml_utils::QmlUtils::new(engine_ptr));
     engine.set_object_property("QmlUtils".into(), qml_utils.pinned());
-
-    let engine_ptr = engine.cpp_ptr();
 
     cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
         // FIXME: workaround to find FluentUI

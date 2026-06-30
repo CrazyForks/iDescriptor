@@ -78,6 +78,11 @@ qrc!(pub rsrc,
         "resources/wireless-gallery-import.mp4",
         "resources/dev-mode.mp4",
         "resources/unlock.mp4",
-        "resources/trust.png"
+        "resources/trust.png",
+
+        // ------- Translations --------
+        // lrelease compiles .ts files to .qm in build.rs   
+        "target/translations/de.qm" as "translations/de.qm",
+
     }
 );

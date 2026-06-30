@@ -5,6 +5,7 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
+import "." as App
 import "./base"
 
 Window {
@@ -27,7 +28,7 @@ Window {
     property bool auto_check_updates: true
     property bool auto_enable_wifi_connections: true
     property string theme: "System Default"
-    property string language: "English"
+    property string language: "en"
     property bool auto_raise_window: true
     property bool switch_to_new_device: true
     property bool auto_connect_wireless_devices: true
@@ -67,6 +68,18 @@ Window {
         backend[name].apply(backend, args)
     }
 
+    function normalizeLanguage(value) {
+        const normalized = String(value || "en").trim().toLowerCase()
+        if (normalized === "german" || normalized.indexOf("de") === 0)
+            return "de"
+        return "en"
+    }
+
+    function applyLanguage() {
+        if (typeof QmlUtils !== "undefined" && QmlUtils && typeof QmlUtils.set_language === "function")
+            QmlUtils.set_language(language)
+    }
+
     function loadSettings() {
         downloadPath = backendValue("dev_disk_img_path", "")
         wireless_file_server_port = backendValue("wireless_file_server_port", 8080)
@@ -74,7 +87,7 @@ Window {
         auto_check_updates = backendValue("auto_check_updates", true)
         auto_enable_wifi_connections = backendValue("auto_enable_wifi_connections", true)
         theme = backendValue("theme", "System Default")
-        language = backendValue("language", "English")
+        language = normalizeLanguage(backendValue("language", "en"))
         auto_raise_window = backendValue("auto_raise_window", true)
         switch_to_new_device = backendValue("switch_to_new_device", true)
         auto_connect_wireless_devices = backendValue("auto_connect_wireless_devices", true)
@@ -88,6 +101,7 @@ Window {
         show_v4l2 = backendValue("show_v4l2", false)
         dirty = false
         restartRequired = false
+        applyLanguage()
     }
 
     function applySettings() {
@@ -98,6 +112,7 @@ Window {
         callBackend("set_auto_enable_wifi_connections", auto_enable_wifi_connections)
         callBackend("set_theme", theme)
         callBackend("set_language", language)
+        applyLanguage()
         callBackend("set_auto_raise_window", auto_raise_window)
         callBackend("set_switch_to_new_device", switch_to_new_device)
         callBackend("set_auto_connect_wireless_devices", auto_connect_wireless_devices)
@@ -123,6 +138,8 @@ Window {
         loadSettings()
         dirty = true
     }
+
+    Component.onCompleted: loadSettings()
 
     FolderDialog {
         id: downloadPathDialog
@@ -296,8 +313,8 @@ Window {
                             textRole: "label"
                             valueRole: "value"
                             model: [
-                                { value: "English", label: qsTr("English") },
-                                { value: "German", label: qsTr("German") }
+                                { value: "en", label: qsTr("English") },
+                                { value: "de", label: qsTr("German") }
                             ]
                             currentIndex: Math.max(0, indexOfValue(root.language))
                             onActivated: {
@@ -529,9 +546,7 @@ Window {
 
                 Button {
                     text: qsTr("Check for Updates")
-                    enabled: false
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("FIXME: updater integration is still owned by MainWindow.")
+                    onClicked: App.Updater.checkForUpdates(true)
                 }
 
                 Button {
