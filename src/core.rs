@@ -40,9 +40,7 @@ use qmetaobject::prelude::*;
 #[derive(Default, QObject, QtThreading)]
 pub struct Core {
     base: qt_base_class!(trait QObject),
-
     init: qt_method!(fn(&mut self)),
-
     init_wireless_device:
         qt_method!(fn(&mut self, ip: QString, pairing_file: QString, mac_address: QString)),
     get_pairing_files: qt_method!(fn(&mut self) -> QVariantMap),
@@ -52,7 +50,6 @@ pub struct Core {
     no_pairing_file: qt_signal!(mac_address : QString),
     sleepy_time_detected: qt_signal!(),
     device_became_wired: qt_signal!(udid: QString),
-    // listen : fn (&mut self),
 }
 
 impl Core {
@@ -493,6 +490,7 @@ async fn init_idescriptor_device<
 
     // FIXME: we may need our own error types here
     // but InternalError should be fine for now
+    // maybe use anyhow?
     let def_vals_dict = def_vals.as_dictionary_mut().ok_or_else(|| {
         IdeviceError::InternalError(
             "lc.get_value(None, None).await is not a dictionary".to_string(),
@@ -730,46 +728,36 @@ async fn collect_info(
         );
     }
 
-    if let (d_target, Value::Dictionary(d_source)) = (&mut def_vals_dict, disk_vals) {
-        // d_target.extend(d_source);
+    info.insert(
+        QString::from("Model"),
+        QVariant::from(&QString::from(afc_info.model)),
+    );
+    info.insert(
+        QString::from("TotalBytes"),
+        QVariant::from(afc_info.total_bytes as u64),
+    );
+    info.insert(
+        QString::from("FreeBytes"),
+        QVariant::from(afc_info.free_bytes as u64),
+    );
+    info.insert(
+        QString::from("BlockSize"),
+        QVariant::from(afc_info.block_size as u64),
+    );
 
-        // let mut afc_info_dict = plist::Dictionary::new();
-        info.insert(
-            QString::from("Model"),
-            QVariant::from(&QString::from(afc_info.model)),
-        );
-        info.insert(
-            QString::from("TotalBytes"),
-            QVariant::from(afc_info.total_bytes as u64),
-        );
-        info.insert(
-            QString::from("FreeBytes"),
-            QVariant::from(afc_info.free_bytes as u64),
-        );
-        info.insert(
-            QString::from("BlockSize"),
-            QVariant::from(afc_info.block_size as u64),
-        );
+    info.insert(
+        QString::from("Jailbroken"),
+        QVariant::from(utils::detect_jailbroken(&mut afc).await),
+    );
 
-        // d_target.insert("AFC_INFO".into(), Value::Dictionary(afc_info_dict));
-        info.insert(
-            QString::from("Jailbroken"),
-            QVariant::from(utils::detect_jailbroken(&mut afc).await),
-        );
-
-        // if let Some(battery_info) = utils::get_battery_info(&mut diag_relay).await {
-        //     d_target.insert("DIAG_INFO".into(), Value::Dictionary(battery_info));
-        // }
-
-        info.insert(
-            QString::from("connection_type"),
-            QVariant::from(if is_wireless {
-                QString::from("Wireless")
-            } else {
-                QString::from("USB")
-            }),
-        );
-    }
+    info.insert(
+        QString::from("connection_type"),
+        QVariant::from(if is_wireless {
+            QString::from("Wireless")
+        } else {
+            QString::from("USB")
+        }),
+    );
 
     // parse ios version
     let ios_version: Vec<&str> = def_vals_dict
