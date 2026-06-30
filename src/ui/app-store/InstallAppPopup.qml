@@ -30,7 +30,7 @@ Dialog {
         title: qsTr("Choose IPA")
         fileMode: FileDialog.OpenFile
         nameFilters: [qsTr("IPA files (*.ipa)"), qsTr("All files (*)")]
-        onAccepted: root.ipaPath = selectedFile.toString().replace("file:///", "/").replace("file://", "")
+        onAccepted: root.ipaPath = QmlUtils.url_to_path(selectedFile)
     }
 
     Connections {

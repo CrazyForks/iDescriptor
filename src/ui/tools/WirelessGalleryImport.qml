@@ -19,13 +19,6 @@ ToolWindow {
         "heif", "mp4", "mov", "avi", "mkv", "m4v", "3gp", "webm"
     ]
 
-    function localPath(url) {
-        let text = url.toString()
-        if (text.startsWith("file://"))
-            text = decodeURIComponent(text.substring(7))
-        return text
-    }
-
     function fileName(path) {
         const normalized = path.replace(/\\/g, "/")
         return normalized.substring(normalized.lastIndexOf("/") + 1)
@@ -49,7 +42,7 @@ ToolWindow {
     function updateFiles(files) {
         selectedFilesModel.clear()
         for (let i = 0; i < files.length; ++i) {
-            const path = localPath(files[i])
+            const path = QmlUtils.url_to_path(files[i])
             if (isGalleryCompatible(path)) {
                 selectedFilesModel.append({
                     path: path,

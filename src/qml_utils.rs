@@ -1,7 +1,11 @@
+use anyhow::{Result, anyhow};
 use cpp::cpp;
-use log::debug;
+use log::{debug, warn};
 use qmetaobject::{QJSValue, prelude::*};
-use std::ffi::c_void;
+use std::{
+    ffi::c_void,
+    path::{Path, PathBuf},
+};
 
 cpp! {{
     #include <QCoreApplication>
@@ -17,6 +21,7 @@ pub struct QmlUtils {
     engine_ptr: Option<*mut c_void>,
     get_lockdown_dir: qt_method!(fn(&self) -> QString),
     generate_uuid: qt_method!(fn(&self) -> QString),
+    url_to_path: qt_method!(fn(&self, location: QString) -> QString),
     set_language: qt_method!(fn(&self, lang_id: QString) -> bool),
     language_changed: qt_signal!(),
     setup_tool_window: qt_method!(fn(&self, win: QJSValue)),
@@ -80,6 +85,17 @@ impl QmlUtils {
         QString::from(uuid::Uuid::new_v4().to_string())
     }
 
+    fn url_to_path(&self, location: QString) -> QString {
+        let location = location.to_string();
+        match url_to_pathbuf(&location) {
+            Ok(path) => QString::from(path.to_string_lossy().to_string()),
+            Err(err) => {
+                warn!("QmlUtils failed to convert URL to path: location={location}: {err}");
+                QString::from(location)
+            }
+        }
+    }
+
     fn set_language(&self, lang_id: QString) -> bool {
         if self.engine_ptr.is_none() {
             debug!("QmlUtils: engine_ptr is none, cannot set_language");
@@ -101,4 +117,19 @@ impl QmlUtils {
 
         crate::platform::macos::apply_main_window(win_id);
     }
+}
+
+fn url_to_pathbuf(mut url: &str) -> Result<PathBuf> {
+    Ok(if url.contains("://") {
+        url::Url::parse(url)
+            .map_err(|err| anyhow!("invalid URL {url}: {err}"))?
+            .to_file_path()
+            .map_err(|_| anyhow!("URL is not a local file path: {url}"))?
+    } else {
+        // Windows extended path
+        if url.starts_with("//?/") {
+            url = &url[4..];
+        }
+        Path::new(url).to_path_buf()
+    })
 }

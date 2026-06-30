@@ -25,7 +25,7 @@ Dialog {
     FolderDialog {
         id: outputDialog
         title: qsTr("Choose download folder")
-        onAccepted: root.outputPath = selectedFolder.toString().replace("file:///", "/").replace("file://", "")
+        onAccepted: root.outputPath = QmlUtils.url_to_path(selectedFolder)
     }
 
     Connections {

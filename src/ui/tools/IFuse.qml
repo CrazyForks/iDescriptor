@@ -103,7 +103,7 @@ ToolWindow {
         id: linuxFolderDialog
         title: qsTr("Select Mount Directory")
         currentFolder: root.mountPath ? root.localFileUrl(root.mountPath) : ""
-        onAccepted: root.mountPath = selectedFolder.toString().replace("file://", "")
+        onAccepted: root.mountPath = QmlUtils.url_to_path(selectedFolder)
     }
 
     FileDialog {
@@ -111,7 +111,7 @@ ToolWindow {
         title: qsTr("Select Mount Directory")
         fileMode: FileDialog.SaveFile
         currentFolder: root.mountPath ? root.localFileUrl(root.mountPath.substring(0, root.mountPath.lastIndexOf("/"))) : ""
-        onAccepted: root.mountPath = selectedFile.toString().replace("file:///", "").replace("file://", "")
+        onAccepted: root.mountPath = QmlUtils.url_to_path(selectedFile)
     }
 
     StateView {

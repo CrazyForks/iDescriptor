@@ -145,7 +145,7 @@ Window {
         id: downloadPathDialog
         title: qsTr("Select Download Directory")
         onAccepted: {
-            root.downloadPath = selectedFolder.toString().replace("file:///", "/").replace("file://", "")
+            root.downloadPath = QmlUtils.url_to_path(selectedFolder)
             root.markDirty(false)
         }
     }

@@ -154,13 +154,6 @@ Item {
 
     property var selectedPaths: []
 
-    function _urlToLocalPath(url) {
-        var s = url.toString()
-        if (s.indexOf("file://") === 0)
-            s = s.slice(7)
-        return decodeURIComponent(s)
-    }
-
     function _isSelected(path) { return selectedPaths.indexOf(path) !== -1 }
     function _multiSelectModifierPressed(modifiers) {
         if (Qt.platform.os === "osx" || Qt.platform.os === "darwin")
@@ -597,7 +590,7 @@ Item {
     FolderDialog {
         id: exportDialog
         title: qsTr("Choose Export Folder")
-        onAccepted: root._startExport(root._urlToLocalPath(selectedFolder))
+        onAccepted: root._startExport(QmlUtils.url_to_path(selectedFolder))
     }
 
     FileDialog {
@@ -607,7 +600,7 @@ Item {
         onAccepted: {
             var paths = []
             for (var i = 0; i < selectedFiles.length; i++)
-                paths.push(root._urlToLocalPath(selectedFiles[i]))
+                paths.push(QmlUtils.url_to_path(selectedFiles[i]))
             root._startImport(paths)
         }
     }
