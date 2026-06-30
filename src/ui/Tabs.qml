@@ -50,12 +50,14 @@ Item {
         id: toolboxTabComponent
         AnimatedTab {
             index: 2
-            currentIndex : root.currentIndex
-            Toolbox {
-                anchors.fill: parent
+            currentIndex: root.currentIndex
+
+            Component.onCompleted: {
+                Toolbox.parent = this
+                Toolbox.anchors.fill = this
             }
         }
-     }
+    }
 
 
 }
