@@ -3,8 +3,6 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import iDescriptor 1.0
 import "." as App
-// FIXME: this will fail on Linux and macOS
-// import "./windows"
 
 Item {
     id: root
@@ -27,7 +25,9 @@ Item {
         currentIndex:  App.DeviceContext.showWelcomePage ? 1 : 0
 
         RowLayout {
-            anchors.fill: parent
+            // anchors.fill: parent
+            Layout.fillWidth: true
+            Layout.fillHeight: true
             spacing: 0
             
             ColumnLayout {

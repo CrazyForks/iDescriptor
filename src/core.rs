@@ -12,44 +12,49 @@ use idevice::{
 };
 use qmetaobject::{qt_base_class, qt_method};
 use qttypes::QVariantMap;
+use url::form_urlencoded::parse;
 
+use ::log::debug;
 use std::f64::INFINITY;
-use std::{any::type_name, sync::Arc};
-use std::{collections::HashMap, net::IpAddr};
-use tokio::sync::Mutex;
-
 use std::future::Future;
 use std::sync::mpsc;
-use std::thread;
+use std::{any, thread};
+use std::{any::type_name, sync::Arc};
+use std::{collections::HashMap, net::IpAddr};
 use tokio::runtime::{Builder, Runtime};
+use tokio::sync::Mutex;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use core::pin::Pin;
 
 use crate::device_ctx::{APP_DEVICE_STATE, DeviceServices};
-use crate::device_db;
 use crate::{
     APP_LABEL, EV_CONNECTED, EV_DISCONNECTED, EV_FAIL, EV_PAIRING_PENDING, POSSIBLE_ROOT, RUNTIME,
     qt_threading::{QtThread, QtThreading},
     utils,
 };
+use crate::{device_db, qvariantmap_insert};
 use macros::QtThreading;
 use plist::{Dictionary, Value};
 use qmetaobject::prelude::*;
+#[allow(non_snake_case)]
 #[derive(Default, QObject, QtThreading)]
 pub struct Core {
     base: qt_base_class!(trait QObject),
     init: qt_method!(fn(&mut self)),
     init_wireless_device:
         qt_method!(fn(&mut self, ip: QString, pairing_file: QString, mac_address: QString)),
+    init_wireless_device_custom: qt_method!(fn(&mut self, ip: QString, pairing_file: QString)),
+    // mac address will only be available if the pairing file was read successfully, otherwise it will be empty
+    customInitFailed: qt_signal!(ip: QString, macAddress: QString, error: QString),
     get_pairing_files: qt_method!(fn(&mut self) -> QVariantMap),
     remove_device: qt_method!(fn(&mut self, udid: QString)),
-    device_event: qt_signal!(event_type : u32, udid : QString , info : QVariantMap),
-    init_failed: qt_signal!(mac_address : QString),
-    no_pairing_file: qt_signal!(mac_address : QString),
-    sleepy_time_detected: qt_signal!(),
-    device_became_wired: qt_signal!(udid: QString),
+    deviceEvent: qt_signal!(eventType : u32, udid : QString , info : QVariantMap),
+    initFailed: qt_signal!(macAddress : QString),
+    noPairingFile: qt_signal!(macAddress : QString),
+    sleepyTimeDetected: qt_signal!(),
+    deviceBecameWired: qt_signal!(udid: QString),
 }
 
 impl Core {
@@ -124,7 +129,7 @@ impl Core {
                                                 let qt_thread = qt_t.clone();
                                                 qt_thread
                                                     .queue(move |core_qobj| {
-                                                        core_qobj.device_event(
+                                                        core_qobj.deviceEvent(
                                                             EV_DISCONNECTED,
                                                             QString::from(udid),
                                                             QVariantMap::default(),
@@ -152,7 +157,7 @@ impl Core {
 
     fn init_wireless_device(&mut self, ip: QString, pairing_file: QString, mac_address: QString) {
         eprintln!(
-            "init_wireless_device: MAC: {} IP: {} PairingFile: {}",
+            "init_wireless_device: MAC: {} IP: {} Pairing File: {}",
             mac_address, ip, pairing_file
         );
         let qt_thread = self.qt_thread();
@@ -165,7 +170,7 @@ impl Core {
                 Err(e) => {
                     qt_thread
                         .queue(move |core_qobj| {
-                            core_qobj.no_pairing_file(QString::from(mac_address_owned));
+                            core_qobj.noPairingFile(QString::from(mac_address_owned));
                         });
                     eprintln!("Failed to read pairing file: {e}");
                     return;
@@ -204,7 +209,7 @@ impl Core {
                     // emit event with info
                     qt_thread
                         .queue(move |core_qobj| {
-                            core_qobj.device_event(
+                            core_qobj.deviceEvent(
                                 EV_CONNECTED,
                                 QString::from(udid),
                                 info,
@@ -216,12 +221,92 @@ impl Core {
 
                     qt_thread
                         .queue(move |core_qobj| {
-                            core_qobj.init_failed(QString::from(mac_address_owned));
+                            core_qobj.initFailed(QString::from(mac_address_owned));
                         });
                 }
             }
         });
     }
+
+    fn init_wireless_device_custom(&mut self, ip: QString, pairing_file: QString) {
+        eprintln!(
+            "init_wireless_device_custom: IP: {} Pairing File: {}",
+            ip, pairing_file
+        );
+        let qt_thread = self.qt_thread();
+        let ip_owned = ip.to_string();
+        let pairing_path = pairing_file.to_string();
+        RUNTIME.spawn(async move {
+            let pairing_file = match PairingFile::read_from_file(&pairing_path) {
+                Ok(pf) => pf,
+                Err(e) => {
+                    eprintln!("Failed to read pairing file: {e}");
+                    qt_thread.queue(move |core_qobj| {
+                        core_qobj.customInitFailed(
+                            QString::from(ip_owned),
+                            QString::from(""),
+                            QString::from(e.to_string()),
+                        );
+                    });
+                    return;
+                }
+            };
+
+            let mac_address_owned = pairing_file.wifi_mac_address.clone();
+
+            let addr = match ip_owned.parse::<IpAddr>() {
+                Ok(addr) => addr,
+                Err(e) => {
+                    qt_thread.queue(move |core_qobj| {
+                        core_qobj.customInitFailed(
+                            QString::from(ip_owned),
+                            QString::from(pairing_file.wifi_mac_address),
+                            QString::from(e.to_string()),
+                        );
+                    });
+                    return;
+                }
+            };
+
+            let t = TcpProvider {
+                addr,
+                pairing_file,
+                label: APP_LABEL.to_string(),
+                scope_id: None,
+            };
+
+            let qt_t_clone = qt_thread.clone();
+            let result = tokio::select! {
+                res = init_idescriptor_device(t, qt_t_clone) => res,
+                /* timeout */
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(20)) => {
+                    eprintln!("Timeout collecting device info for wireless device ip: {ip_owned}");
+                    Err(IdeviceError::Timeout)
+                }
+            };
+
+            match result {
+                Ok((udid, info)) => {
+                    // emit event with info
+                    qt_thread.queue(move |core_qobj| {
+                        core_qobj.deviceEvent(EV_CONNECTED, QString::from(udid), info);
+                    });
+                }
+                Err(e) => {
+                    eprintln!("Failed to initialize wireless device ip: {ip_owned} {e:?}");
+
+                    qt_thread.queue(move |core_qobj| {
+                        core_qobj.customInitFailed(
+                            QString::from(ip_owned),
+                            QString::from(mac_address_owned),
+                            QString::from(e.to_string()),
+                        );
+                    });
+                }
+            }
+        });
+    }
+
     fn get_pairing_files(&mut self) -> QVariantMap {
         let mut map = QVariantMap::default();
 
@@ -327,7 +412,7 @@ fn is_pairing_related_error(e: &IdeviceError) -> bool {
 async fn handle_pairing(qt_thread: QtThread<Core>, udid: String) -> Result<(), IdeviceError> {
     let udid_for_event = udid.clone();
     qt_thread.queue(move |core_qobj| {
-        core_qobj.device_event(
+        core_qobj.deviceEvent(
             EV_PAIRING_PENDING,
             QString::from(udid_for_event),
             QVariantMap::default(),
@@ -397,7 +482,7 @@ fn emit_pairing_failed(
     _reason: &str,
 ) {
     qt_thread.queue(move |core_qobj| {
-        core_qobj.device_event(EV_FAIL, QString::from(udid), QVariantMap::default());
+        core_qobj.deviceEvent(EV_FAIL, QString::from(udid), QVariantMap::default());
     });
 }
 
@@ -425,7 +510,7 @@ async fn emit_connected(qt_thread: QtThread<Core>, udid: String) {
                 println!("Emitting connected");
 
                 qt_thread.queue(move |core_qobj| {
-                    core_qobj.device_event(
+                    core_qobj.deviceEvent(
                         EV_CONNECTED,
                         QString::from(udid_for_event),
                         info_for_event,
@@ -581,7 +666,7 @@ async fn init_idescriptor_device<
             }
             let udid_for_signal = udid.clone();
             qt_thread.queue(move |core_qobj| {
-                core_qobj.device_became_wired(QString::from(udid_for_signal));
+                core_qobj.deviceBecameWired(QString::from(udid_for_signal));
             });
         }
     }
@@ -759,6 +844,8 @@ async fn collect_info(
         }),
     );
 
+    info.insert(QString::from("is_wireless"), QVariant::from(is_wireless));
+
     // parse ios version
     let ios_version: Vec<&str> = def_vals_dict
         .get("ProductVersion")
@@ -811,8 +898,71 @@ async fn collect_info(
         QVariant::from(developer_mode_status),
     );
 
+    insert_battery_info(diag_relay, &mut info, product_type.into())
+        .await
+        .unwrap();
+
     Ok(info)
 }
+
+async fn insert_battery_info(
+    diag_relay: &mut DiagnosticsRelayClient,
+    info: &mut QVariantMap,
+    raw_product_type: String,
+) -> anyhow::Result<()> {
+    let mut parsed = QVariantMap::default();
+
+    let battery_info = match utils::query_battery_info(diag_relay).await {
+        Some(info) => info,
+        None => {
+            debug!(
+                "query_battery_info returned None for device {}",
+                raw_product_type
+            );
+            anyhow::bail!("query_battery_info didn't return a dict")
+        }
+    };
+
+    // old devices do not have "BatteryData"
+    let is_old_device = battery_info.get("BatteryData").is_none();
+    let battery_info = if is_old_device {
+        utils::parse_diag_info_old(battery_info)
+    } else {
+        utils::parse_diag_info(battery_info, raw_product_type)
+    };
+
+    qvariantmap_insert!(parsed, "cycle_count", battery_info.cycle_count);
+    qvariantmap_insert!(
+        parsed,
+        "battery_serial_number",
+        QString::from(battery_info.battery_serial_number)
+    );
+    qvariantmap_insert!(parsed, "design_capacity", battery_info.design_capacity);
+    qvariantmap_insert!(parsed, "max_capacity", battery_info.max_capacity);
+    qvariantmap_insert!(
+        parsed,
+        "battery_health",
+        QString::from(battery_info.battery_health)
+    );
+    qvariantmap_insert!(parsed, "is_charging", battery_info.is_charging);
+    qvariantmap_insert!(parsed, "fully_charged", battery_info.fully_charged);
+    qvariantmap_insert!(
+        parsed,
+        "current_battery_level",
+        battery_info.current_battery_level
+    );
+    qvariantmap_insert!(
+        parsed,
+        "usb_connection_type",
+        QString::from(battery_info.usb_connection_type)
+    );
+    qvariantmap_insert!(parsed, "adapter_voltage", battery_info.adapter_voltage);
+    qvariantmap_insert!(parsed, "adapter_watts", battery_info.adapter_watts);
+
+    qvariantmap_insert!(*info, "DIAG_INFO", &parsed);
+    Ok(())
+}
+
 async fn spawn_heartbeat_task(
     mut hb_client: heartbeat::HeartbeatClient,
     qt_thread: QtThread<Core>,
@@ -839,7 +989,7 @@ async fn spawn_heartbeat_task(
                         IdeviceError::Heartbeat(idevice::HeartbeatError::SleepyTime) => {
                             println!("heartbeat: Sleepy time");
                             qt_thread.queue(move |core_qobj| {
-                                core_qobj.sleepy_time_detected();
+                                core_qobj.sleepyTimeDetected();
                             });
                         }
                         _ => {}
@@ -851,7 +1001,7 @@ async fn spawn_heartbeat_task(
 
                         let udid_for_event = udid_for_hb.clone();
                         let _ = qt_thread.queue(move |core_qobj| {
-                            core_qobj.device_event(
+                            core_qobj.deviceEvent(
                                 EV_DISCONNECTED,
                                 QString::from(udid_for_event),
                                 QVariantMap::default(),
@@ -871,7 +1021,7 @@ async fn spawn_heartbeat_task(
                     IdeviceError::Heartbeat(idevice::HeartbeatError::SleepyTime) => {
                         println!("heartbeat: Sleepy time");
                         qt_thread.queue(move |core_qobj| {
-                            core_qobj.sleepy_time_detected();
+                            core_qobj.sleepyTimeDetected();
                         });
                     }
                     _ => {}
@@ -882,7 +1032,7 @@ async fn spawn_heartbeat_task(
 
                     let udid_for_event = udid_for_hb.clone();
                     let _ = qt_thread.queue(move |core_qobj| {
-                        core_qobj.device_event(
+                        core_qobj.deviceEvent(
                             EV_DISCONNECTED,
                             QString::from(udid_for_event),
                             QVariantMap::default(),

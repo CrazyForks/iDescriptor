@@ -1,5 +1,5 @@
 use crate::{POSSIBLE_ROOT, run_sync};
-use ::log::{debug, error, info, warn};
+use ::log::{debug, error, warn};
 use cpp::*;
 use idevice::{
     IdeviceError, IdeviceService,
@@ -8,8 +8,8 @@ use idevice::{
     house_arrest::HouseArrestClient,
     installation_proxy::InstallationProxyClient,
     provider::IdeviceProvider,
+    xpc::Dictionary as Xpc_Dict,
 };
-use plist::Dictionary as PlistDictionary;
 use plist_macro::plist;
 use qmetaobject::prelude::*;
 use qmetaobject::*;
@@ -21,6 +21,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::sync::Mutex;
+use plist::{Dictionary, Value};
+use crate::qvariantmap_insert;
 
 cpp! {{
     struct TraitObject2 { void *data; void *vtable; };
@@ -43,16 +45,240 @@ cpp! {{
     QCoreApplication *globalApp = nullptr;
 }}
 
+pub struct ParsedBatteryInfo {
+    pub cycle_count: u64,
+    pub battery_serial_number: String,
+    pub design_capacity: u64,
+    pub max_capacity: u64,
+    pub battery_health: String,
+    pub is_charging: bool,
+    pub fully_charged: bool,
+    pub current_battery_level: u64,
+    pub usb_connection_type: String,
+    pub adapter_voltage: u64,
+    pub adapter_watts: u64,
+}
+
 pub const PUBLIC_STAGING: &str = "PublicStaging";
 
-pub async fn get_battery_info(diag: &mut DiagnosticsRelayClient) -> Option<PlistDictionary> {
+pub async fn query_battery_info(diag: &mut DiagnosticsRelayClient) -> Option<Dictionary> {
     match diag.ioregistry(None, None, Some("IOPMPowerSource")).await {
         Ok(Some(dict)) => Some(dict),
         _ => None,
     }
 }
 
-pub async fn get_cable_info(diag: &mut DiagnosticsRelayClient) -> Option<PlistDictionary> {
+pub fn parse_diag_info_old(dict: Dictionary) -> ParsedBatteryInfo {
+    let is_charging = dict
+        .get("IsCharging")
+        .and_then(|v| v.as_boolean())
+        .unwrap_or(false);
+    let fully_charged = dict
+        .get("FullyCharged")
+        .and_then(|v| v.as_boolean())
+        .unwrap_or(false);
+
+    let apple_raw_current_capacity = dict
+        .get("AppleRawCurrentCapacity")
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(0);
+    let apple_raw_max_capacity = dict
+        .get("AppleRawMaxCapacity")
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(0);
+
+    let old_current_battery_level = if apple_raw_current_capacity > 0 && apple_raw_max_capacity > 0
+    {
+        (apple_raw_current_capacity * 100) / apple_raw_max_capacity
+    } else {
+        0
+    };
+
+    // adaptor details
+    let usb_connection_type = dict
+        .get("AdapterDetails")
+        .and_then(|v| v.as_dictionary())
+        .and_then(|v| v.get("Description"))
+        .and_then(|v| v.as_string())
+        .unwrap_or("Unknown".into());
+    let adapter_voltage = 0;
+    let adapter_watts = dict
+        .get("AdapterDetails")
+        .and_then(|v| v.as_dictionary())
+        .and_then(|v| v.get("Watts"))
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(0);
+
+    let cycle_count = dict
+        .get("CycleCount")
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(0);
+
+    let design_capacity = dict
+        .get("DesignCapacity")
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(0);
+    let max_capacity = dict
+        .get("MaxCapacity")
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(0);
+    // skipping on very old devices for now
+    let battery_serial_number = "";
+
+    let health_percent = format!(
+        "{}%",
+        if design_capacity != 0 {
+            (max_capacity * 100) / design_capacity
+        } else {
+            0
+        }
+        .clamp(0, 100)
+    );
+
+    ParsedBatteryInfo {
+        cycle_count,
+        battery_serial_number: battery_serial_number.into(),
+        design_capacity,
+        max_capacity,
+        battery_health: health_percent,
+        is_charging,
+        fully_charged,
+        current_battery_level: old_current_battery_level,
+        usb_connection_type: usb_connection_type.into(),
+        adapter_voltage,
+        adapter_watts,
+    }
+}
+
+pub fn parse_diag_info(dict: Dictionary, raw_product_type: String) -> ParsedBatteryInfo {
+    let cycle_count = dict
+        .get("BatteryData")
+        .and_then(|v| v.as_dictionary())
+        .and_then(|v| v.get("CycleCount"))
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(1);
+
+    let (_name, major, minor) = parse_device_ver(&raw_product_type).unwrap_or_default();
+
+    // we need a better way to do this
+    // but iPhone8,1
+    let newer_than_iphone8_1 = major > 8 || (major == 8 && minor > 1);
+
+    let battery_serial_number = dict
+        .get("BatteryData")
+        .and_then(|v| v.as_dictionary())
+        .and_then(|v| v.get("BatterySerialNumber"))
+        .and_then(|v| v.as_string())
+        .unwrap_or("Error retrieving serial number".into());
+    let design_capacity = dict
+        .get("BatteryData")
+        .and_then(|v| v.as_dictionary())
+        .and_then(|v| v.get("DesignCapacity"))
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(0);
+
+    let is_iphone = raw_product_type.starts_with("iPhone");
+    let max_capacity = if newer_than_iphone8_1 && is_iphone {
+        dict.get("AppleRawMaxCapacity")
+            .and_then(|v| v.as_unsigned_integer())
+            .unwrap_or(0)
+    } else {
+        dict.get("BatteryData")
+            .and_then(|v| v.as_dictionary())
+            .and_then(|v| v.get("MaxCapacity"))
+            .and_then(|v| v.as_unsigned_integer())
+            .unwrap_or(0)
+    };
+
+    // seems to be to the most accurate way
+    // to get the battery health percentage
+    let battery_health = format!(
+        "{}%",
+        ((max_capacity * 100) / design_capacity).clamp(0, 100)
+    );
+
+    let is_charging = dict
+        .get("IsCharging")
+        .and_then(|v| v.as_boolean())
+        .unwrap_or(false);
+    let fully_charged = dict
+        .get("FullyCharged")
+        .and_then(|v| v.as_boolean())
+        .unwrap_or(false);
+
+    /* data is sometimes not accurate here so we need to calculate */
+    // this code was available in our old c++ code
+    // d.batteryInfo.currentBatteryLevel =
+    //     ioreg["BatteryData"]["StateOfCharge"].getUInt();
+
+    let apple_raw_current_capacity = dict
+        .get("AppleRawCurrentCapacity")
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(0);
+    let apple_raw_max_capacity = dict
+        .get("AppleRawMaxCapacity")
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(0);
+
+    let current_battery_level = if (apple_raw_current_capacity > 0 && apple_raw_max_capacity > 0) {
+        (apple_raw_current_capacity * 100) / apple_raw_max_capacity
+    } else {
+        0
+    };
+
+    // check if is equal to usb type-c
+    // in frontend
+    let usb_connection_type = dict
+        .get("AdapterDetails")
+        .and_then(|v| v.as_dictionary())
+        .and_then(|v| v.get("Description"))
+        .and_then(|v| v.as_string())
+        .unwrap_or("Unknown".into());
+    let adapter_voltage = dict
+        .get("AppleRawAdapterDetails")
+        .and_then(|v| v.as_array())
+        .and_then(|v| v.get(0))
+        .and_then(|v| v.as_dictionary())
+        .and_then(|v| v.get("AdapterVoltage"))
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(0);
+    let adapter_watts = dict
+        .get("AppleRawAdapterDetails")
+        .and_then(|v| v.as_array())
+        .and_then(|v| v.get(0))
+        .and_then(|v| v.as_dictionary())
+        .and_then(|v| v.get("Watts"))
+        .and_then(|v| v.as_unsigned_integer())
+        .unwrap_or(0);
+
+    ParsedBatteryInfo {
+        cycle_count,
+        battery_serial_number: battery_serial_number.into(),
+        design_capacity,
+        max_capacity,
+        battery_health: battery_health.into(),
+        is_charging,
+        fully_charged,
+        current_battery_level,
+        usb_connection_type: usb_connection_type.into(),
+        adapter_voltage,
+        adapter_watts,
+    }
+}
+
+fn parse_device_ver(s: &str) -> Option<(String, u32, u32)> {
+    // Find where the digits start
+    let split_at = s.find(|c: char| c.is_ascii_digit())?;
+    let (name, rest) = s.split_at(split_at);
+
+    let mut parts = rest.split(',');
+    let major = parts.next()?.parse::<u32>().ok()?;
+    let minor = parts.next()?.parse::<u32>().ok()?;
+
+    Some((name.to_string(), major, minor))
+}
+
+pub async fn get_cable_info(diag: &mut DiagnosticsRelayClient) -> Option<Dictionary> {
     match diag
         .ioregistry(None, None, Some("AppleTriStarBuiltIn"))
         .await
@@ -699,7 +925,6 @@ pub fn get_window_id(val: QJSValue) -> usize {
     }
 }
 
-
 pub fn env_flag(name: &str) -> bool {
     std::env::var(name)
         .map(|value| {
@@ -710,10 +935,7 @@ pub fn env_flag(name: &str) -> bool {
 }
 
 pub fn deployed_qml_path(entry: &str) -> Option<String> {
-    let path = std::env::current_exe()
-        .ok()?
-        .parent()?
-        .join(entry);
+    let path = std::env::current_exe().ok()?.parent()?.join(entry);
 
     if path.exists() {
         path.to_str().map(str::to_string)

@@ -4,7 +4,6 @@ import QtQuick.Layouts
 
 Item {
     id: root
-    anchors.fill: parent
 
     // FIXME: theming
     property color linkColor: "#3b82f6"

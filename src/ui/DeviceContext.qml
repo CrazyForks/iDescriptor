@@ -15,7 +15,9 @@ QtObject {
     //Record<mac,pairing_file_path>
     property var pairing_files : ({})
 
-    signal device_removed(string udid)
+    signal deviceRemoved(string udid)
+    signal deviceAdded(string udid, string mac)
+    signal deviceAlreadyExistsMAC(string mac)
     signal initStarted(string mac)
 
     function init() {
@@ -52,10 +54,16 @@ QtObject {
         Object.assign(root.pairing_files, core.get_pairing_files());
     }
 
+    // receives path of pairing file
+    function tryToConnectToNetworkDeviceCustom(ip, path) {
+        console.log("QML: Trying to connect to network device with IP:", ip, "and pairing file path:", path);
+        core.init_wireless_device_custom(ip, path)
+    }
+
     function tryToConnectToNetworkDevice(
         mac, ip, force_cache, set_as_selection_if_exists
     ){
-        console.log("Trying to connect to network device with MAC:", mac, "IP:", ip, `should force cache=${force_cache}`);
+        console.log("QML: Trying to connect to network device with MAC:", mac, "IP:", ip, `should force cache=${force_cache}`);
 
         if (force_cache) {
             cachePairedDevices();
@@ -65,15 +73,14 @@ QtObject {
 
         //FIXME
         if (existingDevice) {
+            console.log("Device with MAC:", mac, "already exists. Emitting deviceAlreadyExistsMAC event");
+            root.deviceAlreadyExistsMAC(mac);
+            if (set_as_selection_if_exists) {
+                console.log("Setting existing device as current selection");
+                root.currentDeviceUdid = existingDevice.udid;
+                root.showWelcomePage = false;
+            }
             return;
-            //emit deviceAlreadyExistsMAC(
-            //    iDescriptor::Uniq(existingDevice->deviceInfo.wifiMacAddress, true));
-            // TODO: add a setting for this
-            //if (setSelectionIfExists) {
-            //    setCurrentDeviceSelection(DeviceSelection(existingDevice->udid),
-            //                            true);
-            //}
-            //return;
         }
 
         cachePairedDevices();
@@ -98,6 +105,7 @@ QtObject {
                 // force garbage collection
                 // this may not work due to rust side being async,
                 // but no harm in trying
+                // fixme: set timeout
                 gc()
                 break
             }
@@ -110,7 +118,7 @@ QtObject {
     property var _connections : Connections {
         target: core
 
-        function onDevice_event(eventType, udid, info) {
+        function onDeviceEvent(eventType, udid, info) {
             console.log("Device event:", eventType, udid, JSON.stringify(info))
 
             switch (eventType) {
@@ -118,9 +126,11 @@ QtObject {
                     const service_manager = serviceFactory.create_service_manager(udid, info.ios_version_major)
                     const sb_client = serviceFactory.create_springboard_services_client(udid)
                     const text = `${info.marketing_name} / ${udid.slice(0,10)}...`
-                    root.pairing_files[info["WiFiAddress"]] = QmlUtils.get_lockdown_dir() + `/${udid}.plist`;
+                    const mac = info["WiFiAddress"]
+                    root.pairing_files[mac] = QmlUtils.get_lockdown_dir() + `/${udid}.plist`;
                     console.log(JSON.stringify(root.pairing_files));
                     devices.append({ udid: udid, info: info , text , service_manager, sb_client })
+                    root.deviceAdded(udid, mac)
                     root.showWelcomePage = false
                     root.currentDeviceUdid = udid
                     break;
@@ -135,7 +145,7 @@ QtObject {
                     }
                     root.showWelcomePage = devices.count === 0
                     root.currentDeviceUdid = ""
-                    root.device_removed(udid)
+                    root.deviceRemoved(udid)
                     break;
                 case 3:
                     break;

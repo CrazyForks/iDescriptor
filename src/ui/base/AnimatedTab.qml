@@ -4,7 +4,6 @@ import QtQuick.Layouts
 
 Item {
     id: root
-    anchors.fill: parent
     required property int index
     required property int currentIndex
     property bool isActive : root.currentIndex === index

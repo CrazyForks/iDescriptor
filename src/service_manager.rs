@@ -100,7 +100,7 @@ impl ServiceManager {
 
                 println!("Battery info interval: Fetching battery info for device {udid}");
 
-                utils::get_battery_info(&mut *device.diag.lock().await)
+                utils::query_battery_info(&mut *device.diag.lock().await)
                     .await
                     .map(|info| {
                         let mut buf = Vec::new();

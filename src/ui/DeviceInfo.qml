@@ -18,9 +18,10 @@ Item {
     ColumnLayout {
         anchors.fill: parent
         spacing: 20
-
+        Layout.margins: 20 
         RowLayout {
-            spacing: 12
+            spacing: 20
+            Layout.rightMargin: 20
 
             ColumnLayout {
                 DeviceImage { 
@@ -29,7 +30,8 @@ Item {
                 }
                 RowLayout {
                     //center
-                    anchors.horizontalCenter: parent.horizontalCenter
+                    // anchors.horizontalCenter: parent.horizontalCenter
+                    Layout.alignment: Qt.AlignHCenter
                     // implicitHeight: 50
                     spacing: 10
                     // 
@@ -73,24 +75,60 @@ Item {
             }
 
             ColumnLayout {
-                spacing: 10
+                spacing: 20
                 Layout.fillWidth: true
 
-                RowLayout {
+                SectionBox {
                     Layout.fillWidth: true
-                    spacing: 10
+                    padding:6
 
-                    Label {
-                        text: v("product_type", "TODO")
-                        font.bold: true
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
+                    RowLayout {
+                        spacing: 15
 
-                    Label {
-                        // FIXME: hardcoded 
-                        text: "5W/USB"
-                        color: "#666"
+                        Label {
+                            text: v("product_type", qsTr("Unknown Device"))
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+
+                        Label {
+                            padding: 4
+                            text: {
+                                const totalDiskCapacity = v("TotalDiskCapacity", null)
+                                if (totalDiskCapacity === null) return ""
+                                const gb = totalDiskCapacity / (1000 * 1000 * 1000)
+                                if (gb >= 1000) {
+                                    const tb = gb / 1024
+                                    return tb.toFixed(1) + " TB"
+                                } else {
+                                    return gb + " GB"
+                                }
+                            }
+
+                            background: Rectangle {
+                                color: Theme.accent
+                                radius: 13
+                            }
+                            color: palette.text
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        Label {
+                            text: info.DIAG_INFO.is_charging ? qsTr("Charging") : info.is_wireless ? qsTr("Wireless") : qsTr("Not Charging")
+                            color: info.DIAG_INFO.is_charging ? Theme.green : palette.text
+                        }
+
+                        BatteryIndicator {
+                            value: info.DIAG_INFO.current_battery_level
+                            isCharging: info.DIAG_INFO.is_charging
+                        }
+
+                        Label {
+                            // FIXME: hardcoded 
+                            text: "5W/USB"
+                            color: palette.text
+                        }
                     }
                 }
                 
