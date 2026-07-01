@@ -12,7 +12,6 @@ ApplicationWindow {
     minimumHeight: 320
     visible: true
     flags: Qt.platform.os === "osx" ? Qt.Window | Qt.NoTitleBarBackgroundHint | Qt.ExpandedClientAreaHint : Qt.Window
-    property int currentIndex: 0
 
     Component.onCompleted: {
         if (Qt.platform.os === "osx") {
@@ -33,29 +32,29 @@ ApplicationWindow {
             spacing: 0
             TabButton {
                 text: qsTr("iDevice")
-                onClicked: currentIndex = 0
-                active: currentIndex == 0
+                onClicked: DeviceContext.currentTab = 0
+                active: DeviceContext.currentTab == 0
             }
 
             TabButton {
                 text: qsTr("Apps")
-                onClicked: currentIndex = 1
-                active: currentIndex == 1
+                onClicked: DeviceContext.currentTab = 1
+                active: DeviceContext.currentTab == 1
             }
             TabButton {
                 text: qsTr("Toolbox")
-                onClicked: currentIndex = 2
-                active: currentIndex == 2
+                onClicked: DeviceContext.currentTab = 2
+                active: DeviceContext.currentTab == 2
             }
             TabButton {
                 text: qsTr("Jailbroken")
-                onClicked: currentIndex = 3
-                active: currentIndex == 3
+                onClicked: DeviceContext.currentTab = 3
+                active: DeviceContext.currentTab == 3
             }
         }
 
         Tabs {
-            currentIndex: window.currentIndex
+            currentIndex: DeviceContext.currentTab
             Layout.fillWidth: true
             Layout.fillHeight: true
         }
