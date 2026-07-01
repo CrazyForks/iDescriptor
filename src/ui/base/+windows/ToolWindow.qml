@@ -14,7 +14,7 @@ FluWindow {
         root.effect = "acrylic"
 
         if (root.auto_close) {
-            App.DeviceContext.device_removed.connect((udid) => {
+            App.DeviceContext.deviceRemoved.connect((udid) => {
                 if (root.udid === udid) {root.close()}
             })
         }

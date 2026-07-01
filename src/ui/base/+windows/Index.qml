@@ -6,7 +6,7 @@ import ".."
 
 FluWindow {
     id:window
-    title: "iDescriptor"
+    title: qsTr("iDescriptor")
     width: 1000
     height: 668 
     minimumWidth: 668

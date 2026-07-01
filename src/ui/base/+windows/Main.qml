@@ -49,6 +49,7 @@ FluLauncher {
         }else{
             FluRouter.navigate("/")
         }
+        Updater.checkAutomatically()
     }
 
 }
