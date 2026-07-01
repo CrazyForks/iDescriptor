@@ -4,8 +4,6 @@ import QtPositioning
 import QtQuick.Layouts
 import QtQuick.Controls
 import "../base"
-import "../+windows"
-
 
 // FIXME: wireup backend logic and add buttons to set the location
 ToolWindow {

@@ -4,8 +4,6 @@ import QtQuick.Dialogs
 import QtQuick.Layouts
 import "../base"
 import "../" as App
-import "../+windows"
-
 
 ToolWindow {
     id: root

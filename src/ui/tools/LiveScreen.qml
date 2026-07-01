@@ -4,8 +4,6 @@ import QtQuick.Layouts
 import iDescriptor 1.0
 import "../base"
 import "../"
-import "../+windows"
-
 
 ToolWindow {
     id: root

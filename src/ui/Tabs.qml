@@ -18,6 +18,8 @@ Item {
         AnimatedTab {
             index: 0
             currentIndex : root.currentIndex
+            Layout.fillWidth: true
+            Layout.fillHeight: true
             DeviceTab {
                 anchors.fill: parent
             }
@@ -40,6 +42,8 @@ Item {
         AnimatedTab {
             index: 1
             currentIndex : root.currentIndex
+            Layout.fillWidth: true
+            Layout.fillHeight: true
             AppsTab {
                 anchors.fill: parent
             }
@@ -51,6 +55,8 @@ Item {
         AnimatedTab {
             index: 2
             currentIndex: root.currentIndex
+            Layout.fillWidth: true
+            Layout.fillHeight: true
 
             Component.onCompleted: {
                 Toolbox.parent = this

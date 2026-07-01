@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls 
 import QtQuick.Layouts 
 import "../base"
-import "../+windows"
+import ".."
 
 ToolWindow {
     id: root
@@ -150,7 +150,9 @@ ToolWindow {
     Connections {
         target: root.device.service_manager
         function onCable_info_retrieved(response) {
-            parseAndUpdate(response)
+            Helpers.setTimeout(function() {
+                parseAndUpdate(response)
+            }, 300)
         }
     }
 
@@ -162,6 +164,7 @@ ToolWindow {
         anchors.fill: parent
         errorText: root.errorText
         retryable: true
+        autoSwitchContent: false
         onRetryRequested: initCableInfo()
 
         contentItem : ColumnLayout {
@@ -214,15 +217,14 @@ ToolWindow {
                                     text: model.label
                                     Layout.preferredWidth: 160
                                     Layout.alignment: Qt.AlignTop
-                                    // FIXME
-                                    color: "black"
+                                    color: palette.text
                                 }
                                 Label {
                                     text: model.value
                                     wrapMode: Text.WordWrap
                                     Layout.fillWidth: true
                                     Layout.alignment: Qt.AlignTop
-                                    color: "black"
+                                    color: palette.text
 
                                 }
                             }
