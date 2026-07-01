@@ -45,6 +45,7 @@ qrc!(pub rsrc,
         "resources/icons/tabler_database-export.svg",
         "resources/icons/uim_process.svg",
         "resources/icons/fuse.png",
+        "resources/icons/mi_options-vertical.svg",
         "resources/iphone.png",
         "resources/ios-version.png",
         "resources/ios-wallpapers/iphone-ios4.png",
@@ -81,7 +82,7 @@ qrc!(pub rsrc,
         "resources/trust.png",
 
         // ------- Translations --------
-        // lrelease compiles .ts files to .qm in build.rs   
+        // lrelease compiles .ts files to .qm in build.rs
         "target/translations/de.qm" as "translations/de.qm",
 
     }
