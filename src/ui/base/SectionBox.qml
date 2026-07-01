@@ -7,9 +7,12 @@ import "../"
 Rectangle {    
     id: section
     property string title : ""
+    property int padding: 13
     default property alias content: body.data
+    property alias overlay: overlayLayer.data
     readonly property bool hasTitle: title.length > 0
-    implicitHeight: section.hasTitle ? sectionLayout.implicitHeight + 26 : sectionLayout.implicitHeight
+    implicitWidth: sectionLayout.implicitWidth + (section.padding * 2)
+    implicitHeight: sectionLayout.implicitHeight + (section.padding * 2)
     color: Theme.softBg
     border.color: Theme.softBgBorder
     border.width: 1
@@ -17,7 +20,7 @@ Rectangle {
     ColumnLayout {
         id: sectionLayout
         anchors.fill: parent
-        anchors.margins: 13
+        anchors.margins: section.padding
         spacing: 10
 
         Label {
@@ -33,5 +36,11 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 8
         }
+    }
+
+    Item {
+        id: overlayLayer
+        anchors.fill: parent
+        z: 1
     }
 }
