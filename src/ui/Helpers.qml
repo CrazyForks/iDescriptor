@@ -87,4 +87,18 @@ QtObject {
         signal.connect(wrapper)
     }
 
+
+    function setTimeout(callback, delay) {
+        var timer = Qt.createQmlObject(
+            "import QtQuick; Timer { interval: " + delay + "; repeat: false; running: true; }",
+            root,
+            "dynamicTimer"
+        );
+        
+        timer.triggered.connect(function() {
+            callback();
+            timer.destroy(); // Clean up memory after execution
+        });
+    }
+
 }
