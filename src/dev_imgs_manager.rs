@@ -8,6 +8,7 @@ use std::io::Write;
 use std::path::{self, Path, PathBuf};
 use std::sync::Arc;
 
+use crate::list_model::ListModel;
 use crate::{
     RUNTIME,
     qt_threading::{QtThread, QtThreading},
@@ -15,14 +16,13 @@ use crate::{
 };
 use futures::StreamExt;
 use macros::QtThreading;
+use qmetaobject::SimpleListItem;
 use qmetaobject::prelude::*;
 use qttypes::{QString, QVariantMap};
 use reqwest::Client;
+use std::cell::RefCell;
 use tokio::io::AsyncWriteExt;
 use tokio::task::JoinHandle;
-use crate::list_model::ListModel;
-use qmetaobject::SimpleListItem;
-use std::cell::RefCell;
 
 #[derive(SimpleListItem, Default, Clone)]
 struct DiskImageItem {
@@ -55,6 +55,8 @@ pub struct DevImgsManager {
 
     image_model: qt_property!(RefCell<ListModel<DiskImageItem>>; NOTIFY image_model_changed),
     image_model_changed: qt_signal!(),
+    get_item: qt_method!(fn(index: i32) -> QVariantMap),
+    check_mounted_image: qt_method!(fn(udid: QString)),
 }
 
 // FIXME:hardcoded
@@ -222,6 +224,51 @@ impl DevImgsManager {
             }
             .await;
         });
+    }
+
+    fn check_mounted_image(&mut self, udid: QString) {
+        let qt_thread = self.qt_thread();
+        RUNTIME.spawn(async move {
+            let result = Self::get_mounted_image(udid.clone()).await;
+            match result {
+                Ok((is_mounted, is_locked, data)) => {
+                    let mut map = QVariantMap::default();
+                    qvariantmap_insert!(map, "is_mounted", is_mounted);
+                    qvariantmap_insert!(map, "is_locked", is_locked);
+                    qvariantmap_insert!(map, "signature", QString::from(hex::encode(data)));
+                    qt_thread.queue(move |q| {
+                        q.mounted_image_info = map;
+                    });
+                }
+                Err(e) => {
+                    error!(
+                        "check_mounted_image: Failed to check mounted image for device {}: {}",
+                        udid.to_string(),
+                        e
+                    );
+                }
+            }
+        });
+    }
+
+    fn get_item(&self, index: i32) -> QVariantMap {
+        let mut map = QVariantMap::default();
+        if index < 0 {
+            return map;
+        }
+
+        let model = self.image_model.borrow();
+        let Some(item) = model.values.get(index as usize) else {
+            return map;
+        };
+
+        qvariantmap_insert!(map, "version", item.version.clone());
+        qvariantmap_insert!(map, "compatibility", item.compatibility.clone());
+        qvariantmap_insert!(map, "is_mounted", item.is_mounted);
+        qvariantmap_insert!(map, "is_downloaded", item.is_downloaded);
+        qvariantmap_insert!(map, "progress", item.progress);
+        qvariantmap_insert!(map, "is_downloading", item.is_downloading);
+        map
     }
 
     async fn get_mounted_image(udid: QString) -> anyhow::Result<(bool, bool, Vec<u8>)> {

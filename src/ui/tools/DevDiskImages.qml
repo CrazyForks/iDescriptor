@@ -8,12 +8,19 @@ ToolWindow {
     id: root
     width: 800
     height: 600
+    title: qsTr("Developer Disk Images - iDescriptor")
     property string currentDeviceUdid: ""
     readonly property bool hasDevice: App.DeviceContext.devices && App.DeviceContext.devices.count > 0
 
+    function selectedImageItem() {
+        if (imageListView.currentIndex < 0)
+            return null
 
-    ListModel {
-        id: image_model
+        const item = DevImgsManager.get_item(imageListView.currentIndex)
+        if (!item)
+            return null
+
+        return item
     }
 
     //TODO: listen for mount/unmount events and update the model accordingly
@@ -76,9 +83,14 @@ ToolWindow {
                         text: qsTr("Mount")
                         enabled: imageListView.currentIndex >= 0 && root.hasDevice
                         onClicked: {
-                            const item = image_model.get(imageListView.currentIndex)
+                            const item = root.selectedImageItem()
+                            if (!item) {
+                                console.error("No developer disk image is selected.")
+                                return
+                            }
+
+                            console.log("Mount button clicked for item:", item)
                             const version = item.version
-                            console.log("Mount button clicked for version:", version)
                             const info = DevImgsManager.get_locations_for_version(version)
                             const exists = info["exists"]
                             if (!exists) {
@@ -89,7 +101,7 @@ ToolWindow {
                             const dmg_path = info["dmg"]
                             const sig_path = info["sig"]
                             if (!dmg_path || !sig_path) {
-                                console.error("Invalid paths for version", imageListView.currentItem.version, ":", dmg_path, sig_path)
+                                console.error("Invalid paths for version", version, ":", dmg_path, sig_path)
                                 return;
                             }
 
@@ -121,7 +133,7 @@ ToolWindow {
                         id: checkMountedButton
                         text: qsTr("Check Mounted")
                         enabled: root.hasDevice
-                        onClicked: devDiskImages.checkMountedImage()
+                        onClicked: DevImgsManager.check_mounted_image()
                     }
                 }
 
