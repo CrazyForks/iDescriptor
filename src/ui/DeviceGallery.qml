@@ -12,7 +12,7 @@ Item {
     required property var udid 
     property int albumId
     required property var info
-    property bool isMainPage : root.albumId == -1 ? false : root.albumId == -2 ? false : !root.albumId 
+    readonly property bool isMainPage: nav.depth <= 1
 
 
     Component.onCompleted: {
@@ -29,29 +29,15 @@ Item {
         id: albumModel
     }
 
-    function selectItemsInRect(rect, append) {
-        for (let i = 0; i < gallery.count; i++) {
-            const item = gallery.itemAtIndex(i)
-            if (!item) continue
+    function openAlbum(id) {
+        root.albumId = id
+        nav.push(albumContentsComponent, { albumId: id })
+    }
 
-            const itemRect = {
-                x: item.x,
-                y: item.y - gallery.contentY,
-                w: item.width,
-                h: item.height
-            }
-
-            const intersects =
-                itemRect.x < rect.x + rect.width &&
-                itemRect.x + itemRect.w > rect.x &&
-                itemRect.y < rect.y + rect.height &&
-                itemRect.y + itemRect.h > rect.y
-
-            if (intersects) {
-                albumModel.setProperty(i, "selected", true)
-            } else if (!append) {
-                albumModel.setProperty(i, "selected", false)
-            }
+    function goBack() {
+        if (nav.depth > 1) {
+            nav.pop()
+            root.albumId = 0
         }
     }
 
@@ -67,21 +53,18 @@ Item {
             console.log(JSON.stringify(query.albums))
             albumModel.clear()
 
-            const keys = Object.keys(query.albums)
-            for (let i = 0; i < keys.length; i++) {
-                const key = keys[i]
-                const jsonStr = query.albums[key]
+            query.albums.forEach((jsonStr) => {
                 const obj = JSON.parse(jsonStr)
-
+                    
                 albumModel.append({
                     albumId : obj.album_id ?  obj.album_id : -99,
-                    fileName: key,
+                    fileName: obj.album_name,
                     filePath: obj.file_path,
                     dateTime: new Date(),
                     selected: false,
                     thumbVersion: 0
                 })
-            }
+            })
         }
     }
 
@@ -104,133 +87,182 @@ Item {
             anchors.fill : parent
 
             Button {
-                text: isMainPage ? "BACK" : "BACK TO MAIN"
-                enabled : root.albumId != 0
-                onClicked : {
-                    root.albumId = 0
-                }
+                text: isMainPage ? qsTr("BACK") : qsTr("BACK TO MAIN")
+                enabled : nav.depth > 1
+                onClicked : root.goBack()
             }
 
-            ScrollView {
+            StackView {
+                id: nav
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                initialItem: mainPageComponent
+                clip: true
 
-                Item { 
-                    width: parent.width
-                    height: parent.height
-
-                    GridView {
-                        id: gallery
-                        anchors.fill: parent
-                        visible: albumId ? false : query.albums
-                        cellWidth: 250
-                        cellHeight: 250
-                        model: albumModel
-                        ScrollBar.vertical: ScrollBar {}
-                        delegate: ItemDelegate {
-                            width: 250
-                            height: 250
-                            highlighted: selected
-
-                            MouseArea {
-                                anchors.fill: parent
-                                onDoubleClicked: {
-                                    console.log("delegate double-click", index, albumId)
-                                    root.albumId = albumId
-                                }
-                            }
-
-                            Rectangle {
-                                anchors.fill: parent
-                                color: selected ? "#4FC3F7" : "transparent"
-                                opacity : 0.3
-                                z : 1
-                            }
-
-                            Image {
-                                cache: false
-                                anchors.fill: parent
-                                //FIXME:use encodeuricomp
-                                source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
-                                fillMode: Image.PreserveAspectFit
-                            }
-
-                            Text {
-                                anchors.bottom: parent.bottom
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                text: fileName + albumId
-                                font.pixelSize: 10
-                                color: "white"
-                                elide: Text.ElideMiddle
-                            }
-                        }
-
-                    }
-                    //rubber band
-                    Item {
-                        anchors.fill: parent
-
-                        Rectangle {
-                            id: selectionRect
-                            color: "transparent"
-                            border.color: "blue"
-                            border.width: 1
-                            visible: false
-                            
-                            opacity: 0.3
-                            Rectangle { anchors.fill: parent; color: "blue"; opacity: 0.2 }
-                        }
-
-                        MouseArea {
-                            id: mouseArea
-                            anchors.fill: parent
-                            property point startPos
-                            
-                            propagateComposedEvents: true 
-
-                            onPressed: (mouse) => {
-                                // mouse.accepted = false  
-                                startPos = Qt.point(mouse.x, mouse.y)
-                                selectionRect.x = startPos.x
-                                selectionRect.y = startPos.y
-                                selectionRect.width = 0
-                                selectionRect.height = 0
-                                selectionRect.visible = true
-                            }
-
-                            onPositionChanged: {
-                                selectionRect.x = Math.min(mouse.x, startPos.x)
-                                selectionRect.y = Math.min(mouse.y, startPos.y)
-                                selectionRect.width = Math.abs(mouse.x - startPos.x)
-                                selectionRect.height = Math.abs(mouse.y - startPos.y)
-                            }
-
-                            onReleased: {
-                                selectionRect.visible = false
-
-                                const append = mouse.modifiers & Qt.ControlModifier
-
-                                selectItemsInRect({
-                                    x: selectionRect.x,
-                                    y: selectionRect.y,
-                                    width: selectionRect.width,
-                                    height: selectionRect.height
-                                }, append)
-                            }
-                        }
-                    }
-                
-                    AlbumContents {
-                        visible : !isMainPage
-                        query : root.query
-                        udid : root.udid
-                        albumId: root.albumId
-                        anchors.fill: parent
-                    }
+                pushEnter: Transition {
+                    PropertyAnimation { property: "x"; from: nav.width; to: 0; duration: 320; easing.type: Easing.OutCubic }
+                }
+                pushExit: Transition {
+                    PropertyAnimation { property: "x"; from: 0; to: -nav.width; duration: 320; easing.type: Easing.OutCubic }
+                    PropertyAnimation { property: "opacity"; from: 1; to: 0.55; duration: 320; easing.type: Easing.OutCubic }
+                }
+                popEnter: Transition {
+                    PropertyAnimation { property: "x"; from: -nav.width; to: 0; duration: 280; easing.type: Easing.OutCubic }
+                    PropertyAnimation { property: "opacity"; from: 0.55; to: 1; duration: 280; easing.type: Easing.OutCubic }
+                }
+                popExit: Transition {
+                    PropertyAnimation { property: "x"; from: 0; to: nav.width; duration: 280; easing.type: Easing.OutCubic }
                 }
             }
 
+        }
+    }
+
+    Component {
+        id: mainPageComponent
+
+        ScrollView {
+            Item {
+                id: albumListPage
+                width: parent.width
+                height: parent.height
+
+                function selectItemsInRect(rect, append) {
+                    for (let i = 0; i < gallery.count; i++) {
+                        const item = gallery.itemAtIndex(i)
+                        if (!item) continue
+
+                        const itemRect = {
+                            x: item.x,
+                            y: item.y - gallery.contentY,
+                            w: item.width,
+                            h: item.height
+                        }
+
+                        const intersects =
+                            itemRect.x < rect.x + rect.width &&
+                            itemRect.x + itemRect.w > rect.x &&
+                            itemRect.y < rect.y + rect.height &&
+                            itemRect.y + itemRect.h > rect.y
+
+                        if (intersects) {
+                            albumModel.setProperty(i, "selected", true)
+                        } else if (!append) {
+                            albumModel.setProperty(i, "selected", false)
+                        }
+                    }
+                }
+
+                GridView {
+                    id: gallery
+                    anchors.fill: parent
+                    cellWidth: 250
+                    cellHeight: 250
+                    model: albumModel
+                    ScrollBar.vertical: ScrollBar {}
+                    delegate: ItemDelegate {
+                        width: 250
+                        height: 250
+                        highlighted: selected
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onDoubleClicked: {
+                                console.log("delegate double-click", index, albumId)
+                                root.openAlbum(albumId)
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: selected ? "#4FC3F7" : "transparent"
+                            opacity : 0.3
+                            z : 1
+                        }
+
+                        Image {
+                            cache: false
+                            anchors.fill: parent
+                            //FIXME:use encodeuricomp
+                            source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
+                            fillMode: Image.PreserveAspectFit
+                        }
+
+                        Text {
+                            anchors.bottom: parent.bottom
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            text: fileName + albumId
+                            font.pixelSize: 10
+                            color: "white"
+                            elide: Text.ElideMiddle
+                        }
+                    }
+                }
+
+                //rubber band
+                Item {
+                    anchors.fill: parent
+
+                    Rectangle {
+                        id: selectionRect
+                        color: "transparent"
+                        border.color: "blue"
+                        border.width: 1
+                        visible: false
+                        
+                        opacity: 0.3
+                        Rectangle { anchors.fill: parent; color: "blue"; opacity: 0.2 }
+                    }
+
+                    MouseArea {
+                        id: mouseArea
+                        anchors.fill: parent
+                        property point startPos
+                        
+                        propagateComposedEvents: true 
+
+                        onPressed: (mouse) => {
+                            // mouse.accepted = false  
+                            startPos = Qt.point(mouse.x, mouse.y)
+                            selectionRect.x = startPos.x
+                            selectionRect.y = startPos.y
+                            selectionRect.width = 0
+                            selectionRect.height = 0
+                            selectionRect.visible = true
+                        }
+
+                        onPositionChanged: {
+                            selectionRect.x = Math.min(mouse.x, startPos.x)
+                            selectionRect.y = Math.min(mouse.y, startPos.y)
+                            selectionRect.width = Math.abs(mouse.x - startPos.x)
+                            selectionRect.height = Math.abs(mouse.y - startPos.y)
+                        }
+
+                        onReleased: {
+                            selectionRect.visible = false
+
+                            const append = mouse.modifiers & Qt.ControlModifier
+
+                            albumListPage.selectItemsInRect({
+                                x: selectionRect.x,
+                                y: selectionRect.y,
+                                width: selectionRect.width,
+                                height: selectionRect.height
+                            }, append)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: albumContentsComponent
+
+        AlbumContents {
+            query : root.query
+            udid : root.udid
         }
     }
 }

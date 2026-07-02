@@ -1,30 +1,99 @@
 use qmetaobject::prelude::*;
-use qttypes::{QStringList, QVariantMap};
+use qttypes::{QStringList, QVariantList, QVariantMap};
 
+use crate::RUNTIME;
 use crate::constants::{
     ALBUM_CONTENTS_QUERY_TEMPLATE, FAVS_ALBUM_ID, FAVS_ALBUM_QUERY, FAVS_QUERY,
     IOS_15_ALBUM_QUERY_STATEMENT, IOS_26_ALBUM_QUERY_STATEMENT, RECENTS_ALBUM_ID,
     RECENTS_ALBUM_QUERY, RECENTS_QUERY,
 };
 use crate::device_ctx;
-use crate::qt_threading::{QtThreading};
+use crate::qt_threading::QtThreading;
 use crate::utils::create_album_info;
-use crate::{RUNTIME};
-use idevice::afc::{opcode::AfcFopenMode};
-use rusqlite::{Connection, OptionalExtension,};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use idevice::afc::AfcClient;
+use idevice::afc::opcode::AfcFopenMode;
 use macros::QtThreading;
+use rusqlite::{Connection, OptionalExtension};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::Mutex;
+use ::log::debug;
 
+const PHOTOS_SQLITE_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite";
+const PHOTOS_SQLITE_SHM_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite-shm";
+const PHOTOS_SQLITE_WAL_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite-wal";
+
+struct TempDirGuard {
+    path: Option<PathBuf>,
+}
+
+impl TempDirGuard {
+    fn new(path: PathBuf) -> Self {
+        Self { path: Some(path) }
+    }
+
+    fn path(&self) -> &Path {
+        self.path.as_deref().expect("temp dir path is set")
+    }
+
+    fn keep(mut self) -> PathBuf {
+        self.path.take().expect("temp dir path is set")
+    }
+}
+
+impl Drop for TempDirGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.path.take() {
+            if let Err(e) = std::fs::remove_dir_all(&path) {
+                println!("Failed to remove temp gallery database dir: {}", e);
+            }
+        }
+    }
+}
+
+// FIXME:we need patch the sqlite if , wal or shm
+#[allow(dead_code)]
+fn patch_wal_legacy_mode(bytes: &mut [u8]) {
+    // HACK: WAL -> legacy mode patch
+    // This is still needed for the old path where we can only export Photos.sqlite.
+    if bytes.len() > 20 && bytes[18] == 0x02 {
+        bytes[18] = 0x01;
+        bytes[19] = 0x01;
+    }
+}
+
+async fn export_afc_file(
+    afc: &mut AfcClient,
+    remote_path: &str,
+    local_path: &Path,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut remote_file = afc.open(remote_path, AfcFopenMode::RdOnly).await?;
+    let mut local_file = tokio::fs::File::create(local_path).await?;
+    let mut chunk = vec![0u8; 64 * 1024];
+
+    loop {
+        let n = remote_file.read(&mut chunk).await?;
+        if n == 0 {
+            break;
+        }
+        local_file.write_all(&chunk[..n]).await?;
+    }
+
+    local_file.flush().await?;
+    remote_file.close().await.ok();
+    Ok(())
+}
 
 #[derive(QObject, Default, QtThreading)]
 pub struct Query {
     base: qt_base_class!(trait QObject),
     udid: String,
     ios_version: u32,
-    albums: qt_property!(QVariantMap; NOTIFY albums_changed),
+    albums: qt_property!(QVariantList; NOTIFY albums_changed),
     albums_changed: qt_signal!(),
     connection: Option<Arc<Mutex<Connection>>>,
+    temp_dir: Option<PathBuf>,
     assets_table_name: Option<String>,
     assets_table_album_column: Option<String>,
     state: qt_property!(QVariantMap; NOTIFY state_changed),
@@ -34,6 +103,7 @@ pub struct Query {
     read_albums: qt_method!(fn(&mut self)),
     query_album: qt_method!(fn(&mut self, id: i32)),
     album_queried: qt_signal!(id: i32, items: QStringList),
+    is_init: bool
 }
 
 impl Query {
@@ -41,62 +111,73 @@ impl Query {
         let mut state = QVariantMap::default();
         state.insert(QString::from("init"), QVariant::from(false));
         state.insert(QString::from("err"), QVariant::from(QString::default()));
-        Self {
-            state,
-            ios_version,
-            udid: udid.to_string(),
-            ..Default::default()
-        }
+
+        let mut def = Self::default();
+        def.state = state;
+        def.ios_version = ios_version;
+        def.udid = udid.to_string();
+        def
     }
 
     fn init(&mut self) {
+        if (self.is_init) {
+            debug!("Query: already initialized, skipping init");
+            return;
+        }
+        self.is_init = true;
         let udid_clone = self.udid.clone();
         let qt_thread = self.qt_thread();
 
         RUNTIME.spawn(async move {
-            let res: Result<(), Box<dyn std::error::Error + Send + Sync>> = (async {
-                let mut gallery_db_bytes = {
+            let res: anyhow::Result<()> = (async {
+                let temp_dir = std::env::temp_dir()
+                    .join(format!("idescriptor-photos-db-{}", uuid::Uuid::new_v4()));
+                tokio::fs::create_dir_all(&temp_dir).await?;
+                // this is so that if we fail to export the db, we don't leave a temp dir behind
+                let temp_dir_guard = TempDirGuard::new(temp_dir);
+
+                let gallery_db_path: PathBuf = temp_dir_guard.path().join("Photos.sqlite");
+                let gallery_db_shm_path: PathBuf = temp_dir_guard.path().join("Photos.sqlite-shm");
+                let gallery_db_wal_path: PathBuf = temp_dir_guard.path().join("Photos.sqlite-wal");
+
+                {
                     let afc_arc = device_ctx::get_device(udid_clone).await?.afc;
                     let mut afc = afc_arc.lock().await;
-                    let mut fd = afc
-                        .open("/PhotoData/Photos.sqlite", AfcFopenMode::RdOnly)
-                        .await?;
-                    fd.read_entire().await?
-                };
 
-                let conn: Connection = Connection::open_in_memory()?;
+                    if let Err(e) =
+                        export_afc_file(&mut afc, PHOTOS_SQLITE_REMOTE_PATH, &gallery_db_path).await
+                    {
+                        // FIXME: surface this to QML instead of panicking once we know how
+                        // to recover from a missing or inaccessible Photos.sqlite.
+                        panic!("Failed to export required Photos.sqlite from device: {}", e);
+                    }
 
-                // HACK: WAL -> legacy mode patch
-                if gallery_db_bytes.len() > 20 && gallery_db_bytes[18] == 0x02 {
-                    gallery_db_bytes[18] = 0x01;
-                    gallery_db_bytes[19] = 0x01;
+                    if let Err(e) = export_afc_file(
+                        &mut afc,
+                        PHOTOS_SQLITE_SHM_REMOTE_PATH,
+                        &gallery_db_shm_path,
+                    )
+                    .await
+                    {
+                        println!("Skipping optional Photos.sqlite-shm export: {}", e);
+                    }
+
+                    if let Err(e) = export_afc_file(
+                        &mut afc,
+                        PHOTOS_SQLITE_WAL_REMOTE_PATH,
+                        &gallery_db_wal_path,
+                    )
+                    .await
+                    {
+                        println!("Skipping optional Photos.sqlite-wal export: {}", e);
+                    }
                 }
 
-                unsafe {
-                    let db_ptr = rusqlite::ffi::sqlite3_deserialize(
-                        conn.handle(),
-                        b"main\0".as_ptr() as *const std::os::raw::c_char,
-                        gallery_db_bytes.as_mut_ptr(),
-                        gallery_db_bytes.len() as i64,
-                        gallery_db_bytes.len() as i64,
-                        rusqlite::ffi::SQLITE_DESERIALIZE_READONLY as u32,
-                    );
-                    if db_ptr != rusqlite::ffi::SQLITE_OK {
-                        return Err("Failed to deserialize SQLite database".into());
-                    }
-                };
-
-                //FIXME:need to drop the vec somewhere safe
-                /*
-                    std::mem::forget is needed because vec is dropped but
-                    sqlite still needs it, we need to manually drop the vec
-                */
-                std::mem::forget(gallery_db_bytes);
+                let conn: Connection = Connection::open(gallery_db_path)?;
 
                 /*
                     we need to get the dynamic asset table name from the table
                     iOS seems to be bumping the version with every major iOS update
-                    but not sure why
                 */
                 let mut assets_table_name: Option<String> = None;
                 let mut assets_table_album_column: Option<String> = None;
@@ -130,15 +211,17 @@ impl Query {
                 };
 
                 if assets_table_name.is_none() {
-                    return Err("Couldn't find the assets table".into());
+                    anyhow::bail!("Couldn't find the assets table");
                 }
 
                 if assets_table_album_column.is_none() {
-                    return Err("Couldn't find assets_table_album_column".into());
+                    anyhow::bail!("Couldn't find assets_table_album_column");
                 }
 
+                let temp_dir = temp_dir_guard.keep();
                 qt_thread.queue(|s| {
                     s.connection = Some(Arc::new(Mutex::new(conn)));
+                    s.temp_dir = Some(temp_dir);
                     s.assets_table_name = assets_table_name;
                     s.assets_table_album_column = assets_table_album_column;
                 });
@@ -186,7 +269,7 @@ impl Query {
         let ios_ver = self.ios_version;
         RUNTIME.spawn(async move {
             println!("Runtime spawn for read_albums");
-            let mut albums = QVariantMap::default();
+            let mut albums = QVariantList::default();
             let res: Result<(), Box<dyn std::error::Error + Send + Sync>> = (async {
                 let conn = con_arc.lock().await;
                 //recents album
@@ -206,10 +289,9 @@ impl Query {
 
                 let (fname, fdir, count) = recents_row.unwrap_or(placeholder_or_empty.clone());
 
-                let recents_album_data = create_album_info(RECENTS_ALBUM_ID, count, fdir, fname);
+                let recents_album_data = create_album_info("Recents",RECENTS_ALBUM_ID, count, fdir, fname);
 
-                albums.insert(
-                    QString::from("Recents"),
+                albums.push(
                     QVariant::from(&QString::from(recents_album_data)),
                 );
 
@@ -227,10 +309,9 @@ impl Query {
 
                 let (fname, fdir, count) = favs_row.unwrap_or(placeholder_or_empty.clone());
 
-                let favs_album_data = create_album_info(FAVS_ALBUM_ID, count, fdir, fname);
+                let favs_album_data = create_album_info("Favorites", FAVS_ALBUM_ID, count, fdir, fname);
 
-                albums.insert(
-                    QString::from("Favorites"),
+                albums.push(
                     QVariant::from(&QString::from(favs_album_data)),
                 );
 
@@ -255,10 +336,9 @@ impl Query {
                     let (album_id, title, item_count, asset_dir, asset_file_name) = row_res?;
 
                     let album_data =
-                        create_album_info(album_id, item_count, asset_dir, asset_file_name);
+                        create_album_info(title.as_str(), album_id, item_count, asset_dir, asset_file_name);
 
-                    albums.insert(
-                        QString::from(title),
+                    albums.push(
                         QVariant::from(&QString::from(album_data)),
                     );
                 }
@@ -440,5 +520,17 @@ impl Query {
                 }
             }
         });
+    }
+}
+
+impl Drop for Query {
+    fn drop(&mut self) {
+        self.connection = None;
+
+        if let Some(temp_dir) = self.temp_dir.take() {
+            if let Err(e) = std::fs::remove_dir_all(&temp_dir) {
+                println!("Failed to remove temp gallery database dir: {}", e);
+            }
+        }
     }
 }
