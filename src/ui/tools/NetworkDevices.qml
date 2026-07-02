@@ -119,97 +119,77 @@ ToolWindow {
                 wrapMode: Text.WordWrap
             }
 
-            Pane {
-                background: Rectangle {
-                    color: "transparent"
-                }
+            SectionBox {
+                title: qsTr("Network Devices")
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                padding: 10
 
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 8
+                // Scroll area
+                ScrollView {
+                    id: deviceScroll
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
 
-                    Label {
-                        text: qsTr("Network Devices")
-                        font.pointSize: 14
-                        font.weight: Font.Bold
-                    }
+                    // Scroll content
+                    Column {
+                        width: deviceScroll.availableWidth
+                        spacing: 8
 
-                    // Scroll area
-                    ScrollView {
-                        id: deviceScroll
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
+                        Repeater {
+                            model: deviceModel
 
-                        // Scroll content
-                        Column {
-                            width: deviceScroll.availableWidth
-                            spacing: 8
+                            delegate: SectionBox {
+                                width: parent.width
+                                contentSpacing: 6
 
-                            Repeater {
-                                model: deviceModel
+                                ColumnLayout {
+                                    id: content
+                                    Layout.fillWidth: true
+                                    spacing: 6
 
-                                delegate: SectionBox {
-                                    width: parent.width
-                                    implicitHeight: content.implicitHeight + 24
-                                    height: implicitHeight
+                                    // Device name (primary)
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: model.name
+                                        wrapMode: Text.WordWrap
+                                        font.pointSize: 13
+                                        font.weight: Font.Medium
+                                    }
 
-                                    ColumnLayout {
-                                        id: content
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 6
+                                    // Device info container
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 12
 
-                                        // Device name (primary)
+                                        // Address info
                                         Label {
-                                            Layout.fillWidth: true
-                                            text: model.name
-                                            wrapMode: Text.WordWrap
-                                            font.pointSize: 13
-                                            font.weight: Font.Medium
+                                            text: qsTr("IP: %1").arg(model.address || "-")
+                                            font.pointSize: 11
+                                            opacity: 0.8
                                         }
 
-                                        // Device info container
-                                        RowLayout {
-                                            Layout.fillWidth: true
-                                            spacing: 12
+                                        // Port info
+                                        Label {
+                                            text: qsTr("Port: %1").arg(model.port !== "" ? model.port : "-")
+                                            font.pointSize: 11
+                                            opacity: 0.8
+                                        }
 
-                                            // Address info
-                                            Label {
-                                                text: qsTr("IP: %1").arg(model.address || "-")
-                                                font.pointSize: 11
-                                                opacity: 0.8
-                                            }
+                                        Item { Layout.fillWidth: true }
 
-                                            // Port info
-                                            Label {
-                                                text: qsTr("Port: %1").arg(model.port !== "" ? model.port : "-")
-                                                font.pointSize: 11
-                                                opacity: 0.8
-                                            }
-
-                                            Item { Layout.fillWidth: true }
-
-                                            Label {
-                                                text: "●"
-                                                font.pointSize: 14
-                                                color: Qt.platform.os === "windows" ? "#0078d4" : "#2e7d32"
-                                            }
+                                        Label {
+                                            text: "●"
+                                            font.pointSize: 14
+                                            color: Qt.platform.os === "windows" ? "#0078d4" : "#2e7d32"
                                         }
                                     }
                                 }
                             }
-
-                            Item { width: 1; height: 1 }
                         }
                     }
                 }
             }
-
-            Item { Layout.fillHeight: true }
         }
     }
 }
