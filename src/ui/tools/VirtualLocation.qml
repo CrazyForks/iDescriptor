@@ -10,6 +10,7 @@ ToolWindow {
     id: mapView
     width: 800
     height: 600
+    title: qsTr("Virtual Location - iDescriptor")
     property int latitude: 0.000
     property int longitude: 0.000
 
@@ -153,6 +154,7 @@ ToolWindow {
         Rectangle {
             Layout.fillWidth : true
             Layout.preferredWidth : mapView.width * 0.3
+            color : palette.window
 
             Layout.fillHeight : true
             Label {
