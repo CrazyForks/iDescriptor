@@ -44,6 +44,11 @@ Item {
     }
 
     property string currentDeviceUdid: ""
+    property var airplayInstance: null
+    property var devDiskImagesInstance: null
+    property var wirelessGalleryImportInstance: null
+    property var ifuseInstance: null
+    property var networkDevicesInstance: null
     readonly property bool hasDevice: App.DeviceContext.devices && App.DeviceContext.devices.count > 0
 
     function showError(message) {
@@ -98,6 +103,7 @@ Item {
             const win = comp.createObject(root,args)    
             if (win !== null) {
                 win.show()
+                return win
             } else {
                 console.error("createObject failed:", comp.errorString())
             }
@@ -105,9 +111,22 @@ Item {
         } else if (comp.status === Component.Error) {
             console.error("Component failed to load:", comp.errorString())
         }
+
+        return null
     }
 
-    // 0 Airplayer, 1 VirtualLocation, 2 LiveScreen, 3 QueryMobileGestalt, 4 DeveloperDiskImages,
+    function focusToolWindow(win) {
+        if (!win)
+            return false
+
+        win.show()
+        win.raise()
+        win.requestActivate()
+        return true
+    }
+
+
+    // 0 Airplayer, 1 SimulateLocation, 2 LiveScreen, 3 QueryMobileGestalt, 4 DeveloperDiskImages,
     // 5 WirelessGalleryImport, 6 iFuse, 7 CableInfo, 8 NetworkDevices, 9 MountDevImage,
     // 10 Restart, 11 Shutdown, 12 RecoveryMode, 13 EnableWifiConnections
     // signal toolClicked(int toolId, bool requiresDevice)
@@ -130,20 +149,45 @@ Item {
             return createComp(loc, args)
         }
 
+        function createSingletonComp(loc, instanceName, _args = {}) {
+            if (focusToolWindow(root[instanceName])) return
+
+            const args = {
+                device,
+                udid: currentDeviceUdid,
+                auto_close : false
+            }
+
+            Object.assign(args, _args || {})
+
+            const win = createComp(loc, args)
+            if (!win)
+                return
+
+            root[instanceName] = win
+            win.closing.connect(function() {
+                if (root[instanceName] === win)
+                    root[instanceName] = null
+                win.destroy(0)
+            })
+        }
+
         switch (toolId) {
             case 0: 
+                // if (focusToolWindow(airplayInstance))
+                    // return
+
                 const gl_plugin_loaded = AirplayImp.load_gst_gl()
                 if (!gl_plugin_loaded) {
                     switch (Qt.platform.os) {
                         case "linux":
-                            errorDialog.text = qsTr("Failed to load gst gl plugin, make sure you are using QT_QPA_PLATFORM=xcb env")
+                            errorDialog.text = qsTr("Failed to load gst gl plugin, make sure you have QT_QPA_PLATFORM=xcb env var set")
                             break;
                         case "windows":
                             errorDialog.text = qsTr("Failed to load gst gl plugin, make sure you can use OpenGL")
                             break;
                         case "macos":
-                            // FIXME:
-                            errorDialog.text = qsTr("FIXME?")
+                            errorDialog.text = qsTr("Failed to load gst gl plugin, make sure you can use OpenGL")
                             break;
                         default:
                             errorDialog.text = qsTr("Failed to load gst gl plugin")
@@ -153,7 +197,7 @@ Item {
                     return;
                 }
 
-                createCompWrapped("./tools/Airplay.qml")
+                createSingletonComp("./tools/Airplay.qml", "airplayInstance")
                 break;
             case 1: 
                 createCompWrapped("./tools/VirtualLocation.qml")
@@ -166,19 +210,19 @@ Item {
                 createCompWrapped("./tools/QueryMobileGestalt.qml")
                 break;
             case 4:
-                createCompWrapped("./tools/DevDiskImages.qml", { auto_close : false })
+                createSingletonComp("./tools/DevDiskImages.qml", "devDiskImagesInstance")
                 break;
             case 5:
-                createCompWrapped("./tools/WirelessGalleryImport.qml", { auto_close : false })
+                createSingletonComp("./tools/WirelessGalleryImport.qml", "wirelessGalleryImportInstance")
                 break;
             case 6:
-                createCompWrapped("./tools/IFuse.qml", { auto_close : false })
+                createSingletonComp("./tools/IFuse.qml", "ifuseInstance")
                 break;
             case 7:
                 createCompWrapped("./tools/CableInfo.qml")
                 break;
             case 8:
-                createCompWrapped("./tools/NetworkDevices.qml", { auto_close : false })
+                createSingletonComp("./tools/NetworkDevices.qml", "networkDevicesInstance")
                 break;
             case 10:
                 confirmDeviceAction(
@@ -361,7 +405,7 @@ Item {
                     root.deviceSelectionChanged(udid)
                 }
 
-                /* workaround to avoid connecting to deviceocntext signal*/
+                /* workaround to avoid connecting to devicecontext signal*/
                 onCountChanged: {
                     if (count > 0) {
                         const lastIndex = count - 1
@@ -507,13 +551,10 @@ Item {
             IconImage {
                 id: icon
                 source: tile.iconSource
-
                 Layout.preferredHeight: 34
                 Layout.preferredWidth: 34
-
                 // FIXME: hardcoded accent color
                 color: "#0078d7"
-
                 opacity: tile.enabled ? 1.0 : 0.7
             }
 
