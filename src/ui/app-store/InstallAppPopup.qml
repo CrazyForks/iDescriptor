@@ -9,6 +9,14 @@ Dialog {
     required property string bundleId
     required property string appName
 
+    background: Rectangle {
+        radius: 10
+        color: palette.window
+        border.color: Qt.rgba(0, 0, 0, 0.12)
+        border.width: 1
+    }
+    padding: 20
+
     modal: true
     width: 500
     title: qsTr("Install IPA")
@@ -77,32 +85,22 @@ Dialog {
             font.bold: true
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(180, Math.max(72, App.DeviceContext.devices.count * 58))
-            radius: 10
-            color: "#f5f5f7"
-            border.color: "#e5e5ea"
-            clip: true
+        ComboBox {
+            id: deviceCombo
+            Layout.minimumWidth: 220
+            Layout.preferredWidth: 220
+            enabled: root.hasDevice
 
-            ListView {
-                anchors.fill: parent
-                model: App.DeviceContext.devices
-                currentIndex: root.selectedDeviceIndex
-                delegate: ItemDelegate {
-                    width: ListView.view.width
-                    height: 58
-                    text: model.text || model.udid
-                    highlighted: index === root.selectedDeviceIndex
-                    onClicked: root.selectedDeviceIndex = index
-                }
+            model: root.hasDevice ? App.DeviceContext.devices : [{ text: qsTr("No device connected"), udid: "" }]
+            textRole: "text"
+            valueRole: "udid"
+
+            onActivated: (index) => {
+                //fixme
             }
 
-            Label {
-                anchors.centerIn: parent
-                visible: App.DeviceContext.devices.count === 0
-                text: qsTr("No device connected")
-                color: "#6e6e73"
+            onCountChanged: {
+                //fixme
             }
         }
 
