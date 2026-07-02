@@ -3,6 +3,7 @@
 #include <QTransform>
 #include <algorithm>
 #include <cstring>
+#include <iostream>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -11,6 +12,8 @@ extern "C" {
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
 }
+#include <QImage>
+#include <libheif/heif.h>
 
 /* this is declared in Rust with #[no_mangle]*/
 extern "C" void afc_reader_read_at(const void *reader_ptr, int64_t offset,
@@ -239,4 +242,79 @@ QImage generate_thumbnail_with_reader_ffi(const void *reader_ptr,
     delete streamCtx;
 
     return result;
+}
+
+
+
+
+QImage heic_to_image_ffi(const uint8_t *input_data, size_t len)
+{
+    if (!input_data || len == 0) {
+        std::cerr << "heic_to_image_ffi: empty input" << std::endl;
+        return QImage();
+    }
+
+    heif_context *ctx = heif_context_alloc();
+    if (!ctx) {
+        std::cerr << "heic_to_image_ffi: failed to allocate heif_context"
+                  << std::endl;
+        return QImage();
+    }
+
+    heif_error err =
+        heif_context_read_from_memory(ctx, input_data, len, nullptr);
+    if (err.code != heif_error_Ok) {
+        std::cerr << "heic_to_image_ffi: failed to read HEIC from memory: "
+                  << err.message << std::endl;
+        heif_context_free(ctx);
+        return QImage();
+    }
+
+    heif_image_handle *handle;
+    err = heif_context_get_primary_image_handle(ctx, &handle);
+    if (err.code != heif_error_Ok) {
+        std::cerr << "heic_to_image_ffi: failed to get primary image handle: "
+                  << err.message << std::endl;
+        heif_context_free(ctx);
+        return QImage();
+    }
+
+    heif_image *img;
+    err = heif_decode_image(handle, &img, heif_colorspace_RGB,
+                            heif_chroma_interleaved_RGB, nullptr);
+    if (err.code != heif_error_Ok) {
+        std::cerr << "heic_to_image_ffi: failed to decode HEIC image: "
+                  << err.message << std::endl;
+        heif_image_handle_release(handle);
+        heif_context_free(ctx);
+        return QImage();
+    }
+
+    int width = heif_image_get_width(img, heif_channel_interleaved);
+    int height = heif_image_get_height(img, heif_channel_interleaved);
+    int stride;
+    /*
+     FIXME: use heif_image_get_plane_readonly2 in future, on ubuntu 24 it's not
+     available yet
+    */
+    const uint8_t *data =
+        heif_image_get_plane_readonly(img, heif_channel_interleaved, &stride);
+
+    if (!data) {
+        std::cerr << "heic_to_image_ffi: failed to get image plane data"
+                  << std::endl;
+        heif_image_release(img);
+        heif_image_handle_release(handle);
+        heif_context_free(ctx);
+        return QImage();
+    }
+
+    QImage qimg(data, width, height, stride, QImage::Format_RGB888);
+    QImage copy =
+        qimg.copy(); // Deep copy since the original data will be freed
+    heif_image_release(img);
+    heif_image_handle_release(handle);
+    heif_context_free(ctx);
+
+    return copy;
 }

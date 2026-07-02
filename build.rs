@@ -18,6 +18,9 @@ fn main() {
     println!("cargo:rerun-if-changed=lib/uxplay/uxplay.cpp");
     println!("cargo:rerun-if-changed=src/native/platform/macos/macos.h");
     println!("cargo:rerun-if-changed=src/native/platform/macos/macos.mm");
+    println!("cargo:rerun-if-changed=src/native/bridge.cpp");
+    println!("cargo:rerun-if-changed=src/native/include/bridge.h");
+    println!("cargo:rerun-if-changed=src/native/CMakeLists.txt");
 
     let qt_include_path = env::var("DEP_QT_INCLUDE_PATH").unwrap();
     let qt_library_path = env::var("DEP_QT_LIBRARY_PATH").unwrap();
@@ -161,6 +164,7 @@ fn main() {
     // Rust linker must resolve explicitly since static libs don't embed deps.
     pkg_config::Config::new().probe("openssl").unwrap();
     pkg_config::Config::new().probe("libplist-2.0").unwrap();
+    pkg_config::Config::new().probe("libheif").unwrap();
     pkg_config::Config::new().probe("glib-2.0").unwrap();
     pkg_config::Config::new().probe("gobject-2.0").unwrap();
 

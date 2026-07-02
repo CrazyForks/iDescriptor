@@ -14,6 +14,9 @@ elseif(APPLE)
     set(ENV{PKG_CONFIG_PATH} "/usr/local/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
 else()
     set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:/usr/local/lib/pkgconfig")
+    # no need for x11 deps on Linux/Unix
+    # this var is respected by uxplay
+    set(NO_X11_DEPS ON)
 endif()
 
 find_package(PkgConfig REQUIRED)
@@ -31,6 +34,7 @@ pkg_check_modules(AVFORMAT REQUIRED IMPORTED_TARGET libavformat)
 pkg_check_modules(AVCODEC  REQUIRED IMPORTED_TARGET libavcodec)
 pkg_check_modules(AVUTIL   REQUIRED IMPORTED_TARGET libavutil)
 pkg_check_modules(SWSCALE  REQUIRED IMPORTED_TARGET libswscale)
+pkg_check_modules(HEIF     REQUIRED IMPORTED_TARGET libheif)
 
 # ---------------------------------------------------------------------------
 # GStreamer
@@ -116,6 +120,7 @@ target_link_libraries(cpp_bridge PUBLIC
     PkgConfig::AVCODEC
     PkgConfig::AVUTIL
     PkgConfig::SWSCALE
+    PkgConfig::HEIF
     PkgConfig::GST
     PkgConfig::GST_APP
     PkgConfig::GST_VIDEO

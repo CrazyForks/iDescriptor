@@ -419,12 +419,13 @@ pub async fn ensure_public_staging(afc: &mut AfcClient) -> Result<(), IdeviceErr
 
 // converts album info to json
 pub fn create_album_info(
+    album_name: &str,
     album_id: i32,
     item_count: i32,
     asset_dir: String,
     asset_file_name: String,
 ) -> String {
-    json!({"album_id" : album_id, "item_count" : item_count,"file_path" : format!("{}/{}",asset_dir,asset_file_name)})
+    json!({ "album_name": album_name, "album_id": album_id, "item_count": item_count, "file_path": format!("{}/{}", asset_dir, asset_file_name) })
         .to_string()
 }
 
@@ -835,9 +836,19 @@ pub fn engine_ptr_new_object(engine_ptr: *mut c_void, obj_ptr: *mut c_void) -> Q
         return engine_ptr->newQObject(obj_ptr);
     })
 }
-//TODO: implement
-// pub fn heic_to_qimage()
+pub fn heic_to_qimage(buf: &[u8]) -> QImage {
+    let data = buf.as_ptr();
+    let len = buf.len();
 
+    cpp!(unsafe [
+        data as "const uint8_t *",
+        len as "size_t"
+    ] -> QImage as "QImage" {
+        return heic_to_image_ffi(data, len);
+    })
+}
+
+//FIXME: this may be called multiple times?
 pub fn force_load_gst_gl() -> bool {
     /*
     need to load qml6glsink in order

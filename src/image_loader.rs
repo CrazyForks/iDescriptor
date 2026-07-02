@@ -1,9 +1,12 @@
 use crate::RUNTIME;
 use crate::device_ctx;
 use crate::qt_threading::{QtThread, QtThreading};
-use crate::utils::{AfcReader, create_image_from_buffer, generate_thumbnail, is_video_file};
+use crate::utils::{
+    AfcReader, create_image_from_buffer, generate_thumbnail, heic_to_qimage, is_video_file,
+};
 use idevice::afc::AfcClient;
 use idevice::afc::opcode::AfcFopenMode;
+use macros::QtThreading;
 use once_cell::sync::Lazy;
 use priority_queue::PriorityQueue;
 use qmetaobject::prelude::*;
@@ -18,8 +21,6 @@ use tokio::{
     io::AsyncReadExt,
     sync::{Notify, Semaphore},
 };
-use macros::QtThreading;
-
 
 #[derive(Default, QObject, QtThreading)]
 pub struct ImageLoader {
@@ -144,8 +145,8 @@ fn ensure_worker_started() {
                             if key.path.to_ascii_lowercase().ends_with(".heic") {
                                 let mut fd = afc.open(&key.path, AfcFopenMode::RdOnly).await?;
                                 let buf = fd.read_entire().await?;
-                                //FIXME:
-                                // img = crate::bridge::bridge::heic_to_image(&buf);
+                                img = heic_to_qimage(&buf);
+                                fd.close().await.ok();
                             } else {
                                 img = file_to_image(&mut afc, &key.path).await;
                             }
