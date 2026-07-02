@@ -18,6 +18,7 @@ Item {
         anchors.centerIn: parent
         visible: !App.DeviceContext.showWelcomePage && App.DeviceContext.devices.count === 0
         color: palette.text
+        font.pixelSize: 24
     }
 
     StackLayout {
