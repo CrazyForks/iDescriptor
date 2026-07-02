@@ -9,6 +9,14 @@ Dialog {
     required property string bundleId
     required property string appName
 
+    background: Rectangle {
+        radius: 10
+        color: palette.window
+        border.color: Qt.rgba(0, 0, 0, 0.12)
+        border.width: 1
+    }
+    padding: 20
+
     modal: true
     width: 440
     title: qsTr("Get IPA")

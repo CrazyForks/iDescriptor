@@ -21,8 +21,38 @@ Item {
     property bool searchError: false
     property string searchErrorText: ""
 
+    property string bundleId: ""
+    property string appName: ""
+
+
     ListModel { id: searchResultsModel }
     ListModel { id: appModel }
+
+    InstallAppPopup {
+        id: installPopup
+        bundleId: root.bundleId
+        appName: root.appName
+        anchors.centerIn: parent
+    }
+
+    GetIpaPopup {
+        id: getIpaPopup
+        bundleId: root.bundleId
+        appName: root.appName
+        anchors.centerIn: parent
+    }
+
+    function openInstallPopup(bundleId, appName) {
+        root.bundleId = bundleId
+        root.appName = appName
+        installPopup.open()
+    }
+
+    function openGetIpaPopup(bundleId, appName) {
+        root.bundleId = bundleId
+        root.appName = appName
+        getIpaPopup.open()
+    }
 
     function clearApps() { appModel.clear() }
 
@@ -322,6 +352,8 @@ Item {
                                 sponsorLabel: model.sponsorLabel
                                 sponsorColor: model.sponsorColor
                                 onSelected: function(app) { root.openDetails(app) }
+                                onInstallRequested: function(bundleId, appName) { root.openInstallPopup(bundleId, appName) }
+                                onGetIpaRequested: function(bundleId, appName) { root.openGetIpaPopup(bundleId, appName) }
                             }
                         }
                     }

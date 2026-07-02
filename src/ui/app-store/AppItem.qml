@@ -1,6 +1,6 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import QtQuick.Controls.impl 
 import ".."
@@ -15,6 +15,9 @@ Rectangle {
     required property var sponsorLabel;
     required property var sponsorColor;
     
+    signal installRequested(string bundleId, string appName)
+    signal getIpaRequested(string bundleId, string appName)
+
     id: root
     width: parent ? parent.width : 260
     height: parent ? parent.height : 120
@@ -23,6 +26,7 @@ Rectangle {
 
     property string iconSource: ""
     signal selected(var app)
+
 
     Component.onCompleted: {
         console.log("Name:", root.name)
@@ -36,6 +40,8 @@ Rectangle {
     MouseArea {
         anchors.fill: parent
         z: 0
+        cursorShape: Qt.PointingHandCursor
+
         onClicked: root.selected({
             name: root.name,
             bundleId: root.bundleId,
@@ -128,16 +134,9 @@ Rectangle {
                                                                         : Theme.accent
                             radius: 4
                         }
-                        onClicked: root.selected({
-                            name: root.name,
-                            bundleId: root.bundleId,
-                            description: root.description,
-                            logoUrl: root.logoUrl,
-                            websiteUrl: root.websiteUrl,
-                            useBundleIdForIcon: root.useBundleIdForIcon,
-                            sponsorLabel: root.sponsorLabel,
-                            sponsorColor: root.sponsorColor
-                        })
+                        onClicked: {
+                            root.installRequested(root.bundleId, root.name)
+                        }
                     }
 
                     Button {
@@ -145,16 +144,13 @@ Rectangle {
                         text: (root.websiteUrl && root.websiteUrl.length) ? "Website" : "Get IPA"
                         font.pixelSize: 12
                         font.bold: true
-                        onClicked: root.selected({
-                            name: root.name,
-                            bundleId: root.bundleId,
-                            description: root.description,
-                            logoUrl: root.logoUrl,
-                            websiteUrl: root.websiteUrl,
-                            useBundleIdForIcon: root.useBundleIdForIcon,
-                            sponsorLabel: root.sponsorLabel,
-                            sponsorColor: root.sponsorColor
-                        })
+                        onClicked: {
+                            if (root.websiteUrl && root.websiteUrl.length) {
+                                Qt.openUrlExternally(root.websiteUrl)
+                            } else {
+                                root.getIpaRequested(root.bundleId, root.name)
+                            }
+                        }
                     }
                 }
 
