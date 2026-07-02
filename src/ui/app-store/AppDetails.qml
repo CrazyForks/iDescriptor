@@ -3,8 +3,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import "../base"
-import "../" as App
-import ".."
+import "../"
+import "../../"
 
 Item {
     id: root
@@ -26,7 +26,7 @@ Item {
         errorText = ""
         details = null
 
-        App.Helpers.fetch_app(root.bundleId, function(appDetails, error) {
+        Helpers.fetch_app(root.bundleId, function(appDetails, error) {
             if (error || !appDetails) {
                 root.errorText = error || qsTr("Failed to fetch app details.")
                 stateView.errorText = root.errorText
@@ -43,7 +43,7 @@ Item {
     function formatBytes(bytesText) {
         var bytes = Number(bytesText || 0)
         if (!bytes) return ""
-        return App.Helpers.formatSize(bytes)
+        return Helpers.formatSize(bytes)
     }
 
     function ratingText(value) {
@@ -119,8 +119,8 @@ Item {
                     Rectangle {
                         anchors.fill: parent
                         gradient: Gradient {
-                            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.18) }
-                            GradientStop { position: 0.72; color: Qt.rgba(1, 1, 1, 0.86) }
+                            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.05) }
+                            GradientStop { position: 0.72; color: Qt.rgba(0, 0, 0, 0) }
                             GradientStop { position: 1.0; color: palette.window }
                         }
                     }
@@ -210,7 +210,7 @@ Item {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 92
                             radius: 12
-                            color: "#f5f5f7"
+                            color: Theme.softBg
 
                             ColumnLayout {
                                 anchors.centerIn: parent
@@ -321,7 +321,6 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             text: details ? (details.description || "") : ""
-                            color: "#1d1d1f"
                             wrapMode: Text.WordWrap
                         }
                     }
