@@ -4,27 +4,36 @@ import QtQuick.Layouts
 import "../"
 
 
-Rectangle {    
+Control {
     id: section
-    property string title : ""
-    property int padding: 13
+    property string title: ""
     default property alias content: body.data
     property alias overlay: overlayLayer.data
+    property int contentSpacing: 8
+    property int titleSpacing: 6
     readonly property bool hasTitle: title.length > 0
-    implicitWidth: sectionLayout.implicitWidth + (section.padding * 2)
-    implicitHeight: sectionLayout.implicitHeight + (section.padding * 2)
-    color: Theme.softBg
-    border.color: Theme.softBgBorder
-    border.width: 1
-    radius: 10
-    ColumnLayout {
-        id: sectionLayout
-        anchors.fill: parent
-        anchors.margins: section.padding
-        spacing: 10
+
+    padding: 10
+    implicitWidth: Math.max(titleLabel.implicitWidth, body.implicitWidth) + leftPadding + rightPadding
+    implicitHeight: titleLabel.height + (hasTitle ? titleSpacing : 0) + body.implicitHeight + topPadding + bottomPadding
+
+    background: Rectangle {
+        color: Theme.softBg
+        border.color: Theme.softBgBorder
+        border.width: 1
+        radius: 10
+    }
+
+    contentItem: Item {
+        implicitWidth: Math.max(titleLabel.implicitWidth, body.implicitWidth)
+        implicitHeight: titleLabel.height + (section.hasTitle ? section.titleSpacing : 0) + body.implicitHeight
 
         Label {
-            Layout.fillWidth: true
+            id: titleLabel
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: section.hasTitle ? implicitHeight : 0
             text: section.title
             font.pixelSize: 15
             font.bold: true
@@ -33,8 +42,12 @@ Rectangle {
 
         ColumnLayout {
             id: body
-            Layout.fillWidth: true
-            spacing: 8
+            anchors.top: titleLabel.bottom
+            anchors.topMargin: section.hasTitle ? section.titleSpacing : 0
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            spacing: section.contentSpacing
         }
     }
 
