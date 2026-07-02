@@ -152,63 +152,63 @@ Item {
 
                         // Row 0
                         Label { text: "iOS Version:"; font.bold: true }
-                        Label { text: v("ProductVersion", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("ProductVersion", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Device Name:"; font.bold: true }
-                        Label { text: v("DeviceName", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("DeviceName", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 1
                         Label { text: "Activation State:"; font.bold: true }
-                        Label { text: v("ActivationState", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("ActivationState", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Device Class:"; font.bold: true }
-                        Label { text: v("DeviceClass", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("DeviceClass", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 2
                         Label { text: "Jailbroken:"; font.bold: true }
-                        Label { text: v("Jailbroken", "TODO") ? "Yes" : "No"; elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("Jailbroken", "No") ? "Yes" : "No"; elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Model Number:"; font.bold: true }
-                        Label { text: v("ModelNumber", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("ModelNumber", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 3
                         Label { text: "CPU Architecture:"; font.bold: true }
-                        Label { text: v("CPUArchitecture", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("CPUArchitecture", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Build Version:"; font.bold: true }
-                        Label { text: v("BuildVersion", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("BuildVersion", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 4
                         Label { text: "Hardware Model:"; font.bold: true }
-                        Label { text: v("HardwareModel", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("HardwareModel", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Region:"; font.bold: true }
-                        Label { text: v("region", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("region", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 5
                         Label { text: "Hardware Platform:"; font.bold: true }
-                        Label { text: v("HardwarePlatform", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("HardwarePlatform", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Firmware Version:"; font.bold: true }
-                        Label { text: v("FirmwareVersion", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("FirmwareVersion", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 6
                         Label { text: "Bluetooth Address:"; font.bold: true }
-                        Label { text: v("BluetoothAddress", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("BluetoothAddress", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Wi‑Fi Address:"; font.bold: true }
-                        Label { text: v("WiFiAddress", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("WiFiAddress", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 7
                         Label { text: "Ethernet Address:"; font.bold: true }
-                        Label { text: v("EthernetAddress", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("EthernetAddress", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Battery Health:"; font.bold: true }
-                        Label { text: "TODO"; elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: root.info.DIAG_INFO.battery_health; elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 8
                         Label { text: "Production Device:"; font.bold: true }
-                        Label { text: "TODO"; elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("ProductionDevice", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Serial Number:"; font.bold: true }
-                        Label { text: v("SerialNumber", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("SerialNumber", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 9
                         Label { text: "IMEI:"; font.bold: true }
-                        Label { text: v("InternationalMobileEquipmentIdentity", "TODO"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: v("InternationalMobileEquipmentIdentity", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "UDID:"; font.bold: true }
-                        Label { text: v("UniqueDeviceID", "TODO"); elide: Text.ElideMiddle; Layout.fillWidth: true }
+                        Label { text: v("UniqueDeviceID", "Unknown"); elide: Text.ElideMiddle; Layout.fillWidth: true }
                     }
                 }
                 
