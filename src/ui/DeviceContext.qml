@@ -105,8 +105,9 @@ QtObject {
                 // force garbage collection
                 // this may not work due to rust side being async,
                 // but no harm in trying
-                // fixme: set timeout
-                gc()
+                Helpers.setTimeout(()=> {
+                    gc()
+                },1000)
                 break
             }
         }
