@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import iDescriptor 1.0
+import iDescriptor
 import "../base"
 import "../"
 
@@ -19,7 +19,6 @@ ToolWindow {
     property int tries: 0
     property int rotationDegrees: 0
     property bool mirrorHorizontal: false
-    property string imageSource: ""
     property string statusText: qsTr("Connecting to screenshot service...")
 
     function startInitialization(delay) {
@@ -34,6 +33,7 @@ ToolWindow {
 
     function showDeveloperModeHelper() {
         if (!root.devModeWindow) {
+            // FIXME: use qrc
             const comp = Qt.createComponent("../DevMode.qml")
             root.devModeWindow = comp.createObject(root, {
                 device: root.device
@@ -134,8 +134,8 @@ ToolWindow {
         udid: root.udid
         ios_version: root.iosVersion
 
-        onScreenshot_captured: function(dataUrl) {
-            root.imageSource = dataUrl
+        onScreenshot_captured: function(data) {
+            screenItem.set_frame(data)
             root.statusText = qsTr("Capturing")
             stateView.viewState = StateView.State.Content
         }
@@ -183,24 +183,21 @@ ToolWindow {
                     anchors.margins: 8
                     clip: true
 
-                    Image {
-                        id: screenImage
-                        readonly property bool rotatedSideways: root.rotationDegrees === 90 || root.rotationDegrees === 270
+                    QmlImage {
+                        id: screenItem
+                        anchors.fill: parent
+                        rotation_degrees: root.rotationDegrees
+                        mirror_horizontal: root.mirrorHorizontal
+                    }
 
-                        anchors.centerIn: parent
-                        width: rotatedSideways ? viewport.height : viewport.width
-                        height: rotatedSideways ? viewport.width : viewport.height
-                        source: root.imageSource
-                        fillMode: Image.PreserveAspectFit
-                        smooth: true
-                        mipmap: true
-                        rotation: root.rotationDegrees
+                    Connections {
+                        target: root
+                        function onRotationDegreesChanged() {
+                            screenItem.update_paint()
+                        }
 
-                        transform: Scale {
-                            origin.x: screenImage.width / 2
-                            origin.y: screenImage.height / 2
-                            xScale: root.mirrorHorizontal ? -1 : 1
-                            yScale: 1
+                        function onMirrorHorizontalChanged() {
+                            screenItem.update_paint()
                         }
                     }
                 }

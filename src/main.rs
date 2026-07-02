@@ -58,6 +58,7 @@ pub mod ui_qrc;
 // pub mod updater;
 pub mod utils;
 pub mod web_wireless_gallery_import;
+pub mod qml_image;
 
 // FIXME: branch
 pub const IMAGE_LIST_URL: &str = "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/qmeta-qml/DeveloperDiskImages.json";
@@ -232,6 +233,12 @@ fn main() {
         0,
         cstr::cstr!("ScreenshotBackend"),
     );
+    qml_register_type::<qml_image::QmlImage>(
+        cstr::cstr!("iDescriptor"),
+        1,
+        0,
+        cstr::cstr!("QmlImage"),
+    );
 
     let mut engine = QmlEngine::new();
     let engine_ptr = engine.cpp_ptr();
@@ -306,11 +313,14 @@ fn main() {
     let service_factory = QObjectBox::new(crate::service_factory::ServiceFactory::new(engine_ptr));
     engine.set_object_property("serviceFactory".into(), service_factory.pinned());
 
-    let windows_qml_entry = "src/ui/+windows/Main.qml";
+    let windows_qml_entry = "src/ui/platform/windows/Main.qml";
+    let macos_qml_entry = "src/ui/platform/macos/Main.qml";
     let other_qml_entry = "src/ui/Main.qml";
 
     let entry = if cfg!(target_os = "windows") {
         windows_qml_entry
+    } else if cfg!(target_os = "macos") {
+        macos_qml_entry
     } else {
         other_qml_entry
     };
