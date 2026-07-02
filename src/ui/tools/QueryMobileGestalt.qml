@@ -41,6 +41,7 @@ ToolWindow {
 
         ColumnLayout {
             anchors.fill: parent
+            anchors.margins: 16
             spacing: 8
 
             Label {
@@ -49,7 +50,7 @@ ToolWindow {
                 Layout.fillWidth: true
             }
 
-            GroupBox {
+            SectionBox {
                 title: qsTr("Select MobileGestalt Keys")
                 Layout.fillWidth: true
                 Layout.fillHeight: false
@@ -129,13 +130,20 @@ ToolWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
-                TextArea {
-                    id: outputText
-                    readOnly: true
-                    placeholderText: qsTr("results will appear here...")
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+                contentItem: ScrollView {
+                    id: resultsScroll
+                    clip: true
+
+                    TextArea {
+                        id: outputText
+                        width: resultsScroll.availableWidth
+                        height: Math.max(resultsScroll.availableHeight, contentHeight + topPadding + bottomPadding)
+                        readOnly: true
+                        selectByMouse: true
+                        placeholderText: qsTr("results will appear here...")
+                        wrapMode: TextArea.Wrap
+                        textFormat: TextEdit.PlainText
+                    }
                 }
             }
         }
