@@ -159,7 +159,7 @@ Item {
 
     Connections {
         target: App.DeviceContext
-        
+
         function onInitStarted(mac) {
             root.setStatusForMac(mac, "connecting")
         }
@@ -236,7 +236,7 @@ Item {
                                 ColumnLayout {
                                     id: content
                                     Layout.fillWidth: true
-                                    spacing: 6
+                                    spacing: 10
 
                                     Label {
                                         Layout.fillWidth: true
@@ -303,11 +303,15 @@ Item {
                                         id: sectionMenuButton
                                         anchors.top: parent.top
                                         anchors.right: parent.right
-                                        anchors.topMargin: 8
-                                        anchors.rightMargin: 8
+                                        anchors.topMargin: 1
+                                        anchors.rightMargin: 1
                                         enabled: !!address
                                         icon.source: "qrc:/resources/icons/mi_options-vertical.svg"
                                         onClicked: sectionMenu.open()
+                                        background : Rectangle {
+                                            color : "transparent"
+                                        }
+
 
                                         Menu {
                                             id: sectionMenu
