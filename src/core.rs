@@ -14,7 +14,7 @@ use qmetaobject::{qt_base_class, qt_method};
 use qttypes::QVariantMap;
 use url::form_urlencoded::parse;
 
-use ::log::debug;
+use ::log::{debug, trace};
 use std::f64::INFINITY;
 use std::future::Future;
 use std::sync::mpsc;
@@ -55,10 +55,16 @@ pub struct Core {
     noPairingFile: qt_signal!(macAddress : QString),
     sleepyTimeDetected: qt_signal!(),
     deviceBecameWired: qt_signal!(udid: QString),
+    is_init: bool,
 }
 
 impl Core {
     fn init(&mut self) {
+        if self.is_init {
+            debug!("Core is already initialized");
+            return;
+        }
+        self.is_init = true;
         self.listen();
     }
 
@@ -974,16 +980,14 @@ async fn spawn_heartbeat_task(
         let mut interval = 15u64;
         let mut fails = 0;
         loop {
-            eprintln!("heartbeat:  Getting marco (interval: {interval}s)");
+            trace!("heartbeat:  Getting marco (interval: {interval}s)");
             match hb_client.get_marco(interval).await {
                 Ok(next) => {
                     interval = next;
                     fails = 0;
-                    eprintln!("heartbeat:  Received marco, new interval: {interval}s");
                 }
                 Err(e) => {
                     fails += 1;
-                    eprintln!("heartbeat:  get_marco failed (fail count: {fails}): {e:?}");
 
                     match e {
                         IdeviceError::Heartbeat(idevice::HeartbeatError::SleepyTime) => {
@@ -1013,7 +1017,7 @@ async fn spawn_heartbeat_task(
                 }
             }
 
-            eprintln!("heartbeat:  Sending polo.");
+            trace!("heartbeat:  Sending polo.");
             if let Err(e) = hb_client.send_polo().await {
                 fails += 1;
                 eprintln!("heartbeat:  send_polo failed (fail count: {fails}): {e:?}");
@@ -1043,7 +1047,6 @@ async fn spawn_heartbeat_task(
 
                 continue;
             }
-            eprintln!("heartbeat:  Polo sent successfully.");
             interval += 5;
         }
 
