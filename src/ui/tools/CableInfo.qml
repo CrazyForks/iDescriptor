@@ -14,7 +14,7 @@ ToolWindow {
 
     property string errorText: ""
     property string statusText: qsTr("Analyzing cable...")
-    property color statusColor: "#000000"
+    property color statusColor: palette.text
     property string descriptionText: qsTr("Please wait while we analyze the connected cable.")
     property bool isTypeC: false
     property bool isGenuine: false
@@ -169,6 +169,7 @@ ToolWindow {
 
         contentItem : ColumnLayout {
             anchors.fill: parent
+            anchors.margins: 16
             spacing: 20
 
             RowLayout {
@@ -195,7 +196,7 @@ ToolWindow {
                 wrapMode: Text.WordWrap
             }
 
-            GroupBox {
+            SectionBox {
                 title: qsTr("Cable Information")
                 Layout.fillWidth: true
                 Layout.fillHeight: true
