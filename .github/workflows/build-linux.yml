@@ -90,24 +90,8 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: ${{ env.QT_VERSION }}
-          modules: "qtmultimedia qtlocation qtpositioning qtserialport"
+          modules: "qtmultimedia qtlocation qtpositioning qtserialport qtsvg"
           dir: ${{ github.workspace }}
-
-      - name: Compile additional dependencies
-        run: |
-          git clone https://github.com/lxqt/lxqt-build-tools.git
-          pushd lxqt-build-tools
-          mkdir build && cd build
-          cmake ..
-          sudo make install
-          popd
-
-          git clone https://github.com/lxqt/qtermwidget.git
-          pushd qtermwidget
-          mkdir build && cd build
-          cmake ..
-          sudo make install
-          popd
 
       - name: Build libimobiledevice suite (versioned tarballs)
         run: |
@@ -156,12 +140,9 @@ jobs:
       - name: Update linker cache
         run: sudo ldconfig
 
-      - name: Configure CMake
+      - name: Build
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DRUN_CLANG_TIDY=OFF
-
-      - name: Build with CMake
-        run: cmake --build build --config Release
+          cargo build --release
 
       - name: Build AppImage
         run: |

@@ -43,7 +43,7 @@ mkdir -p "$APPDIR/usr/share/applications"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
 # Copy executable and icon
-cp build/iDescriptor "$APPDIR/usr/bin/"
+cp target/idescriptor "$APPDIR/usr/bin/iDescriptor"
 cp resources/icons/app-icon/icon.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/iDescriptor.png"
 
 
@@ -103,7 +103,9 @@ plugins=(
     "libgstximagesink.so"
     "libgstxvimagesink.so"
     "libgstgtk.so"
-    "libgstgl.so"
+    "libgstopengl.so"
+    # FIXME: build and bundle this from source later
+    # "libgstqml6.so"
     "libgstrtp.so"
     "libgstrtpmanager.so"
     "libgsttypefindfunctions.so"
