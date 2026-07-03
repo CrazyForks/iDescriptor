@@ -184,7 +184,7 @@ fi
 
 export LD_LIBRARY_PATH="$APPDIR/usr/local/lib:$LD_LIBRARY_PATH"
 export LINUXDEPLOY_EXCLUDED_LIBRARIES="*sql*"
-export QML_SOURCES_PATHS="./qml"
+export QML_SOURCES_PATHS="./src/ui"
 export EXTRA_QT_MODULES="geoservices;position"
 
 
