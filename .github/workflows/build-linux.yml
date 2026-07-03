@@ -107,6 +107,7 @@ jobs:
           --auto-features=disabled \
           -Dqt6=enabled \
           -Dqt5=disabled \
+          -Dqt-x11=enabled \
           -Dtests=disabled \
           -Dexamples=disabled \
           -Dnls=disabled
