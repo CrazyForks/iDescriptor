@@ -294,11 +294,11 @@ fn main() {
 
     cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
 
-        QQmlFileSelector selector(engine_ptr);
-        // FIXME: workaround to find FluentUI
-        #ifdef Q_OS_WINDOWS
-            engine_ptr->addImportPath("C:/Qt/6.9.3/mingw_64/qml");
-        #endif
+        static QQmlFileSelector* s_fileSelector = nullptr;
+        if (!s_fileSelector) {
+            s_fileSelector = new QQmlFileSelector(engine_ptr, engine_ptr);
+        }
+
 
         static NetworkDeviceProvider* s_networkProvider = nullptr;
         if (!s_networkProvider) {
@@ -309,6 +309,16 @@ fn main() {
         // #endif
         // engine_ptr->rootContext()->setContextProperty("NetworkDeviceProvider", NetworkDeviceProvider::sharedInstance());
     });
+
+    // FIXME: workaround to find FluentUI
+    // in dev builds
+    #[cfg(debug_assertions)]
+    cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
+        #ifdef Q_OS_WINDOWS
+            engine_ptr->addImportPath("C:/Qt/6.9.3/mingw_64/qml");
+        #endif
+    });
+
 
     let service_factory = QObjectBox::new(crate::service_factory::ServiceFactory::new(engine_ptr));
     engine.set_object_property("serviceFactory".into(), service_factory.pinned());
