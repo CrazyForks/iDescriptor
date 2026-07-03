@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts 
+import QtQuick.Layouts
+import "./"
 
 Item {
     id: root
@@ -38,7 +39,7 @@ Item {
 
         /* 0 — Loading */
         Item {
-            BusyIndicator {
+            Spinner {
                 anchors.centerIn: parent
                 running: root.viewState === StateView.State.Loading
             }

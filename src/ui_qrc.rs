@@ -40,8 +40,10 @@ qrc!(pub qml,
 
         // base/
         "src/ui/base/AnimatedTab.qml",
+        "src/ui/base/Spinner.qml",
         "src/ui/base/StateView.qml",
         "src/ui/base/ToolWindow.qml",
+        "src/ui/base/DefaultWindow.qml",
         "src/ui/base/SectionBox.qml",
 
         // tools/
@@ -77,6 +79,7 @@ qrc!(pub windows_qml,
         "src/ui/base/+windows/SidebarTabButton.qml",
         "src/ui/base/+windows/DefaultWindow.qml",
         "src/ui/base/+windows/ToolWindow.qml",
+        "src/ui/base/+windows/Spinner.qml",
     }
 );
 
