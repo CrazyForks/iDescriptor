@@ -27,7 +27,7 @@ fn main() {
     let qt_version = env::var("DEP_QT_VERSION").unwrap();
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
 
-    compile_translations(&qt_library_path);
+    // compile_translations(&qt_library_path);
 
     // ------------------------------------------------------------------
     // Build cpp_bridge via CMake
@@ -149,6 +149,14 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=AppKit");
         println!("cargo:rustc-link-lib=framework=Foundation");
         println!("cargo:rustc-link-lib=framework=QuartzCore");
+    }
+
+    if target_os == "windows" {
+        // need to include Bonjour SDK headers for dnssd.h
+        let bonjour_sdk = env::var("BONJOUR_SDK")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("C:/Program Files/Bonjour SDK"));
+        config.include(bonjour_sdk.join("Include"));
     }
 
     config.include(&qt_include_path).build("src/main.rs");
