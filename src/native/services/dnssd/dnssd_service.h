@@ -20,7 +20,7 @@
 #ifndef DNSSD_SERVICE_H
 #define DNSSD_SERVICE_H
 
-#include "avahi_service.h"
+#include "../../include/common.h"
 #include <QList>
 #include <QMap>
 #include <QMutex>
