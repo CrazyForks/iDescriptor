@@ -1,4 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 
-Window {}
+Window {
+    property string _effect: "____"
+
+}

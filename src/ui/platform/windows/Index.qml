@@ -13,8 +13,9 @@ FluWindow {
     minimumHeight: 320
     launchMode: FluWindowType.SingleTask
     fitsAppBarWindows: true
+    backgroundColor: "transparent"
 
-     Component.onCompleted: {  
+    Component.onCompleted: {  
         window.effect = "acrylic"
     }  
 

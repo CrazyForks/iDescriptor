@@ -9,6 +9,8 @@ FluWindow {
     required property string udid
     required property var device
     property bool auto_close: true
+    backgroundColor: "transparent"
+
     launchMode: FluWindowType.Standard 
     Component.onCompleted : {
         root.effect = "acrylic"

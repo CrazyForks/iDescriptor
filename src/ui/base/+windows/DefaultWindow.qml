@@ -6,11 +6,12 @@ import FluentUI
 
 FluWindow {
     id: root
-    required property string udid
-    required property var device
     property bool auto_close: true
+    property string _effect: "acrylic"
     launchMode: FluWindowType.Standard 
+    backgroundColor: "transparent"
     Component.onCompleted : {
-        root.effect = "acrylic"
+        // directly setting the effect property doesn't work
+        root.effect = root._effect
     }
 }
