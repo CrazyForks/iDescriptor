@@ -46,3 +46,5 @@ Running target/debug/export_speed /DCIM/104APPLE/IMG_4048.MOV true /var/lib/lock
 | 256 KiB | 134,893,219 |   9.518 |     13.52 |
 |   1 MiB | 134,893,219 |   8.709 | **14.77** |
 |   4 MiB | 134,893,219 |   9.906 |     12.99 |
+
+You can compile [binary](./bin/export_speed.rs) and run it on your device to test transfer speeds
