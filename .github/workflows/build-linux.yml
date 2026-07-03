@@ -113,7 +113,7 @@ jobs:
           -Dnls=disabled
 
           ninja -C build-qml6
-          meson install -C build-qml6
+          sudo meson install -C build-qml6
 
       - name: Build libimobiledevice suite (versioned tarballs)
         run: |
