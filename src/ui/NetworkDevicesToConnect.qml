@@ -293,9 +293,6 @@ Item {
                                         }
                                     }
 
-
-                                    // react to model.state changes
-                                    Binding { target: resetTimer; property: "running"; value: false }
                                 }
 
                                 overlay: [
@@ -307,6 +304,7 @@ Item {
                                         anchors.rightMargin: 1
                                         enabled: !!address
                                         icon.source: "qrc:/resources/icons/mi_options-vertical.svg"
+                                        icon.color: palette.text
                                         onClicked: sectionMenu.open()
                                         background : Rectangle {
                                             color : "transparent"
