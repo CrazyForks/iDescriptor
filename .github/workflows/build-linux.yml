@@ -77,7 +77,12 @@ jobs:
             libavcodec-dev \
             libavutil-dev \
             libswscale-dev \
-            meson
+            python3-pip 
+
+      - name: Install latest Meson
+        run: |
+          python3 -m pip install --user --upgrade meson
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
