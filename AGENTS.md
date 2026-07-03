@@ -72,7 +72,9 @@ We have some globals defined in qml context which are accessible in any qml file
 
 If the thing can or should be singleton you need to follow a similar approch or ask me whether it should be a singleton or not.
 
+Use camelCase for signal names in Rust and QML, only for signals not for methods or properties
 
+Use url_to_path from QmlUtils for the selected path to normalize the path, for example when you get a file path from a FileDialog you need to normalize it before using it
 
 Sometimes you will asked to tranform some QWidgets C++ code to QML in this case if you see a varible called loadingWidget that's the equivalent of
 StateView in qml which you can import like so (assuming you are in a qml file in src/ui/ , adjust the path accordingly if you are in a different folder)
