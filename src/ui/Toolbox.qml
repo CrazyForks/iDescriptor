@@ -200,7 +200,7 @@ Item {
                 createSingletonComp("./tools/Airplay.qml", "airplayInstance")
                 break;
             case 1: 
-                createCompWrapped("./tools/VirtualLocation.qml")
+                createCompWrapped("./tools/SimulateLocation.qml")
                 break;
             case 2:
                 createCompWrapped("./tools/LiveScreen.qml")

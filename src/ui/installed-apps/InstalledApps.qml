@@ -164,7 +164,7 @@ Item {
     }
 
     Connections {
-        function onInstalled_apps_retrieved(success, apps) {
+        function onInstalledAppsRetrieved(success, apps) {
             allAppsModel.clear();
             filteredAppsModel.clear();
             if (!success) {

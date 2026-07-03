@@ -44,7 +44,7 @@ Dialog {
     Connections {
         target: root.selectedDevice ? root.selectedDevice.service_manager : null
 
-        function onInstall_ipa_init(started, state) {
+        function onInstallIpaInit(started, state) {
             root.installing = started
             root.stateText = state
             root.errorText = started ? "" : state
@@ -52,7 +52,7 @@ Dialog {
                 root.progress = 0
         }
 
-        function onInstall_ipa_progress(progress, state) {
+        function onInstallIpaProgress(progress, state) {
             root.installing = progress < 1
             root.progress = progress
             root.stateText = state

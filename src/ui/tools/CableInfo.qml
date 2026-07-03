@@ -149,7 +149,7 @@ ToolWindow {
 
     Connections {
         target: root.device.service_manager
-        function onCable_info_retrieved(response) {
+        function onCableInfoRetrieved(response) {
             Helpers.setTimeout(function() {
                 parseAndUpdate(response)
             }, 300)

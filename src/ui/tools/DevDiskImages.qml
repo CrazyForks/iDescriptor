@@ -111,8 +111,8 @@ ToolWindow {
                                 return;
                             }
 
-                            App.Helpers.connectOnce(device.service_manager.dev_image_mounted,(version, success, is_locked) =>{ 
-                                console.log("dev_image_mounted signal received for version:", version, "success:", success, "is_locked:", is_locked)
+                            App.Helpers.connectOnce(device.service_manager.devImageMounted,(version, success, is_locked) =>{ 
+                                console.log("devImageMounted signal received for version:", version, "success:", success, "is_locked:", is_locked)
                                 if (success) {
                                     console.log("Developer disk image mounted successfully for version:", version)
                                     DevImgsManager.fetch_image_list(root.currentDeviceUdid)

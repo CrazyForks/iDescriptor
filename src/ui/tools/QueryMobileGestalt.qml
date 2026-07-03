@@ -151,7 +151,7 @@ ToolWindow {
 
     Connections {
         target: device.service_manager
-        function onMobilegestalt_info_retrieved(info) {
+        function onMobilegestaltInfoRetrieved(info) {
             outputText.text = formatResults(info)
             var n = Object.keys(info || {}).length 
             statusLabel.text = qsTr("Query completed. Found %n result(s).","",n)
