@@ -113,9 +113,8 @@ jobs:
           -Dnls=disabled
 
           ninja -C build-qml6
-
-          # meson is installed through pip,
-          sudo ~/.local/bin/meson install -C build-qml6 install -C build-qml6
+          sudo cp build-qml6/ext/qt6/libgstqml6.so \
+          /usr/lib/$(uname -m)-linux-gnu/gstreamer-1.0/
 
       - name: Build libimobiledevice suite (versioned tarballs)
         run: |
