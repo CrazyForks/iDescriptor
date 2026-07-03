@@ -242,13 +242,13 @@ ADDITIONAL_DLLS=(
     "libmd4c.dll"
     "zlib1.dll"
     "libsharpyuv-0.dll"
+    "libarchive-13.dll"
+    "libheif.dll"
     #gl plugins dependencies
     "libgstapp-1.0-0.dll"
     "libgstgl-1.0-0.dll"
     "libgstcontroller-1.0-0.dll"
     "libgraphene-1.0-0.dll"
-    "libarchive-13.dll"
-    "libheif.dll"
 )
 
 echo "Copying additional MinGW runtime DLLs from MSYS2..."
