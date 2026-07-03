@@ -43,7 +43,7 @@ mkdir -p "$APPDIR/usr/share/applications"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
 # Copy executable and icon
-cp target/idescriptor "$APPDIR/usr/bin/iDescriptor"
+cp target/release/idescriptor "$APPDIR/usr/bin/iDescriptor"
 cp resources/icons/app-icon/icon.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/iDescriptor.png"
 
 
