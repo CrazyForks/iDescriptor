@@ -1,0 +1,49 @@
+[package]
+name = "idescriptor"
+version = "0.4.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.50.0", features = ["full"] }
+futures = "0.3"
+idevice = { path = "lib/idevice-rs/idevice", features = ["full"] }
+uuid = { version = "1.22.0", features = ["v4"] }
+plist = "1.8.0"
+plist-macro = "0.1.6"
+tracing = "0.1.44"
+once_cell = "1.21.4"
+regex = "1.12.3"
+urlencoding = "2.1.3"
+serde_json = "1.0.149"
+rusqlite = { version = "0.39.0", features = ["bundled"] }
+filetime = "0.2.27"
+priority-queue = "2.7.0"
+anyhow = "1.0.102"
+ipatool = { version = "0.1.2", default-features = false }
+cpp = "0.5.11"
+cstr = "0.2.12"
+qmetaobject = { version = "0.2.10", features = ["log"]}
+qttypes     = { version = "0.2.12", default-features = false, features = ["required", "qtquick", "qtquickcontrols2"]}
+simplelog = "0.12.2"
+url = "2.5.8"
+oneshot = "0.2.1"
+macros = { path = "lib/macros"}
+base64 = "0.22.1"
+reqwest = "0.13.4"
+zip = "8.6.0"
+log = "0.4.33"
+ssh2 = "0.9"
+hex = "0.4.3"
+#z_updater = { path= "/home/uncore/Desktop/proj/z-updater"}
+
+[target.'cfg(target_os = "windows")'.dependencies]
+compress-tools = { version = "0.16", features = ["tokio_support"] }
+md-5 = "0.10"
+
+[build-dependencies]
+cc = "1.2.61"
+cpp_build = "0.5.11"
+walkdir = "2.5.0"
+winres = "0.1.12"
+pkg-config = "0.3.33"
+cmake = "0.1.58"

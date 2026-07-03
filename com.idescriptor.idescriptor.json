@@ -31,55 +31,6 @@
   ],
   "modules": [
     {
-      "name": "lxqt-build-tools",
-      "buildsystem": "cmake-ninja",
-      "builddir": true,
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/lxqt/lxqt-build-tools.git"
-        }
-      ]
-    },
-    {
-      "name": "golang",
-      "buildsystem": "simple",
-      "build-options": {
-        "append-path": "/app/sdk/golang/bin",
-        "env": {
-          "GOROOT": "/app/sdk/golang"
-        }
-      },
-      "sources": [
-        {
-          "type": "archive",
-          "only-arches": ["x86_64"],
-          "url": "https://go.dev/dl/go1.25.3.linux-amd64.tar.gz",
-          "sha256": "0335f314b6e7bfe08c3d0cfaa7c19db961b7b99fb20be62b0a826c992ad14e0f",
-          "strip-components": 0
-        },
-        {
-          "type": "archive",
-          "only-arches": ["aarch64"],
-          "url": "https://go.dev/dl/go1.25.3.linux-arm64.tar.gz",
-          "sha256": "1d42ebc84999b5e2069f5e31b67d6fc5d67308adad3e178d5a2ee2c9ff2001f5",
-          "strip-components": 0
-        }
-      ],
-      "build-commands": ["mkdir -p /app/sdk", "mv go /app/sdk/golang"]
-    },
-    {
-      "name": "qtermwidget",
-      "buildsystem": "cmake-ninja",
-      "builddir": true,
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/lxqt/qtermwidget"
-        }
-      ]
-    },
-    {
       "name": "libplist",
       "buildsystem": "autotools",
       "sources": [
@@ -157,8 +108,7 @@
     },
     {
       "name": "libde265",
-      "buildsystem": "autotools",
-      "config-opts": ["--disable-dec265", "--disable-sherlock265"],
+      "buildsystem": "cmake-ninja",
       "sources": [
         {
           "type": "git",
@@ -201,23 +151,12 @@
       ]
     },
     {
-      "name": "pugixml",
-      "buildsystem": "cmake-ninja",
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/zeux/pugixml.git"
-        }
-      ]
-    },
-    {
       "name": "iDescriptor",
       "buildsystem": "simple",
       "build-options": {
         "append-path": "/usr/lib/sdk/rust-stable/bin",
         "env": {
           "CARGO_HOME": "/run/build/iDescriptor/cargo",
-          "CARGO_NET_OFFLINE": "true",
           "RUST_BACKTRACE": "1",
           "CUSTOM_LIB_PATH": "/app/lib",
           "CUSTOM_INCLUDE_PATH": "/app/include",
@@ -228,20 +167,14 @@
         "build-args": ["--share=network"]
       },
       "build-commands": [
-        "cargo --offline fetch --manifest-path lib/idevice-rs/Cargo.toml --verbose",
-        "cargo build --offline --release --all-features --manifest-path lib/idevice-rs/Cargo.toml",
-        "cmake -B build -DGO_EXECUTABLE=$GO_EXECUTABLE .",
-        "cmake --build build --config Release",
-        "install -Dm0755 build/iDescriptor ${FLATPAK_DEST}/bin/iDescriptor"
+        "cargo build --release",
+        "install -Dm0755 target/release/idescriptor ${FLATPAK_DEST}/bin/iDescriptor"
       ],
       "sources": [
         {
           "type": "dir",
           "path": "."
-        },
-        "cargo-sources.idevice-rs.json",
-        "cargo-sources.idevice-rs.idevice.json",
-        "cargo-sources.idevice-rs.cpp.plist_ffi.json"
+        }
       ]
     }
   ]
