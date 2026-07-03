@@ -76,7 +76,8 @@ jobs:
             libavformat-dev \
             libavcodec-dev \
             libavutil-dev \
-            libswscale-dev
+            libswscale-dev \
+            meson
 
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
