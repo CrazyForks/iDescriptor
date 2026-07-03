@@ -104,8 +104,7 @@ plugins=(
     "libgstxvimagesink.so"
     "libgstgtk.so"
     "libgstopengl.so"
-    # FIXME: build and bundle this from source later
-    # "libgstqml6.so"
+    "libgstqml6.so"
     "libgstrtp.so"
     "libgstrtpmanager.so"
     "libgsttypefindfunctions.so"
