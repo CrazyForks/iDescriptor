@@ -41,7 +41,7 @@ FluLauncher {
         FluTheme.animationEnabled = true
 
         FluRouter.routes = {
-            "/": "qrc:/ui/+windows/Index.qml",
+            "/": "qrc:/src/ui/platform/windows/Index.qml",
         }
         var args = Qt.application.arguments
         if(args.length>=2 && args[1].startsWith("-crashed=")){
@@ -49,7 +49,7 @@ FluLauncher {
         }else{
             FluRouter.navigate("/")
         }
-        Updater.checkAutomatically()
+        // Updater.checkAutomatically()
     }
 
 }
