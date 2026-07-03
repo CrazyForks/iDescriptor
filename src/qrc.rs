@@ -82,8 +82,7 @@ qrc!(pub rsrc,
         "resources/trust.png",
 
         // ------- Translations --------
-        // lrelease compiles .ts files to .qm in build.rs
-        "target/translations/de.qm" as "translations/de.qm",
+        // "target/translations/de.qm" as "translations/de.qm",
 
     }
 );
