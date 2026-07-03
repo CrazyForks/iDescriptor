@@ -3,11 +3,15 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Window
 import QtQuick.Layouts
+import "./base"
 
-Window {
+DefaultWindow {
     id: window
+    showMaximize: false  
+    showMinimize: false     
+    showClose: false 
     ListModel { id : processesList } 
-
+    _effect : "normal"
     width: 300
     height: 300
     visible: false
@@ -52,6 +56,7 @@ Window {
             window.finishProcess(jobId, cancelled, successfulItems, failedItems, totalBytes)
         }
 
+        //hide process bar when failed
         function onImport_item_finished(jobId, fileName, destinationPath, success, bytesTransferred, errorMessage) {
             window.finishItem(jobId, success)
         }
@@ -64,7 +69,7 @@ Window {
     Rectangle {
         anchors.fill: parent
         radius: 10
-        color: "#333"
+        color: "transparent"
 
         ColumnLayout {
             anchors.fill: parent
@@ -93,6 +98,12 @@ Window {
             }
         }
 
+    }
+
+    Label {
+        text: "Export & Import processes will appear here"
+        anchors.centerIn: parent
+        visible: !processesList.length 
     }
 
     function toggle(parentWindow, globalPos) {
@@ -124,6 +135,8 @@ Window {
     }
 
     function addProcess(processId, title, type, totalItems, destinationPath) {
+        console.log(processId, title, type, totalItems, destinationPath)
+
         if (findProcessIndex(processId) !== -1)
             return
 
