@@ -247,6 +247,8 @@ ADDITIONAL_DLLS=(
     "libgstgl-1.0-0.dll"
     "libgstcontroller-1.0-0.dll"
     "libgraphene-1.0-0.dll"
+    "libarchive-13.dll"
+    "libheif.dll"
 )
 
 echo "Copying additional MinGW runtime DLLs from MSYS2..."
