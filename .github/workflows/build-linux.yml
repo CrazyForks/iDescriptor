@@ -88,6 +88,26 @@ jobs:
           modules: "qtmultimedia qtlocation qtpositioning qtserialport qt5compat qtshadertools"
           dir: ${{ github.workspace }}
 
+      - name: Build qml6glsink from gst-plugins-good
+        shell: bash
+        run: |
+          wget https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.28.3.tar.xz
+          tar -xf gst-plugins-good-1.28.3.tar.xz
+          cd gst-plugins-good-1.28.3
+
+          meson setup build-qml6 . \
+          --prefix=/usr \
+          --libdir=lib/$(uname -m)-linux-gnu \
+          --auto-features=disabled \
+          -Dqt6=enabled \
+          -Dqt5=disabled \
+          -Dtests=disabled \
+          -Dexamples=disabled \
+          -Dnls=disabled
+
+          ninja -C build-qml6
+          meson install -C build-qml6
+
       - name: Build libimobiledevice suite (versioned tarballs)
         run: |
           set -euo pipefail
