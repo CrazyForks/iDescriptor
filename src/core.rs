@@ -906,7 +906,9 @@ async fn collect_info(
 
     insert_battery_info(diag_relay, &mut info, product_type.into())
         .await
-        .unwrap();
+        .unwrap_or_else(|e| {
+            debug!("Failed to insert battery info: {e:?}");
+        });
 
     Ok(info)
 }
