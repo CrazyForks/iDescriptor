@@ -19,6 +19,7 @@ ToolWindow {
     property int tries: 0
     property int rotationDegrees: 0
     property bool mirrorHorizontal: false
+    property bool devModeHandled: false
     property string statusText: qsTr("Connecting to screenshot service...")
 
     function startInitialization(delay) {
@@ -29,28 +30,8 @@ ToolWindow {
         initTimer.restart()
     }
 
-    property var devModeWindow: null
-
     function showDeveloperModeHelper() {
-        if (!root.devModeWindow) {
-            // FIXME: use qrc
-            const comp = Qt.createComponent("../DevMode.qml")
-            root.devModeWindow = comp.createObject(root, {
-                device: root.device
-            })
-
-            if (root.devModeWindow) {
-                root.devModeWindow.open()
-
-                root.devModeWindow.closed.connect(function() {
-                    root.devModeWindow = null
-                })
-            }
-        } else {
-            root.devModeWindow.raise()
-            root.devModeWindow.requestActivate()
-        }
-
+        devModeHelper.start()
         stateView.errorText = qsTr("Developer Mode is required before Live Screen can start. Enable Developer Mode on the device, then retry.")
         stateView.viewState = StateView.State.Error
     }
@@ -59,7 +40,7 @@ ToolWindow {
         backend.stop_capture()
 
         if (need === "dev-img") {
-            if (devDiskHelper.visible)
+            if (devModeHelper.visible)
                 return
 
             root.statusText = qsTr("Developer disk image required...")
@@ -101,8 +82,9 @@ ToolWindow {
                 stateView.errorText = qsTr("Live Screen is not supported on iOS versions below 6.")
                 stateView.viewState = StateView.State.Error
                 return
-            } else if (iosVersion >= 17 && 
-                root.device.info.developer_mode_enabled !== true) {
+            } else if (iosVersion >= 17
+                && root.device.info.developer_mode_enabled !== true
+                && !root.devModeHandled) {
                 showDeveloperModeHelper()
                 return
             }
@@ -112,18 +94,21 @@ ToolWindow {
         }
     }
 
-    DevDiskImageHelper {
-        id: devDiskHelper
+    DevModeHelper {
+        id: devModeHelper
         device: root.device
         // udid: root.udid
         iosVersion: root.iosVersion
 
-        onMountingCompleted: function(success) {
+        onHandled: function(success, forced) {
             if (success) {
+                root.devModeHandled = true
                 root.tries = 0
                 root.startInitialization(800)
             } else {
-                stateView.errorText = qsTr("Developer disk image was not mounted.")
+                stateView.errorText = root.iosVersion >= 17
+                    ? qsTr("Developer Mode was not handled.")
+                    : qsTr("Developer disk image was not mounted.")
                 stateView.viewState = StateView.State.Error
             }
         }

@@ -23,8 +23,11 @@ use qttypes::{QStringList, QVariantMap};
 
 use plist_macro::plist;
 use serde_json;
+use std::sync::Arc;
 use std::{io::Read, pin::Pin, time::Duration};
+use tokio::sync::Mutex;
 
+#[allow(non_snake_case)]
 #[derive(Default, QObject, QtThreading)]
 pub struct ServiceManager {
     base: qt_base_class!(trait QObject),
@@ -35,7 +38,9 @@ pub struct ServiceManager {
     mount_dev_image: qt_method!(fn(&self, version: QString, image_path: QString, sig: QString)),
     get_mounted_image: qt_method!(fn(&self)),
     fetch_installed_apps: qt_method!(fn(&self)),
-    set_location: qt_method!(fn(&self, latitude: QString, longitude: QString) -> i32),
+    check_developer_mode_status: qt_method!(fn(&self)),
+    set_location: qt_method!(fn(&self, latitude: QString, longitude: QString)),
+    clear_location: qt_method!(fn(&self)),
     fetch_disk_usage: qt_method!(fn(&self)),
     restart: qt_method!(fn(&self) -> bool),
     shutdown: qt_method!(fn(&self) -> bool),
@@ -44,22 +49,24 @@ pub struct ServiceManager {
     enable_wifi_connections: qt_method!(fn(&self)),
 
     // Signals
-    cable_info_retrieved: qt_signal!(info: QString),
-    mobilegestalt_info_retrieved: qt_signal!(info: QVariantMap),
-    dev_image_mounted: qt_signal!(version: QString, success: bool, is_locked: bool),
-    developer_mode_option_revealed: qt_signal!(success: bool),
-    mounted_image_retrieved: qt_signal!(
+    cableInfoRetrieved: qt_signal!(info: QString),
+    mobilegestaltInfoRetrieved: qt_signal!(info: QVariantMap),
+    devImageMounted: qt_signal!(version: QString, success: bool, is_locked: bool),
+    developerModeOptionRevealed: qt_signal!(success: bool),
+    developerModeStatusChecked: qt_signal!(enabled: bool),
+    mountedImageRetrieved: qt_signal!(
         success: bool,
         is_locked: bool,
         sig: QByteArray,
         sig_length: u64
     ),
-    installed_apps_retrieved: qt_signal!(success : bool,apps: QVariantMap),
-    battery_info_updated: qt_signal!(info: QString),
-    disk_usage_retrieved: qt_signal!(success: bool, apps_usage: u64),
-    install_ipa_init: qt_signal!(started: bool, state: QString),
-    install_ipa_progress: qt_signal!(progress: f64, state: QString),
-    enable_wifi_connections_result: qt_signal!(success: bool),
+    installedAppsRetrieved: qt_signal!(success : bool,apps: QVariantMap),
+    batteryInfoUpdated: qt_signal!(info: QString),
+    diskUsageRetrieved: qt_signal!(success: bool, apps_usage: u64),
+    installIpaInit: qt_signal!(started: bool, state: QString),
+    installIpaProgress: qt_signal!(progress: f64, state: QString),
+    enableWifiConnectionsResult: qt_signal!(success: bool),
+    locationSimulationCompleted: qt_signal!(success: bool, code: i32, action: QString),
 
     udid: String,
     ios_version: u32,
@@ -107,7 +114,7 @@ impl ServiceManager {
                         if Value::Dictionary(info).to_writer_xml(&mut buf).is_ok() {
                             if let Ok(s) = String::from_utf8(buf) {
                                 qt_thread.queue(move |t| {
-                                    t.battery_info_updated(QString::from(s));
+                                    t.batteryInfoUpdated(QString::from(s));
                                 });
                             }
                         }
@@ -143,7 +150,7 @@ impl ServiceManager {
                                     "query_mobilegestalt: MobileGestalt key not found or not a dictionary for device {udid}."
                                 );
                                 let _ = qt_thread.queue(move |t| {
-                                    t.mobilegestalt_info_retrieved(map);
+                                    t.mobilegestaltInfoRetrieved(map);
                                 });
                                 return;
                             }
@@ -155,7 +162,7 @@ impl ServiceManager {
                         }
                     }
                     let _ = qt_thread.queue(move |t| {
-                        t.mobilegestalt_info_retrieved(map);
+                        t.mobilegestaltInfoRetrieved(map);
                     });
                 }
                 Err(e) => {
@@ -163,7 +170,7 @@ impl ServiceManager {
                         "query_mobilegestalt: error querying MobileGestalt for device {udid}: {e}"
                     );
                     let _ = qt_thread.queue(move |t| {
-                        t.mobilegestalt_info_retrieved(map);
+                        t.mobilegestaltInfoRetrieved(map);
                     });
                 }
             }
@@ -189,20 +196,20 @@ impl ServiceManager {
                             "get_cable_info: Failed to serialize ioregistry values to XML for device {udid}."
                         );
                         let _ = qt_thread.queue(|t| {
-                            t.cable_info_retrieved(QString::from(""));
+                            t.cableInfoRetrieved(QString::from(""));
                         });
                         return;
                     }
 
                     let _ = qt_thread.queue(move |t| {
-                        t.cable_info_retrieved(QString::from(res.unwrap()));
+                        t.cableInfoRetrieved(QString::from(res.unwrap()));
                     });
 
                 }
                 None => {
                     eprintln!("get_cable_info: Failed to get ioregistry for device {udid}");
                     let _ = qt_thread.queue(|t| {
-                        t.cable_info_retrieved(QString::from(""));
+                        t.cableInfoRetrieved(QString::from(""));
                     });
                 }
             }
@@ -227,7 +234,7 @@ impl ServiceManager {
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to connect to ImageMounter for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(version, false, false);
+                        t.devImageMounted(version, false, false);
                     });
                     return;
                 }
@@ -238,7 +245,7 @@ impl ServiceManager {
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to open image file {image} for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(version, false, false);
+                        t.devImageMounted(version, false, false);
                     });
                     return;
                 }
@@ -247,7 +254,7 @@ impl ServiceManager {
             if let Err(e) = file.read_to_end(&mut buf) {
                 eprintln!("mount_dev_image: Failed to read image file {image} for device {udid}: {e}");
                 let _ = qt_thread.queue(|t| {
-                    t.dev_image_mounted(version, false, false);
+                    t.devImageMounted(version, false, false);
                 });
                 return;
             }
@@ -257,7 +264,7 @@ impl ServiceManager {
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to open signature file {signature} for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(version,false,false);
+                        t.devImageMounted(version,false,false);
                     });
                     return;
                 }
@@ -267,7 +274,7 @@ impl ServiceManager {
             if let Err(e) = sig_file.read_to_end(&mut sig_buf) {
                 eprintln!("mount_dev_image: Failed to read signature file {signature} for device {udid}: {e}");
                 let _ = qt_thread.queue(|t| {
-                    t.dev_image_mounted(version, false,false);
+                    t.devImageMounted(version, false,false);
                 });
                 return;
             }
@@ -275,19 +282,19 @@ impl ServiceManager {
             match mounter.mount_developer(&buf, sig_buf).await {
                 Ok(_) => {
                     let _ = qt_thread.queue(|t| {
-                        t.dev_image_mounted(version, true ,false);
+                        t.devImageMounted(version, true ,false);
                     });
                 }
                 Err(idevice::IdeviceError::DeviceLocked) => {
                     eprintln!("mount_dev_image: Failed to mount developer image for device {udid}: device locked");
                     qt_thread.queue(|t| {
-                        t.dev_image_mounted(version, false, true);
+                        t.devImageMounted(version, false, true);
                     });
                 }
                 Err(e) => {
                     eprintln!("mount_dev_image: Failed to mount developer image for device {udid}: {e}");
                     qt_thread.queue(|t| {
-                        t.dev_image_mounted(version, false, false);
+                        t.devImageMounted(version, false, false);
                     });
                 }
             };
@@ -314,7 +321,7 @@ impl ServiceManager {
                 Err(e) => {
                     eprintln!("get_mounted_image: Failed to connect to ImageMounter for device {udid}: {e}");
                     qt_thread.queue(|t| {
-                        t.mounted_image_retrieved(false,false,QByteArray::default(), 0);
+                        t.mountedImageRetrieved(false,false,QByteArray::default(), 0);
                     });
                     return;
                 }
@@ -323,25 +330,25 @@ impl ServiceManager {
             match mounter.lookup_image("Developer").await {
                 Ok(res) => {
                     qt_thread.queue(move|t| {
-                        t.mounted_image_retrieved(true,false,QByteArray::from(&res[..]), res.len() as u64);
+                        t.mountedImageRetrieved(true,false,QByteArray::from(&res[..]), res.len() as u64);
                     });
                 }
                 Err(idevice::IdeviceError::DeviceLocked) => {
                     eprintln!("get_mounted_image: Failed to lookup mounted developer image for device {udid}: device locked");
                     qt_thread.queue(|t| {
-                        t.mounted_image_retrieved(false,true,QByteArray::default(), 0);
+                        t.mountedImageRetrieved(false,true,QByteArray::default(), 0);
                     });
                 }
                 Err(idevice::IdeviceError::NotFound) => {
                     eprintln!("get_mounted_image: No mounted developer image found for device {udid}");
                     let _ = qt_thread.queue(|t| {
-                        t.mounted_image_retrieved(true,false,QByteArray::default(), 0);
+                        t.mountedImageRetrieved(true,false,QByteArray::default(), 0);
                     });
                 }
                 Err(e) => {
                     eprintln!("get_mounted_image: Failed to lookup mounted developer image for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.mounted_image_retrieved(false,false,QByteArray::default(), 0);
+                        t.mountedImageRetrieved(false,false,QByteArray::default(), 0);
                     });
                 }
             };
@@ -367,7 +374,7 @@ impl ServiceManager {
                 Err(e) => {
                     eprintln!("reveal_developer_mode_option_in_ui: Failed to connect to AMFI service for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.developer_mode_option_revealed(false);
+                        t.developerModeOptionRevealed(false);
                     });
                     return;
                 }
@@ -377,13 +384,13 @@ impl ServiceManager {
             match amfi_client.reveal_developer_mode_option_in_ui().await {
                 Ok(_) => {
                     let _ = qt_thread.queue(|t| {
-                        t.developer_mode_option_revealed(true);
+                        t.developerModeOptionRevealed(true);
                     });
                 }
                 Err(e) => {
                     eprintln!("reveal_developer_mode_option_in_ui: Failed to reveal developer mode option in UI for device {udid}: {e}");
                     let _ = qt_thread.queue(|t| {
-                        t.developer_mode_option_revealed(false);
+                        t.developerModeOptionRevealed(false);
                     });
             }
 
@@ -411,7 +418,7 @@ impl ServiceManager {
                 Err(e) => {
                     eprintln!("fetch_installed_apps: Failed to connect to InstallationProxy service for device {udid}: {e}");
                     qt_thread.queue( move |t| {
-                        t.installed_apps_retrieved(false, all_apps);
+                        t.installedAppsRetrieved(false, all_apps);
                     });
                     return;
                 }
@@ -480,62 +487,87 @@ impl ServiceManager {
             }
 
             qt_thread.queue(move |t| {
-                t.installed_apps_retrieved(true, all_apps);
+                t.installedAppsRetrieved(true, all_apps);
             });
         });
     }
 
-    fn set_location(&self, latitude: QString, longitude: QString) -> i32 {
+    fn set_location(&self, latitude: QString, longitude: QString) {
         let udid = self.udid.clone();
         let ios_version = self.ios_version;
+        let qt_t = self.qt_thread();
 
         let provider_guard = self.device.as_ref().unwrap().clone().provider;
-        /*
-            FIXME: use RUNTIME.spawn in the future
-        */
-        RUNTIME.block_on(async move {
-            tokio::select! {
-                res = async {
-                    let result = {
-                        let provider_guard = provider_guard.lock().await;
+        RUNTIME.spawn(async move {
+            let qt_thread = qt_t.clone();
+            let action = QString::from("set");
+            let latitude_str = latitude.to_string();
+            let longitude_str = longitude.to_string();
+            let result = tokio::time::timeout(
+                Duration::from_secs(10),
+                set_device_location_for_version(
+                    provider_guard,
+                    ios_version,
+                    udid.clone(),
+                    latitude_str,
+                    longitude_str,
+                ),
+            )
+            .await;
 
-
-                        if ios_version < 17 {
-                            set_device_location_lockdown( provider_guard.as_ref(), latitude.to_string().as_str(), longitude.to_string().as_str()).await
-                        } else {
-                            println!("Using RSD path for setting location on device {udid} with iOS version {ios_version}");
-                            let proxy_res = {
-                                CoreDeviceProxy::connect(provider_guard.as_ref()).await
-                            };
-
-                            match proxy_res {
-                                Ok(proxy) => set_device_location_rsd(proxy, utils::qstring_to_f64(latitude).unwrap_or(0.0), utils::qstring_to_f64(longitude).unwrap_or(0.0)).await,
-                                Err(err) => {
-                                    println!("Failed to connect to CoreDeviceProxy for device {udid}, cannot set location using RSD path.");
-                                    return err.code();
-                                },
-                            }
-                        }
-                    };
-
-                    match result {
-                        Ok(_) => 0,
-                        Err(e) => {
-                            eprintln!(
-                                "set_location: failed to set virtual location for device {udid}: {e:?}"
-                            );
-                            return e.code();
-                        }
-                    }
-                } => {
-                    res
+            let code = match result {
+                Ok(Ok(_)) => 0,
+                Ok(Err(e)) => {
+                    eprintln!(
+                        "set_location: failed to set virtual location for device {udid}: {e:?}"
+                    );
+                    e.code()
                 }
-                _ = tokio::time::sleep(Duration::from_secs(10)) => {
+                Err(_) => {
                     eprintln!("set_location: timed out");
                     idevice::IdeviceError::Timeout.code()
                 }
-            }
-        })
+            };
+
+            qt_thread.queue(move |t| {
+                t.locationSimulationCompleted(code == 0, code, action);
+            });
+        });
+    }
+
+    fn clear_location(&self) {
+        let udid = self.udid.clone();
+        let ios_version = self.ios_version;
+        let qt_t = self.qt_thread();
+        let provider_guard = self.device.as_ref().unwrap().clone().provider;
+
+        RUNTIME.spawn(async move {
+            let qt_thread = qt_t.clone();
+            let action = QString::from("clear");
+            let result = tokio::time::timeout(
+                Duration::from_secs(10),
+                clear_device_location_for_version(provider_guard, ios_version, udid.clone()),
+            )
+            .await;
+
+            let code = match result {
+                Ok(Ok(_)) => 0,
+                Ok(Err(e)) => {
+                    eprintln!(
+                        "clear_location: failed to clear virtual location for device {udid}: {e:?}"
+                    );
+                    e.code()
+                }
+                Err(_) => {
+                    eprintln!("clear_location: timed out");
+                    idevice::IdeviceError::Timeout.code()
+                }
+            };
+
+            qt_thread.queue(move |t| {
+                t.locationSimulationCompleted(code == 0, code, action);
+            });
+        });
     }
 
     fn fetch_disk_usage(&self) {
@@ -555,7 +587,7 @@ impl ServiceManager {
                     Err(e) => {
                         eprintln!("fetch_disk_usage: Failed to connect to InstallationProxy service for device {udid}: {e}");
                         qt_thread.queue(move |t| {
-                            t.disk_usage_retrieved(false, 0);
+                            t.diskUsageRetrieved(false, 0);
                         });
                         return;
                     }
@@ -565,13 +597,13 @@ impl ServiceManager {
             match utils::calculate_apps_usage(&mut instproxy).await {
                 Ok(apps_usage) => {
                     qt_thread.queue(move |t| {
-                        t.disk_usage_retrieved(true, apps_usage);
+                        t.diskUsageRetrieved(true, apps_usage);
                     });
                 }
                 Err(e) => {
                     eprintln!("fetch_disk_usage: Failed to calculate apps disk usage for device {udid}: {e}");
                     qt_thread.queue(move |t| {
-                        t.disk_usage_retrieved(false, 0);
+                        t.diskUsageRetrieved(false, 0);
                     });
                 }
             };
@@ -657,7 +689,7 @@ impl ServiceManager {
                     Err(e) => {
                         eprintln!("install_ipa: Failed to ensure /PublicStaging directory exists on device {udid}: {e}");
                         qt_thread.queue(move |t| {
-                            t.install_ipa_init(false, QString::from("Failed to prepare device for IPA upload"));
+                            t.installIpaInit(false, QString::from("Failed to prepare device for IPA upload"));
                         });
                         return;
                     }
@@ -668,14 +700,14 @@ impl ServiceManager {
                     Ok(false) => {
                         eprintln!("install_ipa: IPA file not found at path {local_ipa_path_owned}");
                         qt_thread.queue(move |t| {
-                            t.install_ipa_init(false, QString::from("IPA file not found"));
+                            t.installIpaInit(false, QString::from("IPA file not found"));
                         });
                         return;
                     }
                     Err(e) => {
                         eprintln!("install_ipa: Failed to check if IPA file exists at path {local_ipa_path_owned}: {e}");
                         qt_thread.queue(move |t| {
-                            t.install_ipa_init(false, QString::from("Failed to access IPA file"));
+                            t.installIpaInit(false, QString::from("Failed to access IPA file"));
                         });
                         return;
                     }
@@ -690,7 +722,7 @@ impl ServiceManager {
                             Err(e) => {
                                 eprintln!("install_ipa: Failed to open local IPA file for device {udid}: {e}");
                                 qt_thread.queue(move |t| {
-                                    t.install_ipa_init(false, QString::from("Failed to open local IPA file"));
+                                    t.installIpaInit(false, QString::from("Failed to open local IPA file"));
                                 });
                                 return;
                             }
@@ -702,7 +734,7 @@ impl ServiceManager {
                             Err(e) => {
                                 eprintln!("install_ipa: Failed to read local IPA file for device {udid}: {e}");
                                 qt_thread.queue(move |t| {
-                                    t.install_ipa_init(false, QString::from("Failed to read local IPA file"));
+                                    t.installIpaInit(false, QString::from("Failed to read local IPA file"));
                                 });
                                 return;
                             }
@@ -711,7 +743,7 @@ impl ServiceManager {
                         if let Err(e) = fd.write_entire(&file_btytes).await {
                             eprintln!("install_ipa: Failed to upload IPA to device {udid}: {e}");
                             qt_thread.queue(move |t| {
-                                t.install_ipa_init(false, QString::from("Failed to upload IPA to device"));
+                                t.installIpaInit(false, QString::from("Failed to upload IPA to device"));
                             });
                             return;
                         }
@@ -719,7 +751,7 @@ impl ServiceManager {
                     Err(e) => {
                         eprintln!("install_ipa: Failed to create file on device {udid} for IPA upload: {e}");
                         qt_thread.queue(move |t| {
-                            t.install_ipa_init(false, QString::from("Failed to create file on device for IPA upload"));
+                            t.installIpaInit(false, QString::from("Failed to create file on device for IPA upload"));
                         });
                         return;
                     }
@@ -734,14 +766,14 @@ impl ServiceManager {
                 Err(e) => {
                     eprintln!("install_ipa: Failed to connect to InstallationProxy service for device {udid}: {e}");
                     qt_thread.queue(move |t| {
-                        t.install_ipa_init(false, QString::from("Failed to connect to Installation Proxy"));
+                        t.installIpaInit(false, QString::from("Failed to connect to Installation Proxy"));
                     });
                     return;
                 }
             };
 
             qt_thread.queue(move |t| {
-                t.install_ipa_init(true, QString::from("Connected to Installation Proxy"));
+                t.installIpaInit(true, QString::from("Connected to Installation Proxy"));
             });
 
             let state = String::from("Installing IPA");
@@ -757,7 +789,7 @@ impl ServiceManager {
 
                             qt_thread
                                 .queue(move |t| {
-                                    t.install_ipa_progress(
+                                    t.installIpaProgress(
                                         progress,
                                         QString::from(state),
                                     );
@@ -801,16 +833,45 @@ impl ServiceManager {
             {
                 Ok(_) => {
                     let _ = qt_thread.queue(|t| {
-                        t.enable_wifi_connections_result(true);
+                        t.enableWifiConnectionsResult(true);
                     });
                 }
                 Err(e) => {
                     eprintln!("wireless: LockdownClient::set_value failed: {e:?} udid: {udid}");
                     let _ = qt_thread.queue(|t| {
-                        t.enable_wifi_connections_result(false);
+                        t.enableWifiConnectionsResult(false);
                     });
                 }
             }
+        });
+    }
+    // for iOS 17+
+    fn check_developer_mode_status(&self) {
+        let lc_guard = self.device.as_ref().unwrap().clone().lockdown;
+        let udid = self.udid.clone();
+        let qt_t = self.qt_thread();
+
+        RUNTIME.spawn(async move {
+            let qt_thread = qt_t.clone();
+            let mut lc = lc_guard.lock().await;
+            let developer_mode_status = match lc
+                .get_value(
+                    Some("DeveloperModeStatus"),
+                    Some("com.apple.security.mac.amfi"),
+                )
+                .await
+            {
+                Ok(Value::Boolean(b)) => b,
+                other => {
+                    eprintln!(
+                        "check_developer_mode_status: failed to read DeveloperModeStatus for device {udid}: {other:?}"
+                    );
+                    false
+                }
+            };
+            qt_thread.queue(move |t| {
+                t.developerModeStatusChecked(developer_mode_status);
+            });
         });
     }
 }
@@ -822,6 +883,59 @@ async fn set_device_location_lockdown(
 ) -> Result<(), idevice::IdeviceError> {
     let mut client = LocationSimulationService::connect(provider).await?;
     client.set(latitude, longitude).await
+}
+
+async fn clear_device_location_lockdown(
+    provider: &dyn IdeviceProvider,
+) -> Result<(), idevice::IdeviceError> {
+    let mut client = LocationSimulationService::connect(provider).await?;
+    client.clear().await
+}
+
+async fn set_device_location_for_version(
+    provider_guard: Arc<Mutex<Box<dyn IdeviceProvider>>>,
+    ios_version: u32,
+    udid: String,
+    latitude: String,
+    longitude: String,
+) -> Result<(), idevice::IdeviceError> {
+    let provider_guard = provider_guard.lock().await;
+
+    if ios_version < 17 {
+        return set_device_location_lockdown(
+            provider_guard.as_ref(),
+            latitude.as_str(),
+            longitude.as_str(),
+        )
+        .await;
+    }
+
+    println!("Using RSD path for setting location on device {udid} with iOS version {ios_version}");
+    let proxy = CoreDeviceProxy::connect(provider_guard.as_ref()).await?;
+    set_device_location_rsd(
+        proxy,
+        latitude.parse::<f64>().unwrap_or(0.0),
+        longitude.parse::<f64>().unwrap_or(0.0),
+    )
+    .await
+}
+
+async fn clear_device_location_for_version(
+    provider_guard: Arc<Mutex<Box<dyn IdeviceProvider>>>,
+    ios_version: u32,
+    udid: String,
+) -> Result<(), idevice::IdeviceError> {
+    let provider_guard = provider_guard.lock().await;
+
+    if ios_version < 17 {
+        return clear_device_location_lockdown(provider_guard.as_ref()).await;
+    }
+
+    println!(
+        "Using RSD path for clearing location on device {udid} with iOS version {ios_version}"
+    );
+    let proxy = CoreDeviceProxy::connect(provider_guard.as_ref()).await?;
+    clear_device_location_rsd(proxy).await
 }
 
 // iOS 17+:
@@ -842,6 +956,22 @@ async fn set_device_location_rsd(
 
     let mut location_client = LocationSimulationClient::new(&mut remote_server).await?;
     location_client.set(latitude, longitude).await
+}
+
+// iOS 17+:
+async fn clear_device_location_rsd(proxy: CoreDeviceProxy) -> Result<(), idevice::IdeviceError> {
+    let rsd_port = proxy.tunnel_info().server_rsd_port;
+    let adapter = proxy.create_software_tunnel()?;
+    let mut adapter = adapter.to_async_handle();
+    let stream = adapter.connect(rsd_port).await?;
+
+    let mut handshake = RsdHandshake::new(stream).await?;
+
+    let mut remote_server = RemoteServerClient::connect_rsd(&mut adapter, &mut handshake).await?;
+    remote_server.read_message(0).await?;
+
+    let mut location_client = LocationSimulationClient::new(&mut remote_server).await?;
+    location_client.clear().await
 }
 
 impl Drop for ServiceManager {

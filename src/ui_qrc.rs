@@ -19,14 +19,14 @@ qrc!(pub qml,
         "src/ui/Helpers.qml",
         "src/ui/HowToConnect.qml",
         "src/ui/IconLoader.qml",
-        "src/ui/Jailbroken.qml",
+        // "src/ui/Jailbroken.qml",
         "src/ui/LoginDialog.qml",
         "src/ui/Main.qml",
         "src/ui/NetworkDevicesToConnect.qml",
         "src/ui/PreviewWindow.qml",
         "src/ui/Theme.qml",
         "src/ui/Settings.qml",
-        "src/ui/Updater.qml",
+        // "src/ui/Updater.qml",
         "src/ui/SidebarTabButton.qml",
         "src/ui/StatusBar.qml",
         "src/ui/StatusWindow.qml",
@@ -35,8 +35,7 @@ qrc!(pub qml,
         "src/ui/Tabs.qml",
         "src/ui/Toolbox.qml",
         "src/ui/Welcome.qml",
-        "src/ui/DevMode.qml",
-        "src/ui/DevDiskImageHelper.qml",
+        "src/ui/DevModeHelper.qml",
         "src/ui/qmldir",
 
 
@@ -50,14 +49,14 @@ qrc!(pub qml,
         "src/ui/tools/Airplay.qml",
         "src/ui/tools/CableInfo.qml",
         "src/ui/tools/QueryMobileGestalt.qml",
-        "src/ui/tools/VirtualLocation.qml",
+        "src/ui/tools/SimulateLocation.qml",
         "src/ui/tools/DevDiskImages.qml",
         "src/ui/tools/WirelessGalleryImport.qml",
         "src/ui/tools/IFuse.qml",
         "src/ui/tools/LiveScreen.qml",
         "src/ui/tools/NetworkDevices.qml",
-        "src/ui/tools/SSHTerminalTool.qml",
-        "src/ui/tools/SSHProcessWindow.qml",
+        // "src/ui/tools/SSHTerminalTool.qml",
+        // "src/ui/tools/SSHProcessWindow.qml",
 
         // app-store/
         "src/ui/app-store/AppDetails.qml",
@@ -74,10 +73,17 @@ qrc!(pub qml,
 #[cfg(target_os = "windows")]
 qrc!(pub windows_qml,
     "/" {
-        "src/ui/base/+windows/Index.qml",
-        "src/ui/base/+windows/Main.qml",
+        "src/ui/platform/windows/Index.qml",
+        "src/ui/platform/windows/Main.qml",
         "src/ui/base/+windows/SidebarTabButton.qml",
         "src/ui/base/+windows/DefaultWindow.qml",
         "src/ui/base/+windows/ToolWindow.qml",
+    }
+);
+
+#[cfg(target_os = "macos")]
+qrc!(pub macos_qml,
+    "/" {
+        "src/ui/platform/macos/Main.qml"
     }
 );
