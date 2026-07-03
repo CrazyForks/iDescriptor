@@ -82,7 +82,7 @@ qrc!(pub rsrc,
         "resources/trust.png",
 
         // ------- Translations --------
-        // "target/translations/de.qm" as "translations/de.qm",
+        "translations/de.qm",
 
     }
 );
