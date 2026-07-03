@@ -98,7 +98,7 @@ Item {
     Connections {
         target: root.device ? root.device.service_manager : null
 
-        function onDisk_usage_retrieved(success, apps_usage) {
+        function onDiskUsageRetrieved(success, apps_usage) {
             if (!success) {
                 loading = false
                 errorMessage = qsTr("Failed to retrieve disk usage data.")
