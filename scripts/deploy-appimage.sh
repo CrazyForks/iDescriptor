@@ -182,21 +182,6 @@ else
     echo "QT_HOME=$QT_HOME"
 fi
 
-# Manually deploy libQt6ShaderTools
-# it's only used by Qt5Compat.GraphicalEffects
-# not by the main executable, so the dependency scanner skips it
-if [ -n "$Qt6_DIR" ]; then
-    shadertools_path=$(find "$Qt6_DIR/lib" -maxdepth 1 -name "libQt6ShaderTools.so*" 2>/dev/null | head -n 1)
-fi
-
-if [ -n "$shadertools_path" ]; then
-    echo "Manually deploying libQt6ShaderTools from $shadertools_path"
-    mkdir -p "$APPDIR/usr/lib"
-    cp -Pv "$shadertools_path"* "$APPDIR/usr/lib/"
-else
-    echo "Warning: Could not find libQt6ShaderTools.so to bundle"
-fi
-
 export LD_LIBRARY_PATH="$APPDIR/usr/local/lib:$LD_LIBRARY_PATH"
 export LINUXDEPLOY_EXCLUDED_LIBRARIES="*sql*"
 export QML_SOURCES_PATHS="./src/ui"
