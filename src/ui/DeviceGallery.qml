@@ -192,7 +192,8 @@ Item {
                             anchors.bottom: parent.bottom
                             anchors.left: parent.left
                             anchors.right: parent.right
-                            text: fileName + albumId
+                            // text: fileName + albumId
+                            text: fileName
                             font.pixelSize: 10
                             color: "white"
                             elide: Text.ElideMiddle
