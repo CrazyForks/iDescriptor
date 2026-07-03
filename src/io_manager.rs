@@ -615,7 +615,7 @@ async fn export_single_item(
         .await
         .map_err(|e| format!("Failed to create local file {output_path_str}: {e}"))?;
 
-    let mut chunk = vec![0u8; 256 * 1024];
+    let mut chunk = vec![0u8; 1024 * 1024];
     let mut transferred = 0_i64;
 
     loop {
@@ -700,7 +700,7 @@ async fn import_single_item(
         .await
         .map_err(|e| format!("Failed to open device file {device_path} for writing: {e}"))?;
 
-    let mut chunk = vec![0u8; 256 * 1024];
+    let mut chunk = vec![0u8; 1024 * 1024];
     let mut transferred = 0_i64;
 
     loop {
