@@ -62,7 +62,7 @@ Window {
     onClosing: cleanupVideoStream()
 
     Connections {
-        target : ThumbnailProvider
+        target : imageLoader 
 
         function onThumbnailReady(path, data, rowHint) {
             if (path == root.filePath && rowHint == root.row) {
