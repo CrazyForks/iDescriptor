@@ -3,7 +3,6 @@ use qmetaobject::qrc;
 qrc!(pub qml,
     "/" {
         "src/ui/AlbumContents.qml",
-        "src/ui/App.qml",
         "src/ui/AppsTab.qml",
         "src/ui/BatteryIndicator.qml",
         "src/ui/Device.qml",
