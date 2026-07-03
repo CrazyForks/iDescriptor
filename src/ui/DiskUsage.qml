@@ -147,6 +147,7 @@ Item {
             id: stateView
             Layout.fillWidth: true
             Layout.fillHeight: true
+            autoSwitchContent: false
             viewState: StateView.State.Loading
             // loadingText: qsTr("Loading disk usage...")
             // errorText: qsTr("Failed to retrieve disk usage data.")
