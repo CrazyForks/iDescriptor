@@ -7,16 +7,16 @@ import "./base"
 Item {
     id: root
 
-    property var query 
+    property var query
     property bool loading: true
-    required property var udid 
+    required property var udid
     property int albumId
     required property var info
     readonly property bool isMainPage: nav.depth <= 1
 
 
     Component.onCompleted: {
-        query = serviceFactory.create_sqlite_query_backend(root.udid, info.ios_version_major) 
+        query = serviceFactory.create_sqlite_query_backend(root.udid, info.ios_version_major)
         if (query) {
             query.init();
         } else {
@@ -55,7 +55,7 @@ Item {
 
             query.albums.forEach((jsonStr) => {
                 const obj = JSON.parse(jsonStr)
-                    
+
                 albumModel.append({
                     albumId : obj.album_id ?  obj.album_id : -99,
                     fileName: obj.album_name,
@@ -82,7 +82,7 @@ Item {
     StateView {
         anchors.fill: parent
         autoSwitchContent: false
-        viewState: query.albums ? StateView.State.Content : StateView.State.Loading
+        viewState: query.albums.length ? StateView.State.Content : StateView.State.Loading
         contentItem : ColumnLayout {
             anchors.fill : parent
 
@@ -211,7 +211,7 @@ Item {
                         border.color: "blue"
                         border.width: 1
                         visible: false
-                        
+
                         opacity: 0.3
                         Rectangle { anchors.fill: parent; color: "blue"; opacity: 0.2 }
                     }
@@ -220,11 +220,11 @@ Item {
                         id: mouseArea
                         anchors.fill: parent
                         property point startPos
-                        
-                        propagateComposedEvents: true 
+
+                        propagateComposedEvents: true
 
                         onPressed: (mouse) => {
-                            // mouse.accepted = false  
+                            // mouse.accepted = false
                             startPos = Qt.point(mouse.x, mouse.y)
                             selectionRect.x = startPos.x
                             selectionRect.y = startPos.y
