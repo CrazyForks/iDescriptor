@@ -101,7 +101,7 @@ jobs:
 
       - name: Install FluentUI
         run: |
-          qt_root_dir="$(cygpath -au "$QT_ROOT_DIR")"
+          qt_root_dir="$(cygpath -au "${Qt6_DIR:?Qt6_DIR is not set}")"
 
           git clone https://github.com/uncor3/FluentUI.git
           cd FluentUI
@@ -115,7 +115,7 @@ jobs:
       - name: Build qml6glsink from gst-plugins-good
         run: |
           set -euo pipefail
-          qt_root_dir="$(cygpath -au "$QT_ROOT_DIR")"
+          qt_root_dir="$(cygpath -au "${Qt6_DIR:?Qt6_DIR is not set}")"
 
           wget "https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz"
           tar -xf "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz"
@@ -262,7 +262,7 @@ jobs:
           mkdir -p target/deploy
           cp target/release/idescriptor.exe target/deploy/
 
-          qt_root_dir="$(cygpath -au "$QT_ROOT_DIR")"
+          qt_root_dir="$(cygpath -au "${Qt6_DIR:?Qt6_DIR is not set}")"
           qml_source_dir="$(cygpath -au "$GITHUB_WORKSPACE")/src/ui"
 
           pushd target/deploy
