@@ -110,11 +110,9 @@ jobs:
             -DCMAKE_PREFIX_PATH="${qt_root_dir}" \
             -DFLUENTUI_QML_PLUGIN_DIRECTORY="${qt_root_dir}/qml/FluentUI"
           cmake --build build
-          cmake --install build
 
       - name: Build qml6glsink from gst-plugins-good
         run: |
-          set -euo pipefail
           qt_root_dir="$(cygpath -au "${Qt6_DIR:?Qt6_DIR is not set}")"
 
           wget "https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz"
@@ -209,7 +207,6 @@ jobs:
 
       - name: Build libimobiledevice suite (versioned tarballs)
         run: |
-          set -euo pipefail
           workspace="$PWD"
           tmp="$PWD/_tmp_libs"
           mkdir -p "$tmp"
@@ -256,8 +253,6 @@ jobs:
 
       - name: Deploy portable build
         run: |
-          set -euo pipefail
-
           rm -rf target/deploy
           mkdir -p target/deploy
           cp target/release/idescriptor.exe target/deploy/
