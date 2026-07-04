@@ -121,10 +121,13 @@ jobs:
           tar -xf "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz"
           cd "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}"
 
+          export PATH="${qt_root_dir}/bin:$PATH"
+
           meson setup build-qml6 . \
             --prefix=/mingw64 \
             --libdir=lib \
             --auto-features=disabled \
+            -Dqt-method=qmake \
             -Dqt6=enabled \
             -Dqt5=disabled \
             -Dtests=disabled \
