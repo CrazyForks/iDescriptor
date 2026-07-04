@@ -121,11 +121,6 @@ jobs:
           tar -xf "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz"
           cd "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}"
 
-          export LC_ALL=en_US.UTF-8
-          export LANG=en_US.UTF-8
-          export PATH="${qt_root_dir}/bin:$PATH"
-          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-
           meson setup build-qml6 . \
             --prefix=/mingw64 \
             --libdir=lib \
