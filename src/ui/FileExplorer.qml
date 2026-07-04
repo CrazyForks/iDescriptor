@@ -4,13 +4,14 @@ import QtQuick.Layouts
 import QtQuick.Controls.impl
 import QtQuick.Dialogs
 import "." as App
+import "./base"
 
 Item {
     id: root
     anchors.fill: parent
 
     property var afcClient: null
-    required property string udid 
+    required property string udid
     property bool useAfc2: false
 
     property bool favEnabled: true
@@ -189,7 +190,7 @@ Item {
     }
 
     function _updateActionEnabled() {
-        exportBtn.enabled = selectedPaths.length > 0 
+        exportBtn.enabled = selectedPaths.length > 0
         deleteBtn.enabled = selectedPaths.length > 0
     }
 
@@ -292,114 +293,101 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        Item {
-            Layout.fillWidth: true
+
+        SectionBox {
+            id: navWidget
+            //Layout.fillWidth: true
             Layout.preferredHeight: 58
+            Layout.margins:20
 
             RowLayout {
                 anchors.fill: parent
+                spacing: 6
 
-                Item { Layout.fillWidth: true }
-
-                Rectangle {
-                    id: navWidget
-                    Layout.preferredWidth: 700
-                    Layout.preferredHeight: 44
-                    radius: 10
-                    color: "transparent"
-                    border.width: 1
-                    border.color: "#22000000"
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: 6
-                        spacing: 6
-
-                        ExplorerToolButton {
-                            id: backBtn
-                            enabled: false
-                            iconSource: "qrc:/resources/icons/material-symbols_arrow-left-alt.svg"
-                            tooltip: qsTr("Go Back")
-                            onClicked: root.goBack()
-                        }
-
-                        ExplorerToolButton {
-                            id: forwardBtn
-                            enabled: false
-                            iconSource: "qrc:/resources/icons/material-symbols_arrow-right-alt.svg"
-                            tooltip: qsTr("Go Forward")
-                            onClicked: root.goForward()
-                        }
-
-                        ExplorerToolButton {
-                            id: homeBtn
-                            iconSource: "qrc:/resources/icons/material-symbols_home.svg"
-                            tooltip: qsTr("Go Home")
-                            onClicked: root.goHome()
-                        }
-
-                        ExplorerToolButton {
-                            id: upBtn
-                            enabled: false
-                            iconSource: "qrc:/resources/icons/material-symbols_arrow-upward-rounded.svg"
-                            tooltip: qsTr("Go Up")
-                            onClicked: root.goUp()
-                        }
-
-                        TextField {
-                            id: addressBar
-                            Layout.fillWidth: true
-                            placeholderText: qsTr("Enter path...")
-                            text: root.currentPath
-                            selectByMouse: true
-                            onAccepted: root.navigateToPath(text, true)
-                        }
-
-                        ExplorerToolButton {
-                            id: importBtn
-                            enabled: !!root.afcClient
-                            iconSource: "qrc:/resources/icons/lets-icons_import.svg"
-                            tooltip: qsTr("Import")
-                            onClicked: importDialog.open()
-                        }
-
-                        ExplorerToolButton {
-                            id: exportBtn
-                            enabled: false
-                            iconSource: "qrc:/resources/icons/ph_export.svg"
-                            tooltip: qsTr("Export")
-                            onClicked: exportDialog.open()
-                        }
-
-                        ExplorerToolButton {
-                            id: deleteBtn
-                            enabled: false
-                            iconSource: "qrc:/resources/icons/material-symbols_delete.svg"
-                            tooltip: qsTr("Delete")
-                            onClicked: confirmDelete.open()
-                        }
-
-                        ExplorerToolButton {
-                            id: favBtn
-                            visible: root.favEnabled
-                            enabled: true
-                            iconSource: "qrc:/resources/icons/material-symbols_favorite.svg"
-                            tooltip: qsTr("Add to Favorites")
-                            onClicked: favDialog.open()
-                        }
-
-                        ExplorerToolButton {
-                            id: enterBtn
-                            iconSource: "qrc:/resources/icons/material-symbols_keyboard-return.svg"
-                            tooltip: qsTr("Navigate to path")
-                            onClicked: root.navigateToPath(addressBar.text, true)
-                        }
-                    }
+                ExplorerToolButton {
+                    id: backBtn
+                    enabled: false
+                    iconSource: "qrc:/resources/icons/material-symbols_arrow-left-alt.svg"
+                    tooltip: qsTr("Go Back")
+                    onClicked: root.goBack()
                 }
 
-                Item { Layout.fillWidth: true } 
+                ExplorerToolButton {
+                    id: forwardBtn
+                    enabled: false
+                    iconSource: "qrc:/resources/icons/material-symbols_arrow-right-alt.svg"
+                    tooltip: qsTr("Go Forward")
+                    onClicked: root.goForward()
+                }
+
+                ExplorerToolButton {
+                    id: homeBtn
+                    iconSource: "qrc:/resources/icons/material-symbols_home.svg"
+                    tooltip: qsTr("Go Home")
+                    onClicked: root.goHome()
+                }
+
+                ExplorerToolButton {
+                    id: upBtn
+                    enabled: false
+                    iconSource: "qrc:/resources/icons/material-symbols_arrow-upward-rounded.svg"
+                    tooltip: qsTr("Go Up")
+                    onClicked: root.goUp()
+                }
+
+                TextField {
+                    id: addressBar
+                    //Layout.fillWidth: true
+                    Layout.maximumWidth: 200
+
+                    placeholderText: qsTr("Enter path...")
+                    text: root.currentPath
+                    selectByMouse: true
+                    onAccepted: root.navigateToPath(text, true)
+                }
+
+                ExplorerToolButton {
+                    id: importBtn
+                    enabled: !!root.afcClient
+                    iconSource: "qrc:/resources/icons/lets-icons_import.svg"
+                    tooltip: qsTr("Import")
+                    onClicked: importDialog.open()
+                }
+
+                ExplorerToolButton {
+                    id: exportBtn
+                    enabled: false
+                    iconSource: "qrc:/resources/icons/ph_export.svg"
+                    tooltip: qsTr("Export")
+                    onClicked: exportDialog.open()
+                }
+
+                ExplorerToolButton {
+                    id: deleteBtn
+                    enabled: false
+                    iconSource: "qrc:/resources/icons/material-symbols_delete.svg"
+                    tooltip: qsTr("Delete")
+                    onClicked: confirmDelete.open()
+                }
+
+                ExplorerToolButton {
+                    id: favBtn
+                    visible: root.favEnabled
+                    enabled: true
+                    iconSource: "qrc:/resources/icons/material-symbols_favorite.svg"
+                    tooltip: qsTr("Add to Favorites")
+                    onClicked: favDialog.open()
+                }
+
+                ExplorerToolButton {
+                    id: enterBtn
+                    iconSource: "qrc:/resources/icons/material-symbols_keyboard-return.svg"
+                    tooltip: qsTr("Navigate to path")
+                    onClicked: root.navigateToPath(addressBar.text, true)
+                }
             }
         }
+
 
         // Content states
         StackLayout {
