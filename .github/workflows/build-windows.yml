@@ -15,8 +15,8 @@ on:
         type: string
         default: "dev"
 env:
-  QT_VERSION: "6.8.3"
-  GO_VERSION: "1.23.4"
+  QT_VERSION: "6.9.3"
+  GST_PLUGINS_GOOD_VERSION: "1.26.2"
   LIBPLIST_VER: "2.7.0"
   LIBTATSU_VER: "1.0.5"
   LIBIMOBILEDEVICE_GLUE_VER: "1.3.2"
@@ -57,19 +57,22 @@ jobs:
           base-devel \
           git \
           make \
+          wget \
           libtool \
           autoconf \
           automake-wrapper \
           p7zip \
           mingw-w64-x86_64-gcc \
           mingw-w64-x86_64-cmake \
+          mingw-w64-x86_64-meson \
+          mingw-w64-x86_64-ninja \
+          mingw-w64-x86_64-pkgconf \
           mingw-w64-x86_64-pugixml \
           mingw-w64-x86_64-libusb \
           mingw-w64-x86_64-qrencode \
           mingw-w64-x86_64-curl \
           mingw-w64-x86_64-openssl \
           mingw-w64-x86_64-libzip \
-          mingw-w64-x86_64-go \
           mingw-w64-x86_64-gstreamer \
           mingw-w64-x86_64-gst-plugins-base \
           mingw-w64-x86_64-gst-plugins-good \
@@ -86,16 +89,6 @@ jobs:
           rustup default stable-x86_64-pc-windows-gnu
           rustup toolchain list
 
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "8.0.x"
-
-      - name: Install WiX Toolset and Extensions
-        shell: pwsh
-        run: |
-          dotnet tool install --global wix --version 4.0.5
-          wix extension add --global WixToolset.UI.wixext/4.0.5
-
       - name: Set PKG_CONFIG environment variable
         run: echo "PKG_CONFIG_EXECUTABLE=C:/msys64/mingw64/bin/pkg-config.exe" >> $GITHUB_ENV
 
@@ -103,8 +96,48 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: ${{ env.QT_VERSION }}
-          modules: "qtmultimedia qtlocation qtpositioning qtserialport"
+          modules: "qtmultimedia qtlocation qtpositioning qtserialport qt5compat qtshadertools"
           arch: win64_mingw
+
+      - name: Install FluentUI
+        run: |
+          qt_root_dir="$(cygpath -au "$QT_ROOT_DIR")"
+
+          git clone https://github.com/uncor3/FluentUI.git
+          cd FluentUI
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${qt_root_dir}" \
+            -DFLUENTUI_QML_PLUGIN_DIRECTORY="${qt_root_dir}/qml/FluentUI"
+          cmake --build build
+          cmake --install build
+
+      - name: Build qml6glsink from gst-plugins-good
+        run: |
+          set -euo pipefail
+          qt_root_dir="$(cygpath -au "$QT_ROOT_DIR")"
+
+          wget "https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz"
+          tar -xf "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz"
+          cd "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}"
+
+          export LC_ALL=en_US.UTF-8
+          export LANG=en_US.UTF-8
+          export PATH="${qt_root_dir}/bin:$PATH"
+          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+
+          meson setup build-qml6 . \
+            --prefix=/mingw64 \
+            --libdir=lib \
+            --auto-features=disabled \
+            -Dqt6=enabled \
+            -Dqt5=disabled \
+            -Dtests=disabled \
+            -Dexamples=disabled \
+            -Dnls=disabled
+
+          ninja -C build-qml6
+          cp build-qml6/ext/qt6/libgstqml6.dll /mingw64/lib/gstreamer-1.0/
 
       - name: Install WinFsp
         shell: pwsh
@@ -173,22 +206,6 @@ jobs:
 
           "BONJOUR_SDK_HOME=C:/Program Files/Bonjour SDK" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Compile additional dependencies
-        run: |
-          git clone https://github.com/lxqt/lxqt-build-tools.git
-          pushd lxqt-build-tools
-          mkdir build && cd build
-          cmake .. -DCMAKE_PREFIX_PATH="$Qt6_DIR"
-          cmake --install . --prefix "C:\lxqt"
-          popd
-
-          git clone https://github.com/uncor3/qtermwidget.git
-          pushd qtermwidget
-          mkdir build && cd build
-          cmake .. -DCMAKE_PREFIX_PATH="$Qt6_DIR;C:\lxqt" -DCMAKE_INSTALL_PREFIX="C:\lxqt"
-          cmake --build . --parallel
-          cmake --install .
-          popd
 
       - name: Build libimobiledevice suite (versioned tarballs)
         run: |
@@ -200,7 +217,7 @@ jobs:
 
           base_url="https://github.com/libimobiledevice"
 
-          libs=( "libplist" "libtatsu" "libimobiledevice-glue" "libusbmuxd" "libimobiledevice" "libirecovery" )
+          libs=( "libplist" )
 
           for name in "${libs[@]}"; do
             ver_var=$(echo "${name^^}_VER" | sed 's/-/_/g')
@@ -233,41 +250,46 @@ jobs:
           cd "$workspace"
           rm -rf "$tmp"
 
-      - name: Configure CMake
+      - name: Build
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$Qt6_DIR" -DDEPLOY=OFF
+          RUSTFLAGS="" cargo build --release
 
-      - name: Build with CMake
-        run: cmake --build build --config Release
+      - name: Deploy portable build
+        run: |
+          set -euo pipefail
 
-      - name: Install & CPack
-        id: cpack_step # Add an ID to this step
-        working-directory: build
+          rm -rf target/deploy
+          mkdir -p target/deploy
+          cp target/release/idescriptor.exe target/deploy/
+
+          qt_root_dir="$(cygpath -au "$QT_ROOT_DIR")"
+          qml_source_dir="$(cygpath -au "$GITHUB_WORKSPACE")/src/ui"
+
+          pushd target/deploy
+          ../../scripts/deploy-exe.sh \
+            --executable="./idescriptor.exe" \
+            --output-dir="./" \
+            --qt-bin-path="${qt_root_dir}/bin" \
+            --win-ifuse="./" \
+            --project-source-dir="../../" \
+            --qml-source-dir="${qml_source_dir}"
+          popd
+
+      - name: Create portable ZIP
+        id: portable_zip
         shell: pwsh
         run: |
-          cmake --install .
-          cpack .
-          # Find the generated files and set them as outputs
-          $msiFile = Get-ChildItem -Path "artifacts/*.msi" | Select-Object -First 1
-          $zipFile = Get-ChildItem -Path "artifacts/*.zip" | Select-Object -First 1
+          $version = "${{ inputs.version }}"
+          $zipName = "iDescriptor-$version-Windows_x86_64.portable.zip"
+          if (Test-Path $zipName) {
+              Remove-Item $zipName
+          }
+          Compress-Archive -Path "target\deploy\*" -DestinationPath $zipName -Force
+          "zip_name=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "zip_path=$((Resolve-Path $zipName).Path)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-          $newZipName = $zipFile.Name.Replace(".zip", ".portable.zip")
-          Rename-Item -Path $zipFile.FullName -NewName $newZipName
-          $zipFile = Get-ChildItem -Path "artifacts/*.portable.zip" | Select-Object -First 1
-
-          echo "msi_name=$($msiFile.Name)" >> $env:GITHUB_OUTPUT
-          echo "msi_path=$($msiFile.FullName)" >> $env:GITHUB_OUTPUT
-          echo "zip_name=$($zipFile.Name)" >> $env:GITHUB_OUTPUT
-          echo "zip_path=$($zipFile.FullName)" >> $env:GITHUB_OUTPUT
-
-      - name: Upload Installer Artifact
+      - name: Upload Portable Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.cpack_step.outputs.msi_name }}
-          path: ${{ steps.cpack_step.outputs.msi_path }}
-
-      - name: Upload Portable ZIP Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.cpack_step.outputs.zip_name }}
-          path: ${{ steps.cpack_step.outputs.zip_path }}
+          name: ${{ steps.portable_zip.outputs.zip_name }}
+          path: ${{ steps.portable_zip.outputs.zip_path }}
