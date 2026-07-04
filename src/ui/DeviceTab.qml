@@ -6,8 +6,6 @@ import "." as App
 
 Item {
     id: root
-    // default info section
-    property int currentSection : 0
 
     Component.onCompleted: {
         App.DeviceContext.init()
@@ -30,7 +28,7 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
-            
+
             ColumnLayout {
                 Layout.fillHeight : true
                 Layout.preferredWidth: 220
@@ -44,24 +42,24 @@ Item {
                         SidebarTabButton {
                             id : button
                             anchors.fill: parent
-                            currentSection: root.currentSection
+                            currentSection: model.currentSection
                             title: info.product_type
                             udid: info["UniqueDeviceID"]
                             wireless: info["connection_type"] === "Wireless"
                             onSectionChanged: {
-                                if (root.currentSection !== sectionIndex)
-                                    root.currentSection = sectionIndex
+                                if (model.currentSection !== sectionIndex)
+                                    model.currentSection = sectionIndex
 
-                            App.DeviceContext.currentDeviceUdid  = deviceUdid                             
+                                App.DeviceContext.currentDeviceUdid  = info["UniqueDeviceID"]
                             }
                         }
-                    } 
+                    }
                 }
                 // spacer taker
                 Item {
                     Layout.fillHeight : true
                 }
-                    
+
             }
 
 
@@ -71,15 +69,15 @@ Item {
                 delegate:Item {
                     Layout.fillWidth : true
                     Layout.fillHeight : true
-                    visible : model.udid === App.DeviceContext.currentDeviceUdid 
+                    visible : model.udid === App.DeviceContext.currentDeviceUdid
                     Device {
                         device: model
                         udid: model.udid
                         anchors.fill: parent
-                        info: model.info 
-                        currentSection: root.currentSection
+                        info: model.info
+                        currentSection: model.currentSection
                     }
-                } 
+                }
             }
         }
 

@@ -8,8 +8,6 @@ QtObject {
     id: root
     property ListModel devices: ListModel {}
     property string currentDeviceUdid : ""
-    // default to info section
-    property int currentSection : 0
     property int currentTab: 0
     property bool showWelcomePage : true
     //Record<mac,pairing_file_path>
@@ -130,7 +128,10 @@ QtObject {
                     const mac = info["WiFiAddress"]
                     root.pairing_files[mac] = QmlUtils.get_lockdown_dir() + `/${udid}.plist`;
                     console.log(JSON.stringify(root.pairing_files));
-                    devices.append({ udid: udid, info: info , text , service_manager, sb_client })
+                    devices.append(
+                        { udid: udid, info: info , text , service_manager, sb_client,
+                    // default to info section
+                    currentSection : 0 })
                     root.deviceAdded(udid, mac)
                     root.showWelcomePage = false
                     root.currentDeviceUdid = udid
