@@ -121,8 +121,7 @@ jobs:
           tar -xf "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz"
           cd "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}"
 
-          export PATH="${qt_root_dir}/bin:$PATH"
-
+          QMAKE="${qt_root_dir}/bin/qmake.exe" \
           meson setup build-qml6 . \
             --prefix=/mingw64 \
             --libdir=lib \
