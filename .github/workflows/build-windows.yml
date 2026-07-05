@@ -88,15 +88,18 @@ jobs:
           rustup default stable-x86_64-pc-windows-gnu
           rustup toolchain list
 
-      - name: Set PKG_CONFIG environment variable
-        run: echo "PKG_CONFIG_EXECUTABLE=C:/msys64/mingw64/bin/pkg-config.exe" >> $GITHUB_ENV
-
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
           version: ${{ env.QT_VERSION }}
           modules: "qtmultimedia qtlocation qtpositioning qtserialport qt5compat qtshadertools"
           arch: win64_mingw
+
+      - name: Set Environment Variables
+        run: |
+          qt_root_dir="$(cygpath -au "${Qt6_DIR:?Qt6_DIR is not set}")"
+          echo "QMAKE=${qt_root_dir}/bin/qmake.exe" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_EXECUTABLE=C:/msys64/mingw64/bin/pkg-config.exe" >> $GITHUB_ENV
 
       - name: Install FluentUI
         run: |
@@ -120,7 +123,6 @@ jobs:
           tar -xf "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz"
           cd "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}"
 
-          QMAKE="${qt_root_dir}/bin/qmake.exe" \
           meson setup build-qml6 . \
             --prefix=/mingw64 \
             --libdir=lib \
