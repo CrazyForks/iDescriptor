@@ -290,7 +290,7 @@ mkdir -p "${OUTPUT_DIR}/gstreamer-1.0/libexec"
 cp "${GST_LIBEXEC_PATH}/gst-plugin-scanner.exe" "${OUTPUT_DIR}/gstreamer-1.0/libexec/"
 
 echo "Copying executables"
-cp "${MSYS2_BIN_PATH}/iproxy.exe" "${OUTPUT_DIR}/"
+# cp "${MSYS2_BIN_PATH}/iproxy.exe" "${OUTPUT_DIR}/"
 
 echo "Copying required scripts"
 cp "${PROJECT_SOURCE_DIR}/install-apple-drivers.ps1" "${OUTPUT_DIR}/"
