@@ -266,9 +266,9 @@ done
 # Required for win-ifuse and iproxy since we moved from libimobiledevice
 # and these are not dependencies of the main executable
 LIBIMOBILEDEVICE_DLLS=(
-    "libimobiledevice-1.0.dll"
-    "libimobiledevice-glue-1.0.dll"
-    "libusbmuxd-2.0.dll"
+    # "libimobiledevice-1.0.dll"
+    # "libimobiledevice-glue-1.0.dll"
+    # "libusbmuxd-2.0.dll"
     "libplist-2.0.dll"
     "libssl-3-x64.dll"
 )
