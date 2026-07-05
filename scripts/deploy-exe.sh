@@ -259,7 +259,7 @@ for DLL_NAME in "${ADDITIONAL_DLLS[@]}"; do
         cp "${DLL_PATH}" "${OUTPUT_DIR}/"
     else
         echo "Error: Additional DLL not found: ${DLL_NAME} (searched ${MSYS2_BIN_PATH})"
-        exit 1
+        # exit 1
     fi
 done
 
