@@ -1,6 +1,6 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import "./base"
 
 Item {
@@ -34,6 +34,11 @@ Item {
             active: root.currentIndex === 2 || item
             sourceComponent: toolboxTabComponent
         }
+
+        Loader {
+            active: root.currentIndex === 3 || item
+            sourceComponent: jailbreakTabComponent
+        }
     }
 
 
@@ -66,4 +71,17 @@ Item {
     }
 
 
+    Component {
+        id: jailbreakTabComponent
+        AnimatedTab {
+            index: 3
+            currentIndex: root.currentIndex
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            Jailbroken {
+                anchors.fill: parent
+            }
+        }
+    }
 }
