@@ -626,7 +626,7 @@ async fn get_info_for_backup(
         .info_from_path(&PathBuf::from(root), None, &delegate)
         .await?;
     let value_dict = plist::Value::from(dict);
-    let json = crate::utils::plist_value_to_json_string(&value_dict)?;
+    let json = serde_json::to_string(&value_dict)?;
     // drop(provider_guard);
 
     // let response = client

@@ -1,3 +1,4 @@
+use crate::device_db;
 use anyhow::{Result, anyhow};
 use cpp::cpp;
 use log::{debug, warn};
@@ -26,6 +27,7 @@ pub struct QmlUtils {
     language_changed: qt_signal!(),
     setup_tool_window: qt_method!(fn(&self, win: QJSValue)),
     setup_main_window: qt_method!(fn(&self, win: QJSValue)),
+    get_device_name: qt_method!(fn(&self, product_type: QString) -> QString),
 }
 
 impl QmlUtils {
@@ -116,6 +118,14 @@ impl QmlUtils {
         let win_id = crate::utils::get_window_id(win);
 
         crate::platform::macos::apply_main_window(win_id);
+    }
+
+    fn get_device_name(&self, product_type: QString) -> QString {
+        QString::from(
+            device_db::find_by_identifier(&product_type.to_string())
+                .unwrap_or(&device_db::UNKNOWN_DEVICE)
+                .marketing_name,
+        )
     }
 }
 

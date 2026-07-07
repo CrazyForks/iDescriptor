@@ -27,6 +27,7 @@ use crate::qquickimageprovider_imp::AddImageProvider;
 pub mod afc_services;
 pub mod airplay;
 pub mod apps;
+pub mod backup_manager;
 pub mod constants;
 pub mod core;
 pub mod dev_imgs;
@@ -41,7 +42,7 @@ pub mod image_cache;
 pub mod image_loader;
 pub mod image_provider;
 pub mod io_manager;
-// pub mod jailbroken;
+pub mod jailbroken;
 pub mod list_model;
 pub mod platform;
 pub mod qml_utils;
@@ -56,9 +57,9 @@ pub mod settings_manager;
 pub mod springboard_services;
 pub mod ui_qrc;
 // pub mod updater;
+pub mod qml_image;
 pub mod utils;
 pub mod web_wireless_gallery_import;
-pub mod qml_image;
 
 // FIXME: branch
 pub const IMAGE_LIST_URL: &str = "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/qmeta-qml/DeveloperDiskImages.json";
@@ -239,6 +240,13 @@ fn main() {
         0,
         cstr::cstr!("QmlImage"),
     );
+    // FIXME: should be singleton
+    qml_register_type::<jailbroken::Jailbroken>(
+        cstr::cstr!("iDescriptor"),
+        1,
+        0,
+        cstr::cstr!("JailbrokenImp"),
+    );
 
     let mut engine = QmlEngine::new();
     let engine_ptr = engine.cpp_ptr();
@@ -277,8 +285,8 @@ fn main() {
         QObjectBox::new(web_wireless_gallery_import::WebWirelessGalleryImport::new_with_state());
     engine.set_object_property("WebWirelessGalleryImport".into(), wireless_import.pinned());
 
-    // let jailbroken = QObjectBox::new(jailbroken::Jailbroken::default());
-    // engine.set_object_property("JailbrokenImp".into(), jailbroken.pinned());
+    let backup_manager = QObjectBox::new(backup_manager::BackupManager::new_with_state());
+    engine.set_object_property("backupManager".into(), backup_manager.pinned());
 
     #[cfg(not(target_os = "macos"))]
     let ifuse = QObjectBox::new(ifuse::IFuse::new_with_state());
@@ -318,7 +326,6 @@ fn main() {
             engine_ptr->addImportPath("C:/Qt/6.9.3/mingw_64/qml");
         #endif
     });
-
 
     let service_factory = QObjectBox::new(crate::service_factory::ServiceFactory::new(engine_ptr));
     engine.set_object_property("serviceFactory".into(), service_factory.pinned());

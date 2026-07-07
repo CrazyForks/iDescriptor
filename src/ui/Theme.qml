@@ -13,6 +13,7 @@ QtObject {
     readonly property color text: darkMode ? "#f5f5f7" : "#1d1d1f"
     readonly property color textMuted: darkMode ? "#a1a1a6" : "#6e6e73"
     readonly property color textSelected: "#ffffff"
+    readonly property color dangerText: darkMode ? "#ff6961" : "#d70015"
     readonly property color icon: darkMode ? "#d1d1d6" : "#3a3a3c"
     readonly property color iconSelected: "#ffffff"
     readonly property color selection: accent
