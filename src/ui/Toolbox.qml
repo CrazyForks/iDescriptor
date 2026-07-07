@@ -49,6 +49,7 @@ Item {
     property var wirelessGalleryImportInstance: null
     property var ifuseInstance: null
     property var networkDevicesInstance: null
+    property var backupManagerInstance: null
     readonly property bool hasDevice: App.DeviceContext.devices && App.DeviceContext.devices.count > 0
 
     function showError(message) {
@@ -128,7 +129,7 @@ Item {
 
     // 0 Airplayer, 1 SimulateLocation, 2 LiveScreen, 3 QueryMobileGestalt, 4 DeveloperDiskImages,
     // 5 WirelessGalleryImport, 6 iFuse, 7 CableInfo, 8 NetworkDevices, 9 MountDevImage,
-    // 10 Restart, 11 Shutdown, 12 RecoveryMode, 13 EnableWifiConnections
+    // 10 Restart, 11 Shutdown, 12 RecoveryMode, 13 EnableWifiConnections, 14 BackupManager
     // signal toolClicked(int toolId, bool requiresDevice)
     function toolClicked(toolId, requiresDevice) {
         const device = App.DeviceContext.getDevice(currentDeviceUdid)
@@ -245,7 +246,9 @@ Item {
                     qsTr("Are you sure you want to put this device into recovery mode?")
                 )
                 break;
-
+            case 14:
+                createSingletonComp("./tools/BackupManager.qml", "backupManagerInstance")
+                break;
             default:
             console.log(`No tool for id ${toolId}`)
         }
@@ -331,6 +334,14 @@ Item {
     ])
 
     readonly property var moreToolsModel: ([
+        {
+            toolId: 14,
+            title: qsTr("Backups"),
+            description: qsTr("Back up and restore this device"),
+            requiresDevice: false,
+            iconSource: "qrc:/resources/icons/tabler_database-export.svg",
+            visible: true
+        },
         {
             toolId: 9,
             title: qsTr("Mount Dev Image"),
