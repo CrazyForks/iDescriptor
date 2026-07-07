@@ -23,6 +23,7 @@ Window {
     readonly property var backend: typeof settingsManager !== "undefined" ? settingsManager : null
 
     property string downloadPath: ""
+    property string backupRootPath: ""
     property int wireless_file_server_port: 8080
     property bool unmount_ifuse_on_exit: false
     property bool auto_check_updates: true
@@ -82,6 +83,7 @@ Window {
 
     function loadSettings() {
         downloadPath = backendValue("dev_disk_img_path", "")
+        backupRootPath = backendValue("backup_root_path", "")
         wireless_file_server_port = backendValue("wireless_file_server_port", 8080)
         unmount_ifuse_on_exit = backendValue("unmount_ifuse_on_exit", false)
         auto_check_updates = backendValue("auto_check_updates", true)
@@ -106,6 +108,7 @@ Window {
 
     function applySettings() {
         callBackend("set_dev_disk_img_path", downloadPath)
+        callBackend("set_backup_root_path", backupRootPath)
         callBackend("set_wireless_file_server_port", wireless_file_server_port)
         callBackend("set_unmount_ifuse_on_exit", unmount_ifuse_on_exit)
         callBackend("set_auto_check_updates", auto_check_updates)
@@ -146,6 +149,15 @@ Window {
         title: qsTr("Select Download Directory")
         onAccepted: {
             root.downloadPath = QmlUtils.url_to_path(selectedFolder)
+            root.markDirty(false)
+        }
+    }
+
+    FolderDialog {
+        id: backupRootPathDialog
+        title: qsTr("Select Backup Directory")
+        onAccepted: {
+            root.backupRootPath = QmlUtils.url_to_path(selectedFolder)
             root.markDirty(false)
         }
     }
@@ -224,6 +236,28 @@ Window {
                         Button {
                             text: qsTr("Browse")
                             onClicked: downloadPathDialog.open()
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Backup Path")
+                            Layout.preferredWidth: 175
+                        }
+
+                        TextField {
+                            Layout.fillWidth: true
+                            text: root.backupRootPath
+                            readOnly: true
+                            selectByMouse: true
+                        }
+
+                        Button {
+                            text: qsTr("Browse")
+                            onClicked: backupRootPathDialog.open()
                         }
                     }
 

@@ -64,6 +64,9 @@ pub struct SettingsManager {
     dev_disk_img_path: qt_method!(fn(&self) -> QString),
     set_dev_disk_img_path: qt_method!(fn(&self, path: QString)),
     mk_dev_disk_img_path: qt_method!(fn(&self) -> QString),
+    backup_root_path: qt_method!(fn(&self) -> QString),
+    set_backup_root_path: qt_method!(fn(&self, path: QString)),
+    mk_backup_root_path: qt_method!(fn(&self) -> QString),
     clear_keys: qt_method!(fn(&mut self, key_prefix: QString)),
 
     save_favorite_place:
@@ -171,6 +174,39 @@ impl SettingsManager {
             QString path = settings.value(
                 QStringLiteral("devdiskimgpath"),
                 settings_manager_home_path() + QStringLiteral("/devdiskimages")
+            ).toString();
+            QDir dir(path);
+            if (!dir.exists()) {
+                dir.mkpath(path);
+            }
+            return path;
+        })
+    }
+
+    fn backup_root_path(&self) -> QString {
+        cpp!(unsafe [] -> QString as "QString" {
+            auto &settings = settings_manager_settings();
+            return settings.value(
+                QStringLiteral("backupRootPath"),
+                settings_manager_home_path() + QStringLiteral("/backups")
+            ).toString();
+        })
+    }
+
+    fn set_backup_root_path(&self, path: QString) {
+        cpp!(unsafe [path as "QString"] {
+            auto &settings = settings_manager_settings();
+            settings.setValue(QStringLiteral("backupRootPath"), path);
+            settings.sync();
+        });
+    }
+
+    fn mk_backup_root_path(&self) -> QString {
+        cpp!(unsafe [] -> QString as "QString" {
+            auto &settings = settings_manager_settings();
+            QString path = settings.value(
+                QStringLiteral("backupRootPath"),
+                settings_manager_home_path() + QStringLiteral("/backups")
             ).toString();
             QDir dir(path);
             if (!dir.exists()) {
@@ -422,6 +458,10 @@ impl SettingsManager {
     fn reset_to_defaults(&self) {
         self.set_dev_disk_img_path(QString::from(format!(
             "{}/devdiskimages",
+            self.home_path().to_string()
+        )));
+        self.set_backup_root_path(QString::from(format!(
+            "{}/backups",
             self.home_path().to_string()
         )));
         self.set_auto_check_updates(true);
