@@ -13,6 +13,7 @@ Item {
     }
 
     property int    viewState:      StateView.State.Loading
+    property int requestedViewState: StateView.State.Loading
     property string errorText:      "Something went wrong."
     property bool   retryable:      true
     property bool  autoSwitchContent: true
@@ -31,7 +32,14 @@ Item {
         onTriggered: root.viewState = StateView.State.Content
     }
 
-
+    // Handles switching with spinner
+    onRequestedViewStateChanged: {
+        if (root.requestedViewState === StateView.State.Content) {
+            root.viewState = StateView.State.Loading
+            return autoSwitchTimer.start()
+        }  
+        root.viewState = root.requestedViewState
+    }
 
     StackLayout {
         anchors.fill: parent
