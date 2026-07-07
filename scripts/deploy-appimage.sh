@@ -43,8 +43,8 @@ mkdir -p "$APPDIR/usr/share/applications"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
 # Copy executable and icon
-cp build/iDescriptor "$APPDIR/usr/bin/"
-cp resources/icons/app-icon/icon.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/iDescriptor.png"
+cp target/release/idescriptor "$APPDIR/usr/bin/iDescriptor"
+cp packaging/shared/resources/app-icon/icon.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/iDescriptor.png"
 
 
 # Copy ifuse
@@ -103,7 +103,8 @@ plugins=(
     "libgstximagesink.so"
     "libgstxvimagesink.so"
     "libgstgtk.so"
-    "libgstgl.so"
+    "libgstopengl.so"
+    "libgstqml6.so"
     "libgstrtp.so"
     "libgstrtpmanager.so"
     "libgsttypefindfunctions.so"
@@ -182,8 +183,8 @@ fi
 
 export LD_LIBRARY_PATH="$APPDIR/usr/local/lib:$LD_LIBRARY_PATH"
 export LINUXDEPLOY_EXCLUDED_LIBRARIES="*sql*"
-export QML_SOURCES_PATHS="./qml"
-export EXTRA_QT_MODULES="geoservices;position"
+export QML_SOURCES_PATHS="./src/ui"
+export EXTRA_QT_MODULES="geoservices;position;multimedia"
 
 
  ./linuxdeploy-x86_64.AppImage \

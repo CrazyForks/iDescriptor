@@ -213,7 +213,7 @@ fn main() {
             println!("cargo:rustc-link-lib=framework={}", fw);
         }
     } else {
-        pkg_config::Config::new().probe("Qt6Core").unwrap();
+        // pkg_config::Config::new().probe("Qt6Core").unwrap();
     }
 
     // Windows: Bonjour

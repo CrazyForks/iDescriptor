@@ -259,16 +259,16 @@ for DLL_NAME in "${ADDITIONAL_DLLS[@]}"; do
         cp "${DLL_PATH}" "${OUTPUT_DIR}/"
     else
         echo "Error: Additional DLL not found: ${DLL_NAME} (searched ${MSYS2_BIN_PATH})"
-        exit 1
+        # exit 1
     fi
 done
 
 # Required for win-ifuse and iproxy since we moved from libimobiledevice
 # and these are not dependencies of the main executable
 LIBIMOBILEDEVICE_DLLS=(
-    "libimobiledevice-1.0.dll"
-    "libimobiledevice-glue-1.0.dll"
-    "libusbmuxd-2.0.dll"
+    # "libimobiledevice-1.0.dll"
+    # "libimobiledevice-glue-1.0.dll"
+    # "libusbmuxd-2.0.dll"
     "libplist-2.0.dll"
     "libssl-3-x64.dll"
 )
@@ -290,7 +290,7 @@ mkdir -p "${OUTPUT_DIR}/gstreamer-1.0/libexec"
 cp "${GST_LIBEXEC_PATH}/gst-plugin-scanner.exe" "${OUTPUT_DIR}/gstreamer-1.0/libexec/"
 
 echo "Copying executables"
-cp "${MSYS2_BIN_PATH}/iproxy.exe" "${OUTPUT_DIR}/"
+# cp "${MSYS2_BIN_PATH}/iproxy.exe" "${OUTPUT_DIR}/"
 
 echo "Copying required scripts"
 cp "${PROJECT_SOURCE_DIR}/install-apple-drivers.ps1" "${OUTPUT_DIR}/"

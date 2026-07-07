@@ -15,7 +15,7 @@ on:
         type: string
         default: "dev"
 env:
-  QT_VERSION: "6.7.2"
+  QT_VERSION: "6.9.2"
   GO_VERSION: "1.23.4"
   LIBPLIST_VER: "2.7.0"
   LIBTATSU_VER: "1.0.5"
@@ -27,18 +27,13 @@ env:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: "recursive"
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "^${{ env.GO_VERSION }}"
 
       - name: Install Linux dependencies
         run: |
@@ -81,7 +76,13 @@ jobs:
             libavformat-dev \
             libavcodec-dev \
             libavutil-dev \
-            libswscale-dev
+            libswscale-dev \
+            python3-pip 
+
+      - name: Install latest Meson
+        run: |
+          python3 -m pip install --user --upgrade meson
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -90,24 +91,30 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: ${{ env.QT_VERSION }}
-          modules: "qtmultimedia qtlocation qtpositioning qtserialport"
+          modules: "qtmultimedia qtlocation qtpositioning qtserialport qt5compat qtshadertools"
           dir: ${{ github.workspace }}
 
-      - name: Compile additional dependencies
+      - name: Build qml6glsink from gst-plugins-good
+        shell: bash
         run: |
-          git clone https://github.com/lxqt/lxqt-build-tools.git
-          pushd lxqt-build-tools
-          mkdir build && cd build
-          cmake ..
-          sudo make install
-          popd
+          wget https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.24.2.tar.xz
+          tar -xf gst-plugins-good-1.24.2.tar.xz
+          cd gst-plugins-good-1.24.2
 
-          git clone https://github.com/lxqt/qtermwidget.git
-          pushd qtermwidget
-          mkdir build && cd build
-          cmake ..
-          sudo make install
-          popd
+          meson setup build-qml6 . \
+          --prefix=/usr \
+          --libdir=lib/$(uname -m)-linux-gnu \
+          --auto-features=disabled \
+          -Dqt6=enabled \
+          -Dqt5=disabled \
+          -Dqt-x11=enabled \
+          -Dtests=disabled \
+          -Dexamples=disabled \
+          -Dnls=disabled
+
+          ninja -C build-qml6
+          sudo cp build-qml6/ext/qt6/libgstqml6.so \
+          /usr/lib/$(uname -m)-linux-gnu/gstreamer-1.0/
 
       - name: Build libimobiledevice suite (versioned tarballs)
         run: |
@@ -156,12 +163,10 @@ jobs:
       - name: Update linker cache
         run: sudo ldconfig
 
-      - name: Configure CMake
+      - name: Build
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DRUN_CLANG_TIDY=OFF
-
-      - name: Build with CMake
-        run: cmake --build build --config Release
+          RUSTFLAGS="" cargo build --release
+          
 
       - name: Build AppImage
         run: |
