@@ -37,6 +37,7 @@ Item {
 
     function selectDevice() {
         App.DeviceContext.currentDeviceUdid = root.udid
+        App.DeviceContext.currentRecoveryDeviceId = ""
     }
 
     Menu {

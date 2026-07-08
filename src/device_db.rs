@@ -2489,6 +2489,34 @@ pub fn find_by_board(board: &str) -> Option<&'static DeviceDatabaseInfo> {
     DEVICES.iter().find(|device| device.board == board)
 }
 
+pub struct IRecoveryMetadataResolver;
+
+impl irecovery::DeviceMetadataResolver for IRecoveryMetadataResolver {
+    fn resolve(&self, info: &irecovery::RecoveryDeviceInfo) -> Option<irecovery::DeviceMetadata> {
+        let device = info
+            .srtg
+            .as_deref()
+            .and_then(|board| {
+                DEVICES
+                    .iter()
+                    .find(|device| device.board.eq_ignore_ascii_case(board))
+            })
+            .or_else(|| {
+                DEVICES.iter().find(|device| {
+                    info.cpid == Some(u32::from(device.bdid))
+                        && info.bdid == Some(u32::from(device.cpid))
+                })
+            })?;
+
+        Some(irecovery::DeviceMetadata {
+            model_identifier: device.model_identifier,
+            board: device.board,
+            marketing_name: device.marketing_name,
+            display_name: device.display_name,
+        })
+    }
+}
+
 pub fn parse_region_info(code: &str) -> &str {
     match code {
         // North America

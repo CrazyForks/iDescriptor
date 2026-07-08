@@ -18,7 +18,7 @@ Item {
         anchors.fill: parent
         spacing: Qt.platform.os === "windows" ? 2 : 5
         Label {
-            text : qsTr("iDescriptor: %1 device(s) connected").arg(App.DeviceContext.devices.count)
+            text : qsTr("iDescriptor: %1 device(s) connected").arg(App.DeviceContext.getDeviceCount())
         }
         Button {
             visible: App.DeviceContext.currentTab === 0

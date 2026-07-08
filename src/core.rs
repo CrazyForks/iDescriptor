@@ -34,7 +34,7 @@ use crate::{
     qt_threading::{QtThread, QtThreading},
     utils,
 };
-use crate::{device_db, qvariantmap_insert};
+use crate::{device_db, qvariantmap_insert, run_sync};
 use macros::QtThreading;
 use plist::{Dictionary, Value};
 use qmetaobject::prelude::*;
@@ -46,13 +46,15 @@ pub struct Core {
     init_wireless_device:
         qt_method!(fn(&mut self, ip: QString, pairing_file: QString, mac_address: QString)),
     init_wireless_device_custom: qt_method!(fn(&mut self, ip: QString, pairing_file: QString)),
+    exit_recovery_mode: qt_method!(fn(&mut self, ecid: QString) -> bool),
     // mac address will only be available if the pairing file was read successfully, otherwise it will be empty
-    customInitFailed: qt_signal!(ip: QString, macAddress: QString, error: QString),
+    customInitFailed: qt_signal!(ip: QString, mac_address: QString, error: QString),
     get_pairing_files: qt_method!(fn(&mut self) -> QVariantMap),
     remove_device: qt_method!(fn(&mut self, udid: QString)),
     deviceEvent: qt_signal!(eventType : u32, udid : QString , info : QVariantMap),
-    initFailed: qt_signal!(macAddress : QString),
-    noPairingFile: qt_signal!(macAddress : QString),
+    recoveryDeviceEvent: qt_signal!(eventType : u32, id : QString , info : QVariantMap),
+    initFailed: qt_signal!(mac_address : QString),
+    noPairingFile: qt_signal!(mac_address : QString),
     sleepyTimeDetected: qt_signal!(),
     deviceBecameWired: qt_signal!(udid: QString),
     is_init: bool,
@@ -70,6 +72,7 @@ impl Core {
 
     fn listen(&mut self) {
         let qt_t = self.qt_thread();
+        let qt_t_recovery = qt_t.clone();
 
         thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
@@ -159,6 +162,71 @@ impl Core {
                 }
             });
         });
+
+        RUNTIME.spawn(async move {
+            let resolver = device_db::IRecoveryMetadataResolver;
+            let mut events = match irecovery::watch_recovery_devices_with_metadata(&resolver).await {
+                Ok(events) => Box::pin(events),
+                Err(err) => {
+                    eprintln!("failed to watch recovery devices: {err}");
+                    return;
+                }
+            };
+
+            while let Some(event) = events.as_mut().next().await {
+                match event {
+                    Ok(irecovery::RecoveryEvent::Connected(device)) => {
+                        let key = recovery_device_key(&device.id);
+                        let info = collect_recovery_device_info(&device);
+                        debug!(
+                            "recovery device connected: id={:?} mode={:?} ecid={:?} model={} name={}",
+                            device.id,
+                            device.mode,
+                            device.ecid,
+                            device.hardware_model().unwrap_or("unknown"),
+                            device.display_name(),
+                        );
+                        qt_t_recovery.queue(move |core_qobj| {
+                            core_qobj.recoveryDeviceEvent(EV_CONNECTED, QString::from(key), info);
+                        });
+                    }
+                    Ok(irecovery::RecoveryEvent::Disconnected(id)) => {
+                        debug!("recovery device disconnected: id={id:?}");
+                        qt_t_recovery.queue(move |core_qobj| {
+                            core_qobj.recoveryDeviceEvent(
+                                EV_DISCONNECTED,
+                                QString::from(recovery_device_key(&id)),
+                                QVariantMap::default(),
+                            );
+                        });
+                    }
+                    Err(err) => {
+                        eprintln!("recovery device watch error: {err}");
+                    }
+                }
+            }
+        });
+    }
+
+    fn exit_recovery_mode(&mut self, ecid: QString) -> bool {
+        let ecid = ecid.to_string();
+        run_sync(async move {
+            let Some(ecid) = parse_recovery_ecid(&ecid) else {
+                debug!("invalid recovery ECID: {ecid}");
+                return false;
+            };
+
+            match irecovery::set_auto_boot_and_reboot(ecid, 3).await {
+                Ok(()) => {
+                    debug!("sent exit recovery command to ECID {ecid:#x}");
+                    true
+                }
+                Err(err) => {
+                    debug!("failed to exit recovery mode for ECID {ecid:#x}: {err}");
+                    false
+                }
+            }
+        })
     }
 
     fn init_wireless_device(&mut self, ip: QString, pairing_file: QString, mac_address: QString) {
@@ -385,6 +453,142 @@ impl Core {
             clean_device_from_app_state(&udid_str).await;
         });
     }
+}
+
+
+// TODO: nusb provides a DeviceId with bus and addr like so
+// recovery:DeviceId(DeviceId { bus: 3, addr: 47 })
+// but should we use ECID anyway?
+fn recovery_device_key(id: &irecovery::DeviceId) -> String {
+    // device
+    //     .ecid
+    //     .map(|ecid| format!("recovery:{ecid:x}"))
+    //     .unwrap_or_else(|| format!("recovery:{:?}", device.id))
+    format!("recovery:{:?}", id)
+}
+
+fn recovery_mode_name(mode: irecovery::RecoveryMode) -> QString {
+    let name = match mode {
+        irecovery::RecoveryMode::Wtf => "WTF",
+        irecovery::RecoveryMode::Dfu => "DFU",
+        irecovery::RecoveryMode::Recovery => "Recovery",
+        irecovery::RecoveryMode::Restore => "Restore",
+        irecovery::RecoveryMode::Kis => "KIS",
+        irecovery::RecoveryMode::Unknown(_) => "Unknown",
+    };
+
+    QString::from(name)
+}
+
+fn collect_recovery_device_info(device: &irecovery::RecoveryDevice) -> QVariantMap {
+    let mut info = QVariantMap::default();
+
+    qvariantmap_insert!(info, "display_name", QString::from(device.display_name()));
+    qvariantmap_insert!(
+        info,
+        "hardware_model",
+        QString::from(device.hardware_model().unwrap_or("unknown"))
+    );
+    qvariantmap_insert!(info, "mode", recovery_mode_name(device.mode));
+    qvariantmap_insert!(info, "vendor_id", u32::from(device.vendor_id));
+    qvariantmap_insert!(info, "product_id", u32::from(device.product_id));
+    println!("ecid_xxx: {:?}", device.ecid);
+    qvariantmap_insert!(
+        info,
+        "ecid",
+        QString::from(
+            device
+                .ecid
+                .map(|ecid| format!("{ecid:x}"))
+                .unwrap_or_default()
+        )
+    );
+    qvariantmap_insert!(
+        info,
+        "ecid_decimal",
+        QString::from(device.ecid.map(|ecid| ecid.to_string()).unwrap_or_default())
+    );
+    qvariantmap_insert!(
+        info,
+        "usb_serial_number",
+        QString::from(device.usb_serial_number.clone().unwrap_or_default())
+    );
+
+    if let Some(metadata) = &device.metadata {
+        qvariantmap_insert!(
+            info,
+            "model_identifier",
+            QString::from(metadata.model_identifier)
+        );
+        qvariantmap_insert!(info, "board", QString::from(metadata.board));
+        qvariantmap_insert!(
+            info,
+            "marketing_name",
+            QString::from(metadata.marketing_name)
+        );
+    }
+
+    if let Some(device_info) = &device.device_info {
+        qvariantmap_insert!(
+            info,
+            "serial_string",
+            QString::from(device_info.serial_string.clone())
+        );
+        qvariantmap_insert!(
+            info,
+            "cpid",
+            QString::from(
+                device_info
+                    .cpid
+                    .map(|value| format!("{value:x}"))
+                    .unwrap_or_default()
+            )
+        );
+        qvariantmap_insert!(
+            info,
+            "bdid",
+            QString::from(
+                device_info
+                    .bdid
+                    .map(|value| format!("{value:x}"))
+                    .unwrap_or_default()
+            )
+        );
+        qvariantmap_insert!(
+            info,
+            "srtg",
+            QString::from(device_info.srtg.clone().unwrap_or_default())
+        );
+        qvariantmap_insert!(
+            info,
+            "srnm",
+            QString::from(device_info.srnm.clone().unwrap_or_default())
+        );
+        qvariantmap_insert!(
+            info,
+            "imei",
+            QString::from(device_info.imei.clone().unwrap_or_default())
+        );
+    }
+
+    info
+}
+
+//TODO: find a better way to do this
+fn parse_recovery_ecid(ecid: &str) -> Option<u64> {
+    let trimmed = ecid.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let without_prefix = trimmed
+        .strip_prefix("0x")
+        .or_else(|| trimmed.strip_prefix("0X"))
+        .unwrap_or(trimmed);
+
+    u64::from_str_radix(without_prefix, 16)
+        .ok()
+        .or_else(|| trimmed.parse::<u64>().ok())
 }
 
 async fn clean_device_from_app_state(udid: &str) {

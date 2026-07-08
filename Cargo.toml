@@ -34,6 +34,7 @@ zip = "8.6.0"
 log = "0.4.33"
 ssh2 = "0.9"
 hex = "0.4.3"
+irecovery = { version = "0.2.1", features = ["tokio"] }
 #z_updater = { path= "/home/uncore/Desktop/proj/z-updater"}
 
 [target.'cfg(target_os = "windows")'.dependencies]

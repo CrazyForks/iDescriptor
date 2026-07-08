@@ -7,7 +7,9 @@ import iDescriptor
 QtObject {
     id: root
     property ListModel devices: ListModel {}
+    property ListModel recoveryDevices: ListModel {}
     property string currentDeviceUdid : ""
+    property string currentRecoveryDeviceId : ""
     property int currentTab: 0
     property bool showWelcomePage : true
     //Record<mac,pairing_file_path>
@@ -33,9 +35,18 @@ QtObject {
         return null
     }
 
-    // FIXME: doesn't include recovery devices
     function getDeviceCount() {
-        return devices.count
+        return devices.count + recoveryDevices.count
+    }
+
+    function getRecoveryDevice(udid) {
+        for (let i = 0; i < recoveryDevices.count; i++) {
+            const device = recoveryDevices.get(i)
+            if (device.udid === udid) {
+                return device
+            }
+        }
+        return null
     }
 
     function getDeviceByMacAddress(mac) {
@@ -135,6 +146,7 @@ QtObject {
                     root.deviceAdded(udid, mac)
                     root.showWelcomePage = false
                     root.currentDeviceUdid = udid
+                    root.currentRecoveryDeviceId = ""
                     break;
                 case 2:
                     // FIXME: find an O(1) solution
@@ -145,8 +157,9 @@ QtObject {
                             break
                         }
                     }
-                    root.showWelcomePage = devices.count === 0
-                    root.currentDeviceUdid = ""
+                    root.showWelcomePage = root.getDeviceCount() === 0
+                    if (root.currentDeviceUdid === udid)
+                        root.currentDeviceUdid = ""
                     root.deviceRemoved(udid)
                     break;
                 case 3:
@@ -159,6 +172,36 @@ QtObject {
             /* force garbage collection otherwise
             things get cleaned up after a long time */
             gc();
+        }
+
+
+        function onRecoveryDeviceEvent(eventType, id, info) {
+            console.log("Recovery device event:", eventType, id, JSON.stringify(info))
+
+            switch (eventType) {
+                case 1:
+                    
+                    const name = info.marketing_name;
+                    const entry = { id, info: info, text: name }
+                    recoveryDevices.append(entry)
+       
+                    root.showWelcomePage = false
+                    if (!root.currentDeviceUdid && !root.currentRecoveryDeviceId)
+                        root.currentRecoveryDeviceId = id
+                    break;
+                case 2:
+                    for (let i = 0; i < recoveryDevices.count; i++) {
+                        const device = recoveryDevices.get(i)
+                        if (device.id === id) {
+                            recoveryDevices.remove(i)
+                            break
+                        }
+                    }
+                    if (root.currentRecoveryDeviceId === id)
+                        root.currentRecoveryDeviceId = ""
+                    root.showWelcomePage = root.getDeviceCount() === 0
+                    break;
+            }
         }
     }
 
