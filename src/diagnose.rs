@@ -113,7 +113,11 @@ fn build_error_state(error: String) -> QVariantMap {
     let mut state = QVariantMap::default();
     qvariantmap_insert!(state, "checking", false);
     qvariantmap_insert!(state, "error", QString::from(error));
-    qvariantmap_insert!(state, "summary", QString::from("Unable to check system dependencies"));
+    qvariantmap_insert!(
+        state,
+        "summary",
+        QString::from("Unable to check system dependencies")
+    );
     qvariantmap_insert!(state, "summaryKind", QString::from("error"));
     qvariantmap_insert!(state, "shouldExpand", true);
     qvariantmap_insert!(state, "requiredMissing", true);
@@ -198,10 +202,22 @@ fn items_to_variant_list(items: Vec<DependencyStatus>) -> QVariantList {
         qvariantmap_insert!(map, "description", QString::from(item.description));
         qvariantmap_insert!(map, "optional", item.optional);
         qvariantmap_insert!(map, "availability", availability_code(item.availability));
-        qvariantmap_insert!(map, "statusText", QString::from(status_text(item.availability)));
-        qvariantmap_insert!(map, "statusKind", QString::from(status_kind(item.availability)));
+        qvariantmap_insert!(
+            map,
+            "statusText",
+            QString::from(status_text(item.availability))
+        );
+        qvariantmap_insert!(
+            map,
+            "statusKind",
+            QString::from(status_kind(item.availability))
+        );
         qvariantmap_insert!(map, "actionText", QString::from(item.action_text));
-        qvariantmap_insert!(map, "actionVisible", item.availability != Availability::Available);
+        qvariantmap_insert!(
+            map,
+            "actionVisible",
+            item.availability != Availability::Available
+        );
         list.push(QVariant::from(map));
     }
     list
@@ -519,7 +535,8 @@ async fn install_bonjour() -> Result<String> {
         bail!("Bonjour installer checksum mismatch");
     }
 
-    let temp_dir = std::env::temp_dir().join(format!("idescriptor-bonjour-{}", uuid::Uuid::new_v4()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("idescriptor-bonjour-{}", uuid::Uuid::new_v4()));
     tokio::fs::create_dir_all(&temp_dir)
         .await
         .with_context(|| format!("Failed to create {}", temp_dir.display()))?;
@@ -530,11 +547,10 @@ async fn install_bonjour() -> Result<String> {
         .await
         .with_context(|| format!("Failed to write {}", exe_path.display()))?;
 
-    let entries = compress_tools::tokio_support::list_archive_files(
-        tokio::fs::File::open(&exe_path).await?,
-    )
-    .await
-    .context("Failed to inspect Bonjour installer archive")?;
+    let entries =
+        compress_tools::tokio_support::list_archive_files(tokio::fs::File::open(&exe_path).await?)
+            .await
+            .context("Failed to inspect Bonjour installer archive")?;
     let msi_entry = entries
         .into_iter()
         .find(|entry| entry.to_ascii_lowercase().ends_with("bonjour64.msi"))
@@ -585,7 +601,13 @@ async fn run_bundled_elevated_script(script_name: &str) -> Result<()> {
 #[cfg(target_os = "windows")]
 async fn run_powershell_elevated(command: &str) -> Result<()> {
     let status = tokio::process::Command::new("powershell.exe")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command])
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+        ])
         .status()
         .await
         .context("Failed to launch elevated PowerShell command")?;

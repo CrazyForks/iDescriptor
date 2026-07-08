@@ -10,6 +10,7 @@ use crate::constants::{
 use crate::device_ctx;
 use crate::qt_threading::QtThreading;
 use crate::utils::create_album_info;
+use ::log::debug;
 use idevice::afc::AfcClient;
 use idevice::afc::opcode::AfcFopenMode;
 use macros::QtThreading;
@@ -18,7 +19,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
-use ::log::debug;
 
 const PHOTOS_SQLITE_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite";
 const PHOTOS_SQLITE_SHM_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite-shm";
@@ -103,7 +103,7 @@ pub struct Query {
     read_albums: qt_method!(fn(&mut self)),
     query_album: qt_method!(fn(&mut self, id: i32)),
     album_queried: qt_signal!(id: i32, items: QStringList),
-    is_init: bool
+    is_init: bool,
 }
 
 impl Query {
@@ -289,11 +289,10 @@ impl Query {
 
                 let (fname, fdir, count) = recents_row.unwrap_or(placeholder_or_empty.clone());
 
-                let recents_album_data = create_album_info("Recents",RECENTS_ALBUM_ID, count, fdir, fname);
+                let recents_album_data =
+                    create_album_info("Recents", RECENTS_ALBUM_ID, count, fdir, fname);
 
-                albums.push(
-                    QVariant::from(&QString::from(recents_album_data)),
-                );
+                albums.push(QVariant::from(&QString::from(recents_album_data)));
 
                 //favs
                 let mut favs_stmt = conn.prepare(FAVS_ALBUM_QUERY)?;
@@ -309,11 +308,10 @@ impl Query {
 
                 let (fname, fdir, count) = favs_row.unwrap_or(placeholder_or_empty.clone());
 
-                let favs_album_data = create_album_info("Favorites", FAVS_ALBUM_ID, count, fdir, fname);
+                let favs_album_data =
+                    create_album_info("Favorites", FAVS_ALBUM_ID, count, fdir, fname);
 
-                albums.push(
-                    QVariant::from(&QString::from(favs_album_data)),
-                );
+                albums.push(QVariant::from(&QString::from(favs_album_data)));
 
                 let q_stm = if ios_ver > 15 {
                     IOS_26_ALBUM_QUERY_STATEMENT
@@ -335,12 +333,15 @@ impl Query {
                 for row_res in rows_iter {
                     let (album_id, title, item_count, asset_dir, asset_file_name) = row_res?;
 
-                    let album_data =
-                        create_album_info(title.as_str(), album_id, item_count, asset_dir, asset_file_name);
-
-                    albums.push(
-                        QVariant::from(&QString::from(album_data)),
+                    let album_data = create_album_info(
+                        title.as_str(),
+                        album_id,
+                        item_count,
+                        asset_dir,
+                        asset_file_name,
                     );
+
+                    albums.push(QVariant::from(&QString::from(album_data)));
                 }
 
                 Ok(())

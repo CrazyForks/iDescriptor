@@ -446,9 +446,7 @@ async fn connect_to_device(
         // SSH can connect over network already, no need to forward
         // if the connection is wireless we should error out
         Connection::Network(ip_addr) => {
-            return Err(anyhow!(
-                "Device is connected over network ({ip_addr}), "
-            ));
+            return Err(anyhow!("Device is connected over network ({ip_addr}), "));
         }
         Connection::Unknown(desc) => Err(anyhow!("Unsupported connection type: {desc}")),
     }

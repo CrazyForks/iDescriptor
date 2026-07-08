@@ -150,30 +150,33 @@ async fn run_capture_ios17_and_above(
         }
     };
 
-    let mut remote_server =
-        match RemoteServerClient::connect_rsd(&mut adapter, &mut handshake).await {
-            Ok(s) => s,
-            Err(IdeviceError::ServiceNotFound) => {
-                debug!("Potentially developer mode disabled, prompting user to enable developer mode on device");
-                qt_thread.queue(move |b| {
-                    b.init_failed(
-                        QString::from("Remote Server service not found on device"),
-                        QString::from("dev-mode"),
-                    )
-                });
-                return;
-            }
-            Err(e) => {
-                eprintln!("screenshot remote err: {e}");
-                qt_thread.queue(move |b| {
-                    b.init_failed(
-                        QString::from(format!("Failed to connect to Remote Server: {e}")),
-                        QString::default(),
-                    )
-                });
-                return;
-            }
-        };
+    let mut remote_server = match RemoteServerClient::connect_rsd(&mut adapter, &mut handshake)
+        .await
+    {
+        Ok(s) => s,
+        Err(IdeviceError::ServiceNotFound) => {
+            debug!(
+                "Potentially developer mode disabled, prompting user to enable developer mode on device"
+            );
+            qt_thread.queue(move |b| {
+                b.init_failed(
+                    QString::from("Remote Server service not found on device"),
+                    QString::from("dev-mode"),
+                )
+            });
+            return;
+        }
+        Err(e) => {
+            eprintln!("screenshot remote err: {e}");
+            qt_thread.queue(move |b| {
+                b.init_failed(
+                    QString::from(format!("Failed to connect to Remote Server: {e}")),
+                    QString::default(),
+                )
+            });
+            return;
+        }
+    };
 
     if let Err(e) = remote_server.read_message(0).await {
         eprintln!("screenshot read_message err: {e}");
@@ -233,7 +236,9 @@ async fn run_capture_ios16_and_lower(
                         qt_thread.queue(move |backend| backend.screenshot_captured(data_url));
                     }
                     Err(IdeviceError::ServiceNotFound) => {
-                        debug!("ScreenshotR vanished or is unavailable, prompting developer image mount");
+                        debug!(
+                            "ScreenshotR vanished or is unavailable, prompting developer image mount"
+                        );
                         qt_thread.queue(move |b| {
                             b.init_failed(
                                 QString::from("ScreenshotR service not found on device"),

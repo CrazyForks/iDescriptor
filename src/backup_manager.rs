@@ -303,10 +303,8 @@ impl BackupManager {
         self.busy_changed();
     }
 
-
     fn get_backup_metadata(&self, udid: QString, root: QString) -> QVariantMap {
         let mut result_metadata = QVariantMap::default();
-   
 
         match read_backup_metadata(udid, root) {
             Ok((was_passcode_set, is_encrypted)) => {
@@ -461,18 +459,27 @@ impl BackupManager {
 //     }
 // }
 
-
 fn read_backup_metadata(udid: QString, root: QString) -> anyhow::Result<(bool, bool)> {
-    let path = PathBuf::from(root.to_string()).join(udid.to_string()).join("Manifest.plist");
+    let path = PathBuf::from(root.to_string())
+        .join(udid.to_string())
+        .join("Manifest.plist");
 
     let metadata = plist::Value::from_file(&path)?;
-    let metadata = metadata.as_dictionary().ok_or_else(|| anyhow::anyhow!("Manifest.plist is not a dictionary"))?;
+    let metadata = metadata
+        .as_dictionary()
+        .ok_or_else(|| anyhow::anyhow!("Manifest.plist is not a dictionary"))?;
 
-    let was_passcode_set = metadata.get("WasPasscodeSet").and_then(|v| v.as_boolean()).ok_or_else(|| anyhow::anyhow!("WasPasscodeSet is not a boolean"))?;
-    let is_encrypted = metadata.get("IsEncrypted").and_then(|v| v.as_boolean()).ok_or_else(|| anyhow::anyhow!("IsEncrypted is not a boolean"))?;
+    let was_passcode_set = metadata
+        .get("WasPasscodeSet")
+        .and_then(|v| v.as_boolean())
+        .ok_or_else(|| anyhow::anyhow!("WasPasscodeSet is not a boolean"))?;
+    let is_encrypted = metadata
+        .get("IsEncrypted")
+        .and_then(|v| v.as_boolean())
+        .ok_or_else(|| anyhow::anyhow!("IsEncrypted is not a boolean"))?;
 
     Ok((was_passcode_set, is_encrypted))
-} 
+}
 
 #[derive(Clone)]
 struct iDescriptorBackupDelegate {

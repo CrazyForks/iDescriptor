@@ -21,7 +21,6 @@ use std::sync::{
 
 use log::{debug, warn};
 
-
 cpp! {{
     #include <QtQuick/QQuickPaintedItem>
 }}
