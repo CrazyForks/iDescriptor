@@ -64,41 +64,19 @@ Item {
         stateView.viewState = StateView.State.Content
     }
 
-    Timer {
-        id: initTimer
-        interval: 100
-        repeat: false
-        onTriggered: {
-            if (!root.device || !root.device.service_manager) {
-                root.loading = false
-                root.errorMessage = qsTr("Failed to retrieve disk usage data.")
-                root.updateState()
-                return
-            }
-
-            // var skipGalleryUsage = root.device.deviceInfo.is_iPhone
-            //                        && root.device.deviceInfo.isWireless
-            //                        && typeof Utils !== "undefined"
-            //                        && Utils.isProductTypeNewer
-            //                        && !Utils.isProductTypeNewer(
-            //                               root.device.deviceInfo.rawProductType,
-            //                               "iPhone10,1")
-
-            root.device.service_manager.fetch_disk_usage()
-        }
-    }
-
     Component.onCompleted: {
         loading = true
         errorMessage = ""
         updateState()
-        initTimer.start()
+        Qt.callLater(function() {
+            root.device.service_manager.fetch_apps_disk_usage()
+        })
     }
  
     Connections {
         target: root.device ? root.device.service_manager : null
 
-        function onDiskUsageRetrieved(success, apps_usage) {
+        function onAppsDiskUsageRetrieved(success, apps_usage) {
             if (!success) {
                 loading = false
                 errorMessage = qsTr("Failed to retrieve disk usage data.")
@@ -112,9 +90,10 @@ Item {
             totalCapacity = root.device.info["TotalDiskCapacity"] || 0
             systemUsage = root.device.info["TotalSystemCapacity"] || 0
             appsUsage = apps_usage
+            //TODO: implement
             mediaUsage = 0
-            freeSpace = root.device.info["TotalDataAvailable"] || 0
-            // galleryUsage = gallery_usage
+            freeSpace = root.device.info["FreeBytes"] != null ? root.device.info["FreeBytes"] : root.device.info["TotalDataAvailable"]
+
 
             var usedKnown = systemUsage + appsUsage + mediaUsage + galleryUsage
             if (totalCapacity > (freeSpace + usedKnown)) {
@@ -133,7 +112,7 @@ Item {
         anchors.topMargin: 0
         anchors.rightMargin: 14
         anchors.bottomMargin: 10
-        spacing: 0
+        spacing: 4
 
         Text {
             Layout.fillWidth: true
@@ -152,35 +131,40 @@ Item {
             // loadingText: qsTr("Loading disk usage...")
             // errorText: qsTr("Failed to retrieve disk usage data.")
 
-            contentItem: ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
+            contentItem: Item {
+                anchors.fill: parent
 
-                Item {
-                    id: barContainer
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 20
+                ColumnLayout {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 0
 
-                    Rectangle {
-                        id: clipContainer
-                        anchors.fill: parent
-                        color: "transparent"
-                        border.width: 0
-                        radius: 5
-                        clip: true
-                        layer.enabled: true
-                        layer.effect: OpacityMask {
-                            maskSource: Rectangle {
-                                width: clipContainer.width
-                                height: clipContainer.height
-                                radius: clipContainer.radius 
-                                visible: false               
-                            }
-                        }
-                        Row {
-                            id: barRow
+                    Item {
+                        id: barContainer
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 20
+
+                        Rectangle {
+                            id: clipContainer
                             anchors.fill: parent
-                            spacing: 0
+                            color: "transparent"
+                            border.width: 0
+                            radius: 5
+                            clip: true
+                            layer.enabled: true
+                            layer.effect: OpacityMask {
+                                maskSource: Rectangle {
+                                    width: clipContainer.width
+                                    height: clipContainer.height
+                                    radius: clipContainer.radius
+                                    visible: false
+                                }
+                            }
+                            Row {
+                                id: barRow
+                                anchors.fill: parent
+                                spacing: 0
 
                             Rectangle {
                                 id: systemBar
@@ -266,12 +250,10 @@ Item {
                                 id: freeBar
                                 width: segmentWidth(freeSpace, barContainer.width)
                                 height: barContainer.height
-                                color: isDarkMode()
-                                       ? "rgba(255, 255, 255, 0.10)"
-                                       : "rgba(0, 0, 0, 0.25)"
-                                border.color: "#4f4f4f"
+                                color: Theme.softBg.darker(0.1)
+                                border.color: Theme.softBgBorder
+                                // border.color: "#4f4f4f"
                                 border.width: 1
-                                radius: 3
                                 visible: width > 0
 
                                 HoverHandler { id: freeHover }
@@ -281,12 +263,12 @@ Item {
                                     .arg(percent(freeSpace))
                             }
                         }
+                        }
                     }
-                }
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
 
                     Text {
                         visible: systemUsage > 0
@@ -338,13 +320,14 @@ Item {
                     }
                     Item { Layout.fillWidth: true }
 
-                    Text {
-                        visible: freeSpace > 0
-                        text: qsTr("Free (%1)").arg(Helpers.formatSize(freeSpace))
-                        font.pixelSize: 10
-                        color: palette.text
-                        leftPadding: 0
-                        rightPadding: 4
+                        Text {
+                            visible: freeSpace > 0
+                            text: qsTr("Free (%1)").arg(Helpers.formatSize(freeSpace))
+                            font.pixelSize: 10
+                            color: palette.text
+                            leftPadding: 0
+                            rightPadding: 4
+                        }
                     }
                 }
             }
