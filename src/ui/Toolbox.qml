@@ -6,6 +6,7 @@ import QtQuick.Controls
 import QtQuick.Controls.impl
 import QtQuick.Dialogs
 import "." as App
+import "./base"
 
 Item {
     id: root
@@ -23,7 +24,7 @@ Item {
         text: ""
     }
 
-    Dialog {
+    AnimatedDialog {
         id: confirmActionDialog
         modal: true
         focus: true
@@ -71,10 +72,6 @@ Item {
 
     function performDeviceAction(action) {
         const device = App.DeviceContext.getDevice(currentDeviceUdid)
-        if (!device || !device.service_manager) {
-            showError(qsTr("The device is not available."))
-            return
-        }
 
         let success = false
         switch (action) {
@@ -269,7 +266,7 @@ Item {
         },
         {
             toolId: 1,
-            title: qsTr("Virtual Location"),
+            title: qsTr("Simulate Location"),
             description: qsTr("Simulate GPS location on your device"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/material-symbols_location-on-outline.svg",
@@ -536,14 +533,6 @@ Item {
         implicitHeight: 92
 
         opacity: enabled ? 1.0 : 0.45
-
-        // Rectangle {
-        //     // subtle hover overlay
-        //     anchors.fill: parent
-        //     radius: tile.radius
-        //     color: mouse.containsMouse && tile.enabled ? "#ffffff" : "transparent"
-        //     opacity: 0.05
-        // }
 
         MouseArea {
             id: mouse
