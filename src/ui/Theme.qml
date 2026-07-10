@@ -5,8 +5,17 @@ import QtQuick
 QtObject {
     id: theme
 
-    readonly property bool darkMode: Qt.application.styleHints.colorScheme === Qt.Dark
+    readonly property SystemPalette _sysPalette: SystemPalette {
+        colorGroup: SystemPalette.Active
+    }
 
+    readonly property bool darkMode: {
+        if (Qt.application.styleHints.colorScheme !== Qt.ColorScheme.Unknown)
+            return Qt.application.styleHints.colorScheme === Qt.ColorScheme.Dark
+        return _sysPalette.windowText.hslLightness > _sysPalette.window.hslLightness
+    }
+
+    
     readonly property color accent: "#0a84ff"
     readonly property color accentPressed: "#006edb"
     readonly property color accentHover: "#006edb"
