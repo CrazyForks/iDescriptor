@@ -1,6 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
+
+#Example 
+#mkdir -p "target/deploy"
+#cd target/deploy
+#cp ../release/idescriptor.exe ./
+#../../scripts/deploy-exe.sh --executable="./idescriptor.exe" --qt-bin-path="C:\Qt\6.9.3\mingw_64\bin" --win-ifuse="./" --project-source-dir="../../" --qml-source-dir="/c/Users/uncore/Desktop/iDescriptor/src/ui"
+
+
 # Parse arguments
 EXECUTABLE_PATH=""
 OUTPUT_DIR="."
@@ -227,23 +235,23 @@ ADDITIONAL_DLLS=(
     "libbrotlicommon.dll"
     "libjpeg-8.dll"
     "libb2-1.dll"
-    "libicuuc77.dll"
-    "libicudt77.dll"
-    "libdouble-conversion.dll"
-    "libbz2-1.dll"
-    "libx265-215.dll"
-    "libcrypto-3-x64.dll"
-    "libpcre2-16-0.dll"
-    "libaom.dll"
-    "libbrotlidec.dll"
-    "libicuin77.dll"
-    "libbrotlienc.dll"
-    "librav1e.dll"
-    "libmd4c.dll"
-    "zlib1.dll"
-    "libsharpyuv-0.dll"
     "libarchive-13.dll"
     "libheif.dll"
+    "libopenh264-7.dll"
+    "libopenjph-0.21.dll"
+    "libcrypto-3-x64.dll"
+    "zlib1.dll"
+    "libbrotlienc.dll"
+    "libkvazaar-7.dll"
+    "liblz4.dll"
+    "librav1e.dll"
+    "libaom.dll"
+    "libbrotlidec.dll"
+    "libsharpyuv-0.dll"
+    "libx265-215.dll"
+    "libcryptopp.dll"
+    "libde265-0.dll"
+    "libbz2-1.dll"
     #gl plugins dependencies
     "libgstapp-1.0-0.dll"
     "libgstgl-1.0-0.dll"
