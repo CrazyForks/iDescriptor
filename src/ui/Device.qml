@@ -26,9 +26,10 @@ Item {
             sourceComponent: installedAppsComponent
         }
 
-        Loader {
-            active: root.currentSection === 2 || item
-            sourceComponent: galleryComponent
+        /*load gallery as soon as possible*/
+        DeviceGallery {
+            udid: root.udid
+            info: root.info
         }
 
         Loader {
@@ -53,15 +54,6 @@ Item {
         InstalledApps {
             udid: root.udid
             device: root.device
-        }
-    }
-
-    Component {
-        id: galleryComponent
-
-        DeviceGallery {
-            udid: root.udid
-            info: root.info
         }
     }
 
