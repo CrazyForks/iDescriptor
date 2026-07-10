@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "." as App
 
 Item {
     id: root
@@ -8,15 +9,17 @@ Item {
     // FIXME: theming
     property color linkColor: "#3b82f6"
 
+    CustomPairingDialog {
+        id: customPairingDialog
+        anchors.centerIn: parent
+    }
 
     ColumnLayout {
         id: mainLayout
-        anchors.fill: parent
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: parent.width
+        y: Math.max(10, Math.round((parent.height - implicitHeight) / 2))
         spacing: 0
-
-        Item { Layout.preferredHeight: 10 }
-
-        Item { Layout.fillHeight: true }
 
         Text {
             id: title
@@ -26,7 +29,7 @@ Item {
             font.pixelSize: 28
             font.weight: Font.DemiBold
             wrapMode: Text.WordWrap
-            color: "white"
+            color: palette.text
         }
 
         Item { Layout.preferredHeight: 6 }
@@ -39,7 +42,7 @@ Item {
             font.pixelSize: 10
             font.weight: Font.Normal
             wrapMode: Text.WordWrap
-            // color: palette.text
+            color: palette.text
         }
 
         Item { Layout.preferredHeight: 12 }
@@ -47,33 +50,61 @@ Item {
         RowLayout {
             id: imageAndWirelessDevicesLayout
             Layout.alignment: Qt.AlignHCenter
-            spacing: 75
+            spacing: 0
 
-            Image {
-                id: connectImage
-                source: "qrc:/resources/connect.png"
-                fillMode: Image.PreserveAspectFit
-                mipmap: true
-                smooth: true
+            Item { Layout.preferredWidth: 75 }
 
-                sourceSize.width: 0
-                sourceSize.height: 0
-                Layout.preferredWidth: implicitWidth
-                Layout.preferredHeight: implicitHeight
+            Item {
+                id: connectImageSlot
+                readonly property real imageAspectRatio: 191 / 428
+
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: Math.min(320, Math.max(220, mainLayout.width * 0.65))
+                Layout.preferredHeight: Math.min(520, Math.max(360, mainLayout.height * 0.65))
+
+                Image {
+                    id: connectImage
+                    anchors.centerIn: parent
+                    source: "qrc:/resources/connect.png"
+                    fillMode: Image.PreserveAspectFit
+                    mipmap: true
+                    smooth: true
+
+                    height: Math.min(parent.height, parent.width / connectImageSlot.imageAspectRatio)
+                    width: height * connectImageSlot.imageAspectRatio
+                }
             }
+
+            Item { Layout.preferredWidth: 75 }
 
             ColumnLayout {
                 id: explorerWithInstructionLayout
+                Layout.preferredWidth: 500
+                Layout.maximumWidth: 600
+                Layout.preferredHeight: 600
                 spacing: 12
 
-                // FIXME: implement
                 NetworkDevicesToConnect {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    //MAX HEIGHT ?
-                    
-                    // Layout.preferredWidth: 360
-                    // Layout.preferredHeight: 580
+                }
+
+                Button {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("Connect with pairing file")
+                    icon.source: "qrc:/resources/icons/ic_baseline-insert-drive-file.svg"
+                    icon.width: 16
+                    icon.height: 16
+                    onClicked: customPairingDialog.open()
+
+                    background: Rectangle {
+                        radius: 12
+                        color: parent.down ? App.Theme.pressed
+                              : parent.hovered ? App.Theme.hover
+                                               : App.Theme.softBg
+                        border.color: App.Theme.controlStroke
+                        border.width: 1
+                    }
                 }
 
                 Text {
@@ -96,7 +127,6 @@ Item {
                             } catch(e) {
                                 console.log("errror",e)
                             }
-                            
                         }
                     }
                 }
@@ -114,7 +144,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             font.pixelSize: 14
             wrapMode: Text.WordWrap
-            // color: palette.text
+            color: palette.text
         }
 
         Item { Layout.preferredHeight: 10 }
@@ -145,8 +175,5 @@ Item {
             Layout.preferredWidth: item ? item.implicitWidth : 520
             Layout.preferredHeight: item ? item.implicitHeight : 0
         }
-
-        // bottom stretch
-        Item { Layout.fillHeight: true }
     }
 }
