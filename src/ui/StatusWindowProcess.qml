@@ -20,6 +20,7 @@ Rectangle {
     required property string destinationPath
     required property var onComplete
     signal removeRequested(string processId)
+    property bool  onCompleteRan: false
     
     // Internal state
     property int lastBytesTransferred: 0
@@ -27,6 +28,9 @@ Rectangle {
     property string lastSpeedText: ""
     property bool isHovered: false
     property bool isRemoveButtonHovered: false
+    readonly property color primaryTextColor: "#f5f5f5"
+    readonly property color secondaryTextColor: "#d0d0d0"
+    readonly property color mutedTextColor: "#aaa"
     
     // Timer for throttling speed updates
     Timer {
@@ -35,23 +39,13 @@ Rectangle {
         repeat: false
     }
     
-    // Timer for auto-executing onComplete
-    Timer {
-        id: completeTimer
-        interval: 1000
-        repeat: false
-        onTriggered: {
-            if (root.onComplete && typeof root.onComplete === "function") {
-                root.onComplete()
-            }
-        }
-    }
-    
     width: parent ? parent.width : 300
+    implicitHeight: content.implicitHeight + 30
     height: implicitHeight
     radius: 5
     color: "transparent"
     ColumnLayout {
+        id: content
         anchors.fill: parent
         anchors.margins: 15
         spacing: 5
@@ -63,6 +57,7 @@ Rectangle {
             Text {
                 id: titleText
                 text: root.title
+                color: root.primaryTextColor
                 font.bold: true
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
@@ -104,6 +99,7 @@ Rectangle {
                 else return ""
             }
             Layout.fillWidth: true
+            color: root.secondaryTextColor
             font.pointSize: 11
         }
         
@@ -128,7 +124,7 @@ Rectangle {
             text: root.currentFile
             wrapMode: Text.WordWrap
             font.pointSize: 10
-            color: "#666"
+            color: root.mutedTextColor
             Layout.fillWidth: true
             visible: text !== ""
         }
@@ -137,7 +133,7 @@ Rectangle {
         Text {
             id: statsLabel
             font.pointSize: 9
-            color: "#888"
+            color: root.mutedTextColor
             Layout.fillWidth: true
         }
         
@@ -207,8 +203,6 @@ Rectangle {
                 }
             }
         }
-        
-        Item { Layout.fillHeight: true }
     }
     
     // Computed property for progress
@@ -284,7 +278,10 @@ Rectangle {
         
         // Handle completion callback
         if (root.status === "Completed") {
-            completeTimer.start()
+            if (root.onComplete && typeof root.onComplete === "function" && !root.onCompleteRan) {
+                root.onCompleteRan = true
+                root.onComplete()
+            }
         }
     }
     

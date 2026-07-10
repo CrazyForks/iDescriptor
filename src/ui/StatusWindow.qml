@@ -22,8 +22,28 @@ DefaultWindow {
 
     color: "transparent"
 
+    onVisibleChanged: {
+        if (!visible)
+            StatusWindowController.uninstall()
+    }
+
     Component.onCompleted : {
         // TODO: remove
+        // processesList.append({
+        //     "processId": "test-process-001",
+        //     "title": "Exporting Project Files",
+        //     "type": "Export",
+        //     "status": "Running",
+        //     "currentFile": "Copying: /documents/report.pdf",
+        //     "totalBytes": 10485760,
+        //     "transferredBytes": 5242880,
+        //     "totalItems": 42,
+        //     "completedItems": 23,
+        //     "failedItems": 2,
+        //     "destinationPath": "/Users/username/Downloads/Exports",
+        //     "onComplete": null
+        // })
+
         // processesList.append({
         //     "processId": "test-process-001",
         //     "title": "Exporting Project Files",
@@ -66,33 +86,67 @@ DefaultWindow {
         }
     }
 
+    Connections {
+        target: StatusWindowController
+
+        function onCloseRequested(reason) {
+            if (window.visible)
+                window.hide()
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
         radius: 10
-        color: "transparent"
+        color: "#222"
+        // border.color: "#888"
+        // border.width: 3
 
         ColumnLayout {
             anchors.fill: parent
-            Repeater {
-                model : processesList
-                delegate : Item {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 250
-                    StatusWindowProcess {
-                        anchors.fill: parent
-                        title: model.title
-                        type: model.type
-                        status: model.status
-                        currentFile: model.currentFile
-                        totalBytes: model.totalBytes
-                        transferredBytes: model.transferredBytes
-                        totalItems: model.totalItems
-                        completedItems: model.completedItems
-                        failedItems: model.failedItems
-                        destinationPath: model.destinationPath
-                        onComplete: model.onComplete
-                        processId: model.processId
-                        onRemoveRequested: (processId) => window.removeProcess(processId)
+
+            ScrollView {
+                id: processesScroll
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+
+                ColumnLayout {
+                    width: processesScroll.availableWidth
+                    height: Math.max(implicitHeight, processesScroll.availableHeight)
+                    spacing: 0
+
+                    Repeater {
+                        model : processesList
+                        delegate : Item {
+                            id: processDelegate
+                            Layout.fillWidth: true
+
+                            implicitHeight: processItem.implicitHeight
+                            Layout.preferredHeight: implicitHeight
+
+                            StatusWindowProcess {
+                                id: processItem
+                                anchors.fill: parent
+                                title: model.title
+                                type: model.type
+                                status: model.status
+                                currentFile: model.currentFile
+                                totalBytes: model.totalBytes
+                                transferredBytes: model.transferredBytes
+                                totalItems: model.totalItems
+                                completedItems: model.completedItems
+                                failedItems: model.failedItems
+                                destinationPath: model.destinationPath
+                                onComplete: model.onComplete
+                                processId: model.processId
+                                onRemoveRequested: (processId) => window.removeProcess(processId)
+                            }
+                        }
+                    }
+
+                    Item {
+                        Layout.fillHeight: true
                     }
                 }
             }
@@ -102,11 +156,13 @@ DefaultWindow {
 
     Label {
         text: "Export & Import processes will appear here"
+        font.pixelSize: 12
+        color: "#d6d6d6"
         anchors.centerIn: parent
-        visible: !processesList.length 
+        visible: !processesList.count
     }
 
-    function toggle(parentWindow, globalPos) {
+    function toggle(parentWindow, globalPos, openerWidth, openerHeight) {
         if (window.visible) {
             window.hide()
             return
@@ -124,6 +180,7 @@ DefaultWindow {
         window.y = targetY
 
         window.raise()
+        StatusWindowController.install(window, globalPos.x, globalPos.y, openerWidth, openerHeight)
     }
 
     function findProcessIndex(processId) {
@@ -156,6 +213,7 @@ DefaultWindow {
         })
         window.show()
         window.raise()
+        StatusWindowController.install(window, 0, 0, 0, 0)
     }
 
     function removeProcess(processId) {

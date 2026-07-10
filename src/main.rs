@@ -55,6 +55,7 @@ pub mod service_factory;
 pub mod service_manager;
 pub mod settings_manager;
 pub mod springboard_services;
+pub mod status_window_controller;
 pub mod ui_qrc;
 // pub mod updater;
 pub mod qml_image;
@@ -141,10 +142,10 @@ fn main() {
         // #else
         //     qputenv("QT_QUICK_CONTROLS_STYLE", "Default");
         // #endif
-        #ifdef Q_OS_LINUX
-            // fix bug UOSv20 v-sync does not work
-            qputenv("QSG_RENDER_LOOP", "basic");
-        #endif
+        // #ifdef Q_OS_LINUX
+        //     // fix bug UOSv20 v-sync does not work
+        //     qputenv("QSG_RENDER_LOOP", "basic");
+        // #endif
 
         #ifdef Q_OS_WINDOWS
             QQuickStyle::setStyle("FluentWinUI3");
@@ -299,6 +300,13 @@ fn main() {
 
     let qml_utils = QObjectBox::new(qml_utils::QmlUtils::new(engine_ptr));
     engine.set_object_property("QmlUtils".into(), qml_utils.pinned());
+
+    let status_window_controller =
+        QObjectBox::new(status_window_controller::StatusWindowController::default());
+    engine.set_object_property(
+        "StatusWindowController".into(),
+        status_window_controller.pinned(),
+    );
 
     cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
 
