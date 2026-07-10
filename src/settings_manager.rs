@@ -97,6 +97,8 @@ pub struct SettingsManager {
     set_use_sqlite_gallery_backend: qt_method!(fn(&self, enabled: bool)),
     theme: qt_method!(fn(&self) -> QString),
     set_theme: qt_method!(fn(&self, theme: QString)),
+    window_effect: qt_method!(fn(&self) -> QString),
+    set_window_effect: qt_method!(fn(&self, effect: QString)),
     language: qt_method!(fn(&self) -> QString),
     set_language: qt_method!(fn(&self, language: QString)),
     connection_timeout: qt_method!(fn(&self) -> i32),
@@ -416,6 +418,14 @@ impl SettingsManager {
         write_string("theme", theme);
     }
 
+    fn window_effect(&self) -> QString {
+        normalize_window_effect(read_string("windowEffect", "normal"))
+    }
+
+    fn set_window_effect(&self, effect: QString) {
+        write_string("windowEffect", normalize_window_effect(effect));
+    }
+
     pub fn language(&self) -> QString {
         cpp!(unsafe [] -> QString as "QString" {
             auto &settings = settings_manager_settings();
@@ -483,6 +493,7 @@ impl SettingsManager {
         self.set_use_unsecure_backend(false);
         self.set_use_sqlite_gallery_backend(true);
         self.set_theme(QString::from("System Default"));
+        self.set_window_effect(QString::from("normal"));
         self.set_language(default_language());
         self.set_connection_timeout(30);
         self.set_show_keychain_dialog(true);
@@ -718,6 +729,16 @@ fn read_string(key: &str, default_value: &str) -> QString {
     let default_value = QString::from(default_value);
     cpp!(unsafe [key as "QString", default_value as "QString"] -> QString as "QString" {
         return settings_manager_settings().value(key, default_value).toString();
+    })
+}
+
+fn normalize_window_effect(effect: QString) -> QString {
+    cpp!(unsafe [effect as "QString"] -> QString as "QString" {
+        const QString normalized = effect.trimmed().toLower();
+        if (normalized == QStringLiteral("acrylic")) {
+            return QStringLiteral("acrylic");
+        }
+        return QStringLiteral("normal");
     })
 }
 

@@ -36,6 +36,7 @@ Window {
     property int connection_timeout: 30
     property bool use_unsecure_backend: false
     property bool use_sqlite_gallery_backend: true
+    property string window_effect: "normal"
     property string default_jailbroken_root_password: "alpine"
     property real icon_size_base_multiplier: 1.0
     property int airplay_fps: 60
@@ -97,6 +98,7 @@ Window {
         connection_timeout = backendValue("connection_timeout", 30)
         use_unsecure_backend = backendValue("use_unsecure_backend", false)
         use_sqlite_gallery_backend = backendValue("use_sqlite_gallery_backend", true)
+        window_effect = backendValue("window_effect", "normal")
         default_jailbroken_root_password = backendValue("default_jailbroken_root_password", "alpine")
         icon_size_base_multiplier = backendValue("icon_size_base_multiplier", 1.0)
         airplay_fps = backendValue("airplay_fps", 60)
@@ -124,6 +126,7 @@ Window {
         callBackend("set_connection_timeout", connection_timeout)
         callBackend("set_use_unsecure_backend", use_unsecure_backend)
         callBackend("set_use_sqlite_gallery_backend", use_sqlite_gallery_backend)
+        callBackend("set_window_effect", window_effect)
         callBackend("set_default_jailbroken_root_password", default_jailbroken_root_password)
         callBackend("set_icon_size_base_multiplier", icon_size_base_multiplier)
         callBackend("set_airplay_fps", airplay_fps)
@@ -341,6 +344,33 @@ Window {
                             currentIndex: 0
                             onActivated: {
                                 root.theme = currentText
+                                root.markDirty(false)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    RowLayout {
+                        visible: Qt.platform.os === "windows"
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Window Effect")
+                            Layout.preferredWidth: 175
+                        }
+
+                        ComboBox {
+                            textRole: "label"
+                            valueRole: "value"
+                            model: [
+                                { value: "normal", label: qsTr("Normal") },
+                                { value: "acrylic", label: qsTr("Acrylic") }
+                            ]
+                            currentIndex: Math.max(0, indexOfValue(root.window_effect))
+                            onActivated: {
+                                root.window_effect = currentValue
                                 root.markDirty(false)
                             }
                         }

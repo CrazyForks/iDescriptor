@@ -1,6 +1,6 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import ".." as App
 import FluentUI
 
@@ -9,11 +9,15 @@ FluWindow {
     required property string udid
     required property var device
     property bool auto_close: true
-    backgroundColor: "transparent"
 
     launchMode: FluWindowType.Standard 
     Component.onCompleted : {
-        root.effect = "acrylic"
+        if (settingsManager.window_effect() === "acrylic") {
+            root.backgroundColor = "transparent"
+            root.effect = "acrylic"
+        } else {
+            root.effect = "normal"
+        }
 
         if (root.auto_close) {
             App.DeviceContext.deviceRemoved.connect((udid) => {
