@@ -28,7 +28,7 @@ use tokio::task::JoinHandle;
 
 use core::pin::Pin;
 
-use crate::device_ctx::{APP_DEVICE_STATE, DeviceServices};
+use crate::device_ctx::{DeviceServices,clean_device_from_app_state, insert_device, insert_heartbeat_task};
 use crate::{
     APP_LABEL, EV_CONNECTED, EV_DISCONNECTED, EV_FAIL, EV_PAIRING_PENDING, POSSIBLE_ROOT, RUNTIME,
     qt_threading::{QtThread, QtThreading},
@@ -455,7 +455,6 @@ impl Core {
     }
 }
 
-
 // TODO: nusb provides a DeviceId with bus and addr like so
 // recovery:DeviceId(DeviceId { bus: 3, addr: 47 })
 // but should we use ECID anyway?
@@ -591,22 +590,6 @@ fn parse_recovery_ecid(ecid: &str) -> Option<u64> {
         .or_else(|| trimmed.parse::<u64>().ok())
 }
 
-async fn clean_device_from_app_state(udid: &str) {
-    let mut state = APP_DEVICE_STATE.lock().await;
-    if let Some(svc) = state.remove(udid) {
-        if let Some(t) = &svc.heartbeat_task {
-            t.abort();
-        }
-
-        let mut streams = svc.video_streams.lock().await;
-        for (_url, tx) in streams.drain() {
-            let _ = tx.send(());
-        }
-        println!("Removed device with UDID {}", udid);
-    } else {
-        eprintln!("Attempted to remove non-existent device with UDID {}", udid);
-    }
-}
 
 fn is_pairing_related_error(e: &IdeviceError) -> bool {
     matches!(
@@ -866,31 +849,24 @@ async fn init_idescriptor_device<
         ios_version,
     };
 
-    // FIXME: use device_ctx
-    {
-        let mut state = APP_DEVICE_STATE.lock().await;
-        if let Some(mut old) = state.insert(udid.to_string(), device_services) {
-            eprintln!("device became wired - UDID {}", udid);
-            if let Some(task) = old.heartbeat_task.take() {
-                task.abort();
-            }
-            let udid_for_signal = udid.clone();
-            qt_thread.queue(move |core_qobj| {
-                core_qobj.deviceBecameWired(QString::from(udid_for_signal));
-            });
-        }
+    let udid_for_signal = udid.clone();
+    let udid_for_task = udid.clone();
+
+    // FIXME: probably not want we need to do here
+    // insert_device will return true if device became wired, so we can emit the signal here
+    if insert_device(udid.clone(), device_services).await {
+        qt_thread.queue(move |core_qobj| {
+            core_qobj.deviceBecameWired(QString::from(udid_for_signal));
+        });
     }
 
     if is_wireless {
         match hb {
             Some(hb_client) => {
                 eprintln!("init_idescriptor_device: Spawning heartbeat task.");
-                match spawn_heartbeat_task(hb_client, qt_thread, udid.clone()).await {
+                match spawn_heartbeat_task(hb_client, qt_thread, udid_for_task).await {
                     Ok(task) => {
-                        let mut state = APP_DEVICE_STATE.lock().await;
-                        if let Some(svc) = state.get_mut(&udid) {
-                            svc.heartbeat_task = Some(task);
-                        }
+                        insert_heartbeat_task(udid.clone(), task).await;
                     }
                     Err(()) => {
                         eprintln!("init_idescriptor_device: Failed to spawn heartbeat task.");
