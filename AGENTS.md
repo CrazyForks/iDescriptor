@@ -495,3 +495,30 @@ Use log create on Rust code whenever possbile for debugging purposes
 ```
 
 Use best practices
+
+
+Do not check for null on things that are already defined and set from main.rs
+
+
+For example qml_utils is already set in main.rs and you can use it directly in any qml file
+```rust
+let qml_utils = QObjectBox::new(qml_utils::QmlUtils::new(engine_ptr));
+engine.set_object_property("QmlUtils".into(), qml_utils.pinned());
+
+```
+
+// Avoid
+```qml
+//Do not do 
+
+    property var qmlUtils: typeof QmlUtils == "undefined" ? null : QmlUtils
+
+//or
+    Button {
+        onClicked: {
+            if (typeof QmlUtils !== "undefined") {
+                QmlUtils.someMethod()
+            }
+        }
+    }
+```
