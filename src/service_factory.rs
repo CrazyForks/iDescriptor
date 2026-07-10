@@ -19,11 +19,11 @@ use tokio::sync::Mutex;
     cannot pass constructor args
     https://forum.qt.io/topic/155986/qt6-qabstractlistmodel-constructor-with-two-arguments-qml-element-is-not-creatable/2
 */
-#[derive(QObject)]
+#[derive(QObject, Default)]
 pub struct ServiceFactory {
     base: qt_base_class!(trait QObject),
     /* SAFETY: check if engine_ptr.is_null() */
-    engine_ptr: *mut c_void,
+    engine_ptr: Option<*mut c_void>,
     create_afc_client: qt_method!(fn(&self, udid: QString, afc2: bool) -> QJSValue),
     create_hause_arrest_afc_client:
         qt_method!(fn(&self, udid: QString, bundle_id: QString) -> QJSValue),
@@ -35,19 +35,14 @@ pub struct ServiceFactory {
 impl ServiceFactory {
     pub fn new(engine_ptr: *mut c_void) -> Self {
         Self {
-            base: Default::default(),
-            engine_ptr,
-            create_afc_client: Default::default(),
-            create_hause_arrest_afc_client: Default::default(),
-            create_service_manager: Default::default(),
-            create_sqlite_query_backend: Default::default(),
-            create_springboard_services_client: Default::default(),
+            engine_ptr: Some(engine_ptr),
+            ..Default::default()
         }
     }
 
     fn create_afc_client(&self, udid: QString, afc2: bool) -> QJSValue {
         let udid_str = udid.to_string();
-        let engine_ptr: *mut c_void = self.engine_ptr;
+        let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
 
         if engine_ptr.is_null() {
             eprintln!("ServiceFactory: engine_ptr is null");
@@ -89,7 +84,7 @@ impl ServiceFactory {
     }
 
     fn create_hause_arrest_afc_client(&self, udid: QString, bundle_id: QString) -> QJSValue {
-        let engine_ptr: *mut c_void = self.engine_ptr;
+        let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
         let udid_clone = udid.clone();
         let bundle_id_clone = bundle_id.clone();
         if engine_ptr.is_null() {
@@ -130,7 +125,7 @@ impl ServiceFactory {
     }
 
     fn create_service_manager(&self, udid: QString, ios_version: u32) -> QJSValue {
-        let engine_ptr: *mut c_void = self.engine_ptr;
+        let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
         if engine_ptr.is_null() {
             eprintln!("ServiceFactory: engine_ptr is null");
             return empty_qjsvalue();
@@ -151,7 +146,7 @@ impl ServiceFactory {
     }
 
     fn create_sqlite_query_backend(&self, udid: QString, ios_version: u32) -> QJSValue {
-        let engine_ptr: *mut c_void = self.engine_ptr;
+        let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
         if engine_ptr.is_null() {
             eprintln!("ServiceFactory: engine_ptr is null");
             return empty_qjsvalue();
@@ -162,7 +157,7 @@ impl ServiceFactory {
     }
 
     fn create_springboard_services_client(&self, udid: QString) -> QJSValue {
-        let engine_ptr: *mut c_void = self.engine_ptr;
+        let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
         if engine_ptr.is_null() {
             eprintln!("ServiceFactory: engine_ptr is null");
             return empty_qjsvalue();
