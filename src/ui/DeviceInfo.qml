@@ -7,6 +7,9 @@ Item {
     id : root
     required property var info
     required property var device
+    readonly property int contentMargin: 20
+    readonly property int contentMaxWidth: 1040
+    readonly property real diskUsageWidthRatio: 0.8
 
     function v(key, fallback) {
         if (!info) return fallback
@@ -16,12 +19,14 @@ Item {
     }
 
     ColumnLayout {
-        anchors.fill: parent
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: Math.max(root.contentMargin, (parent.height - implicitHeight) / 2)
+        width: Math.min(Math.max(0, parent.width - root.contentMargin * 2), root.contentMaxWidth)
         spacing: 20
-        Layout.margins: 20 
+
         RowLayout {
+            Layout.fillWidth: true
             spacing: 20
-            Layout.rightMargin: 20
 
             ColumnLayout {
                 DeviceImage { 
@@ -40,9 +45,7 @@ Item {
                         HoverHandler {
                             cursorShape: Qt.PointingHandCursor
                         }
-                        //FIXME: wire up
-                        onClicked: {
-                        }
+                        onClicked: Toolbox.toolClicked(10, true)
                         background: Rectangle {
                             color: "transparent"
                         }
@@ -52,9 +55,7 @@ Item {
                         HoverHandler {
                             cursorShape: Qt.PointingHandCursor
                         }
-                        //FIXME: wire up
-                        onClicked: {
-                        }
+                        onClicked: Toolbox.toolClicked(11, true)
                         background: Rectangle {
                             color: "transparent"
                         }
@@ -64,9 +65,7 @@ Item {
                         HoverHandler {
                             cursorShape: Qt.PointingHandCursor
                         }
-                        //FIXME: wire up
-                        onClicked: {
-                        }
+                        onClicked: Toolbox.toolClicked(12, true)
                         background: Rectangle {
                             color: "transparent"
                         }
@@ -75,6 +74,7 @@ Item {
             }
 
             ColumnLayout {
+                id: detailsColumn
                 spacing: 20
                 Layout.fillWidth: true
 
@@ -188,13 +188,13 @@ Item {
 
                         // Row 6
                         Label { text: "Bluetooth Address:"; font.bold: true }
-                        Label { text: v("BluetoothAddress", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        PrivateText { text: v("BluetoothAddress", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Wi‑Fi Address:"; font.bold: true }
-                        Label { text: v("WiFiAddress", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        PrivateText { text: v("WiFiAddress", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 7
                         Label { text: "Ethernet Address:"; font.bold: true }
-                        Label { text: v("EthernetAddress", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        PrivateText { text: v("EthernetAddress", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Battery Health:"; font.bold: true }
                         Label { text: root.info.DIAG_INFO.battery_health; elide: Text.ElideRight; Layout.fillWidth: true }
 
@@ -202,18 +202,19 @@ Item {
                         Label { text: "Production Device:"; font.bold: true }
                         Label { text: v("ProductionDevice", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Serial Number:"; font.bold: true }
-                        Label { text: v("SerialNumber", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        PrivateText { text: v("SerialNumber", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 9
                         Label { text: "IMEI:"; font.bold: true }
-                        Label { text: v("InternationalMobileEquipmentIdentity", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        PrivateText { text: v("InternationalMobileEquipmentIdentity", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "UDID:"; font.bold: true }
-                        Label { text: v("UniqueDeviceID", "Unknown"); elide: Text.ElideMiddle; Layout.fillWidth: true }
+                        PrivateText { text: v("UniqueDeviceID", qsTr("Unknown")); Layout.fillWidth: true }
                     }
                 }
                 
                 DiskUsage {
-                    Layout.fillWidth: true
+                    Layout.preferredWidth: detailsColumn.width * root.diskUsageWidthRatio
+                    Layout.alignment: Qt.AlignHCenter
                     device : root.device
                 }
             }
