@@ -90,7 +90,7 @@ impl QQuickPaintedItem for QmlImage {
 
 impl QmlImage {
     fn set_frame(&mut self, data: QByteArray) {
-        let image = crate::utils::create_image_from_buffer(data.to_slice());
+        let image = crate::utils::create_image_from_buffer(data.to_slice(), 0, 0);
         if image.size().width == 0 || image.size().height == 0 {
             warn!("live screen received an invalid screenshot frame");
             return;

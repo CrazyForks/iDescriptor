@@ -445,29 +445,66 @@ macro_rules! qvariantmap_insert {
     };
 }
 
-pub fn is_video_file(path: &str) -> bool {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MediaFileType {
+    Image,
+    Heic,
+    Video,
+    Unsupported,
+}
+
+pub fn media_file_type(path: &str) -> MediaFileType {
     let ext = path
         .rsplit_once('.')
         .map(|(_, e)| e.to_ascii_lowercase())
         .unwrap_or_default();
 
+    match ext.as_str() {
+        "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "tif" | "tiff" => MediaFileType::Image,
+        "heic" | "heif" => MediaFileType::Heic,
+        "mp4" | "mov" | "m4v" | "avi" | "mkv" | "webm" | "flv" | "wmv" | "3gp" | "mpeg" | "mpg"
+        | "ts" | "mts" | "m2ts" => MediaFileType::Video,
+        _ => MediaFileType::Unsupported,
+    }
+}
+
+pub fn is_video_file(path: &str) -> bool {
+    matches!(media_file_type(path), MediaFileType::Video)
+}
+
+pub fn is_previewable_media_file(path: &str) -> bool {
     matches!(
-        ext.as_str(),
-        "mp4"
-            | "mov"
-            | "m4v"
-            | "avi"
-            | "mkv"
-            | "webm"
-            | "flv"
-            | "wmv"
-            | "3gp"
-            | "mpeg"
-            | "mpg"
-            | "ts"
-            | "mts"
-            | "m2ts"
+        media_file_type(path),
+        MediaFileType::Image | MediaFileType::Heic | MediaFileType::Video
     )
+}
+
+pub fn is_image_file(path: &str) -> bool {
+    matches!(
+        media_file_type(path),
+        MediaFileType::Image | MediaFileType::Heic
+    )
+}
+
+pub fn is_heic_file(path: &str) -> bool {
+    matches!(media_file_type(path), MediaFileType::Heic)
+}
+
+pub fn is_ordinary_image_file(path: &str) -> bool {
+    matches!(media_file_type(path), MediaFileType::Image)
+}
+
+pub fn media_file_type_name(path: &str) -> &'static str {
+    match media_file_type(path) {
+        MediaFileType::Image => "image",
+        MediaFileType::Heic => "heic",
+        MediaFileType::Video => "video",
+        MediaFileType::Unsupported => "unsupported",
+    }
+}
+
+pub fn is_supported_media_file(path: &str) -> bool {
+    !matches!(media_file_type(path), MediaFileType::Unsupported)
 }
 
 pub fn serde_json_to_qt_array(v: &serde_json::Value) -> QJsonArray {
@@ -530,7 +567,7 @@ pub fn serde_json_to_qt_object(v: &serde_json::Value) -> QJsonObject {
     map
 }
 
-pub fn create_image_from_buffer(buf: &[u8]) -> QImage {
+pub fn create_image_from_buffer(buf: &[u8], width: u32, height: u32) -> QImage {
     if buf.is_empty() {
         return QImage::default();
     }
@@ -538,8 +575,16 @@ pub fn create_image_from_buffer(buf: &[u8]) -> QImage {
     let buf_ptr = buf.as_ptr();
     let buf_len: i32 = buf.len().try_into().unwrap_or(i32::MAX);
 
-    cpp!(unsafe [buf_ptr as "const uchar*", buf_len as "int"] -> QImage as "QImage" {
-        return QImage::fromData(buf_ptr, buf_len, nullptr);
+    cpp!(unsafe [buf_ptr as "const uchar*", buf_len as "int", width as "int", height as "int"] -> QImage as "QImage" {
+        QImage img = QImage::fromData(buf_ptr, buf_len, nullptr);
+        if (img.isNull()) {
+            return QImage();
+        }
+        if (width > 0 && height > 0) {
+            return img.scaled(width, height, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        } else {
+            return img;
+        }
     })
 }
 

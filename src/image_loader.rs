@@ -2,7 +2,8 @@ use crate::RUNTIME;
 use crate::device_ctx;
 use crate::qt_threading::{QtThread, QtThreading};
 use crate::utils::{
-    AfcReader, create_image_from_buffer, generate_thumbnail, heic_to_qimage, is_video_file,
+    AfcReader, MediaFileType, create_image_from_buffer, generate_thumbnail, heic_to_qimage,
+    media_file_type,
 };
 use idevice::afc::AfcClient;
 use idevice::afc::opcode::AfcFopenMode;
@@ -38,6 +39,8 @@ static NEXT_SEQ: AtomicU64 = AtomicU64::new(0);
 struct JobKey {
     udid: String,
     path: String,
+    width: u32,
+    height: u32,
 }
 
 struct JobPayload {
@@ -120,39 +123,50 @@ fn ensure_worker_started() {
                     let res: anyhow::Result<()> = async {
                         let afc_arc = device_ctx::get_device(key.udid.as_str()).await?.afc;
 
-                        let mut img = QImage::default();
-                        if is_video_file(&key.path) {
-                            // FIXME: can we do something better here ?
-                            let reader =
-                                AfcReader::new(key.udid.clone(), key.path.clone(), afc_arc);
+                        let img = match media_file_type(&key.path) {
+                            MediaFileType::Video => {
+                                // FIXME: can we do something better here ?
+                                let reader =
+                                    AfcReader::new(key.udid.clone(), key.path.clone(), afc_arc);
 
-                            // let reader_for_block = reader;
-                            let f_size = reader.get_size().await;
-                            if !(f_size > 0) {
-                                anyhow::bail!("File size is invalid for {}", key.path);
-                            };
+                                // let reader_for_block = reader;
+                                let f_size = reader.get_size().await;
+                                if !(f_size > 0) {
+                                    anyhow::bail!("File size is invalid for {}", key.path);
+                                };
 
-                            img = tokio::task::spawn_blocking(move || {
-                                generate_thumbnail(
-                                    &reader, f_size, // FIXME: use consts for sizes
-                                    320, 240,
-                                )
-                            })
-                            .await
-                            .unwrap_or_default();
-                        } else {
-                            let mut afc = afc_arc.lock().await;
-                            if key.path.to_ascii_lowercase().ends_with(".heic") {
+                                tokio::task::spawn_blocking(move || {
+                                    generate_thumbnail(
+                                        &reader,
+                                        f_size, // FIXME: use consts for sizes
+                                        key.width as i32,
+                                        key.height as i32,
+                                    )
+                                })
+                                .await
+                                .unwrap_or_default()
+                            }
+                            MediaFileType::Heic => {
+                                let mut afc = afc_arc.lock().await;
                                 let mut fd = afc.open(&key.path, AfcFopenMode::RdOnly).await?;
                                 let buf = fd.read_entire().await?;
-                                img = heic_to_qimage(&buf);
+                                println!("Read {} bytes from {}", buf.len(), key.path);
+                                let img = heic_to_qimage(&buf);
                                 fd.close().await.ok();
-                            } else {
-                                img = file_to_image(&mut afc, &key.path).await;
+                                img
                             }
-                        }
+                            MediaFileType::Image => {
+                                let mut afc = afc_arc.lock().await;
+                                file_to_image(&mut afc, &key.path, key.width, key.height).await
+                            }
+                            MediaFileType::Unsupported => {
+                                anyhow::bail!("Unsupported media file {}", key.path);
+                            }
+                        };
 
-                        crate::image_cache::insert(&key.udid.as_str(), &key.path, img);
+                        crate::image_cache::insert(
+                            &key.udid, &key.path, key.width, key.height, img,
+                        );
 
                         let row = payload.row;
                         let path_for_qt = payload.path_for_qt;
@@ -204,7 +218,7 @@ async fn file_to_buffer(afc: &mut AfcClient, path: String) -> Vec<u8> {
 }
 
 //FIXME: move
-async fn file_to_image(afc: &mut AfcClient, path: &str) -> QImage {
+async fn file_to_image(afc: &mut AfcClient, path: &str, width: u32, height: u32) -> QImage {
     let mut buf = Vec::new();
 
     let mut fd = match afc.open(path, AfcFopenMode::RdOnly).await {
@@ -216,7 +230,7 @@ async fn file_to_image(afc: &mut AfcClient, path: &str) -> QImage {
     };
 
     // FIXME: optimize chunk
-    let mut chunk = vec![0u8; 8192];
+    let mut chunk = vec![0u8; 1024 * 1024]; // 1MB
 
     loop {
         let n = match fd.read(&mut chunk).await {
@@ -234,19 +248,35 @@ async fn file_to_image(afc: &mut AfcClient, path: &str) -> QImage {
     }
     fd.close().await.ok();
 
-    create_image_from_buffer(&buf)
+    create_image_from_buffer(&buf, width, height)
 }
 
 impl ImageLoader {
-    pub fn request_thumbnail(&self, udid: QString, file_path: QString, row: u32) {
+    pub fn request_thumbnail(
+        &self,
+        udid: QString,
+        file_path: QString,
+        row: u32,
+        width: u32,
+        height: u32,
+    ) {
         ensure_worker_started();
-
+        println!(
+            "ImageLoader: request_thumbnail for udid: {}, file_path: {}, row: {}, width: {}, height: {}",
+            udid.to_string(),
+            file_path.to_string(),
+            row,
+            width,
+            height
+        );
         let udid_string = udid.to_string();
         let path_string = file_path.to_string();
 
         let key = JobKey {
             udid: udid_string,
             path: path_string,
+            width,
+            height,
         };
 
         let payload = JobPayload {

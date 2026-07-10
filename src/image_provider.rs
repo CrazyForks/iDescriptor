@@ -1,11 +1,7 @@
 use qmetaobject::*;
 use qttypes::{QImage, QSize, QString};
-use std::cell::RefCell;
-use std::collections::HashMap;
-use url::Url;
 use url::form_urlencoded;
 
-use crate::image_loader::ImageLoader;
 use crate::qquickimageprovider_imp::*;
 
 #[derive(Default, Clone)]
@@ -52,6 +48,10 @@ fn parse_image_id(id: &str) -> Option<(String, u32, String)> {
     Some((udid, index, path.to_string()))
 }
 
+fn requested_cache_size(requested_size: &QSize) -> (u32, u32) {
+    (requested_size.width, requested_size.height)
+}
+
 impl QQuickImageProvider for ImageProvider {
     fn request_image(&self, id: &str, requested_size: &QSize) -> (QSize, QImage) {
         let placeholder = (
@@ -72,7 +72,9 @@ impl QQuickImageProvider for ImageProvider {
             }
         };
 
-        if let Some(img) = crate::image_cache::get(&udid, &path) {
+        let (width, height) = requested_cache_size(requested_size);
+
+        if let Some(img) = crate::image_cache::get(&udid, &path, width, height) {
             return (
                 QSize {
                     width: 500,
@@ -86,6 +88,8 @@ impl QQuickImageProvider for ImageProvider {
             QString::from(udid),
             QString::from(path),
             index,
+            width,
+            height,
         );
 
         placeholder
