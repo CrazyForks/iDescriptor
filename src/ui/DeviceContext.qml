@@ -19,6 +19,7 @@ QtObject {
     signal deviceAdded(string udid, string mac)
     signal deviceAlreadyExistsMAC(string mac)
     signal initStarted(string mac)
+    signal noPairingFileForWirelessDevice(string mac)
 
     function init() {
         /* core is a global obj set from rust side*/
@@ -96,8 +97,8 @@ QtObject {
         const pairing_file = root.pairing_files[mac];
         console.log(JSON.stringify(root.pairing_files));
         if (!pairing_file) {
-            console.log("No pairing file cached for device with MAC:", mac, "Emitting noPairingFileForWirelessDevice event");
-            //emit noPairingFileForWirelessDevice(device.macAddress);
+            console.log("No pairing file found for MAC:", mac);
+            root.noPairingFileForWirelessDevice(mac);
             return;
         }
         //--- fn init_wireless_device(ip: QString, pairing_file: QString, mac_address: QString) ---
