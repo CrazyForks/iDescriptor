@@ -137,16 +137,11 @@ Item {
         }
     }
 
-    // Backend events (core)
     Connections {
         target: core
 
         function onInitFailed(macAddress) {
             root.setStatusForMac(macAddress, "failed")
-        }
-
-        function onNoPairingFile(macAddress) {
-            root.setStatusForMac(macAddress, "noPairing")
         }
 
         function onCustomInitFailed(ip, macAddress, error) {
@@ -170,6 +165,10 @@ Item {
         function onDeviceAlreadyExistsMAC(mac) {
             console.log("Device with MAC:", mac, "already exists. Setting status to 'alreadyExists'");
             root.setStatusForMac(mac, "alreadyExists")
+        }
+
+        function onNoPairingFileForWirelessDevice(macAddress) {
+            root.setStatusForMac(macAddress, "noPairing")
         }
     }
 
@@ -271,9 +270,9 @@ Item {
                                             onClicked: {
                                                 buttonText = qsTr("Connecting...")
                                                 App.DeviceContext.tryToConnectToNetworkDevice(mac, address, true, true)
-                                                resetTimer.stop()
-                                                resetTimer.interval = 10000
-                                                resetTimer.start()
+                                                App.Helpers.setTimeout(function() {
+                                                    root.setStatusForMac(mac, "idle")
+                                                }, 10000)
                                             }
                                         }
 
@@ -326,6 +325,7 @@ Item {
                                     id: pairingFileDialog
                                     title: qsTr("Choose pairing file")
                                     fileMode: FileDialog.OpenFile
+                                    nameFilters: ["*.plist"]
                                     onAccepted: {
                                         var path = QmlUtils.url_to_path(selectedFile)
                                         if (!path || !address) return
