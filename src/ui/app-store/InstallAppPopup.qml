@@ -3,8 +3,9 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import "../" as App
+import "../base"
 
-Dialog {
+AnimatedDialog {
     id: root
     required property string bundleId
     required property string appName

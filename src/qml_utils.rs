@@ -23,6 +23,10 @@ pub struct QmlUtils {
     get_lockdown_dir: qt_method!(fn(&self) -> QString),
     generate_uuid: qt_method!(fn(&self) -> QString),
     url_to_path: qt_method!(fn(&self, location: QString) -> QString),
+    join_path: qt_method!(fn(&self, base: QString, child: QString) -> QString),
+    safe_path_segment: qt_method!(fn(&self, name: QString) -> QString),
+    copy_to_clipboard: qt_method!(fn(&self, text: QString)),
+    get_lockdown_path: qt_method!(fn(&self) -> QString),
     set_language: qt_method!(fn(&self, lang_id: QString) -> bool),
     language_changed: qt_signal!(),
     setup_tool_window: qt_method!(fn(&self, win: QJSValue)),
@@ -96,6 +100,44 @@ impl QmlUtils {
                 QString::from(location)
             }
         }
+    }
+
+    fn join_path(&self, base: QString, child: QString) -> QString {
+        QString::from(
+            PathBuf::from(base.to_string())
+                .join(child.to_string())
+                .to_string_lossy()
+                .to_string(),
+        )
+    }
+
+    fn safe_path_segment(&self, name: QString) -> QString {
+        let sanitized: String = name
+            .to_string()
+            .chars()
+            .map(|ch| match ch {
+                '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+                ch if ch.is_control() => '_',
+                ch => ch,
+            })
+            .collect::<String>()
+            .trim()
+            .trim_matches('.')
+            .to_string();
+
+        if sanitized.is_empty() {
+            QString::from("Album")
+        } else {
+            QString::from(sanitized)
+        }
+    }
+
+    fn copy_to_clipboard(&self, text: QString) {
+        crate::utils::copy_to_clipboard(text);
+    }
+
+    fn get_lockdown_path(&self) -> QString {
+        QString::from(crate::utils::get_lockdown_path().to_string_lossy().to_string())
     }
 
     fn set_language(&self, lang_id: QString) -> bool {

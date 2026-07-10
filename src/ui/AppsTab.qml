@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "./app-store/"
 import "./base"
+import "." as App
 
 Item {
     id: root
@@ -15,6 +16,7 @@ Item {
     property string error: ""
     property string email: ""
     property bool isLoggedIn: email.length > 0
+    property bool sponsorsFetched: false
 
     property string searchTerm: ""
     property bool searchLoading: false
@@ -39,6 +41,11 @@ Item {
         id: getIpaPopup
         bundleId: root.bundleId
         appName: root.appName
+        anchors.centerIn: parent
+    }
+
+    LoginDialog {
+        id: loginDialog
         anchors.centerIn: parent
     }
 
@@ -147,9 +154,12 @@ Item {
         function onStateChanged() {
             var s = apps.state
             if (!s) return
-            if (s.error) error = s.error
             email = s.email || ""
-            if (s.init) fetchSponsors()
+            if (s.error && !loginDialog.visible) error = s.error
+            if (s.init && !root.sponsorsFetched) {
+                root.sponsorsFetched = true
+                fetchSponsors()
+            }
         }
 
         function onSearch_ready(searchTerm, success, res) {
@@ -255,7 +265,6 @@ Item {
                     }
 
                     showSearch()
-                    if (!apps) return
 
                     root.searchLoading = true
                     root.searchError = false
@@ -273,7 +282,7 @@ Item {
                 TextField {
                     id: searchField
                     Layout.preferredWidth: 200
-                    placeholderText: isLoggedIn ? qsTr("Search for apps...") : qsTr("Sign in to search")
+                    placeholderText: qsTr("Search for apps...")
                     onTextChanged: {
                         root.searchTerm = text
                         searchTimer.restart()
@@ -284,15 +293,16 @@ Item {
 
                 Label {
                     text: isLoggedIn ? qsTr("Signed in as %1").arg(email) : qsTr("Not signed in")
-                    color: "#6e6e73"
+                    color: App.Theme.textMuted
                 }
 
                 Button {
                     text: isLoggedIn ? qsTr("Sign Out") : qsTr("Sign In")
                     onClicked: {
-                        const comp = Qt.createComponent("qrc:/src/ui/LoginDialog.qml")
-                        const win = comp.createObject(root)
-                        if (win) win.open()
+                        if (isLoggedIn)
+                            apps.sign_out()
+                        else
+                            loginDialog.open()
                     }
                 }
             }
