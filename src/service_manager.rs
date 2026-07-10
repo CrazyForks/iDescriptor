@@ -41,7 +41,7 @@ pub struct ServiceManager {
     check_developer_mode_status: qt_method!(fn(&self)),
     set_location: qt_method!(fn(&self, latitude: QString, longitude: QString)),
     clear_location: qt_method!(fn(&self)),
-    fetch_disk_usage: qt_method!(fn(&self)),
+    fetch_apps_disk_usage: qt_method!(fn(&self)),
     restart: qt_method!(fn(&self) -> bool),
     shutdown: qt_method!(fn(&self) -> bool),
     enter_recovery_mode: qt_method!(fn(&self) -> bool),
@@ -62,7 +62,7 @@ pub struct ServiceManager {
     ),
     installedAppsRetrieved: qt_signal!(success : bool,apps: QVariantMap),
     batteryInfoUpdated: qt_signal!(info: QString),
-    diskUsageRetrieved: qt_signal!(success: bool, apps_usage: u64),
+    appsDiskUsageRetrieved: qt_signal!(success: bool, apps_usage: u64),
     installIpaInit: qt_signal!(started: bool, state: QString),
     installIpaProgress: qt_signal!(progress: f64, state: QString),
     enableWifiConnectionsResult: qt_signal!(success: bool),
@@ -570,7 +570,7 @@ impl ServiceManager {
         });
     }
 
-    fn fetch_disk_usage(&self) {
+    fn fetch_apps_disk_usage(&self) {
         let udid = self.udid.clone();
         let qt_t = self.qt_thread();
 
@@ -585,9 +585,9 @@ impl ServiceManager {
                 match InstallationProxyClient::connect(provider_guard.as_ref()).await {
                     Ok(c) => c,
                     Err(e) => {
-                        eprintln!("fetch_disk_usage: Failed to connect to InstallationProxy service for device {udid}: {e}");
+                        eprintln!("fetch_apps_disk_usage: Failed to connect to InstallationProxy service for device {udid}: {e}");
                         qt_thread.queue(move |t| {
-                            t.diskUsageRetrieved(false, 0);
+                            t.appsDiskUsageRetrieved(false, 0);
                         });
                         return;
                     }
@@ -597,13 +597,13 @@ impl ServiceManager {
             match utils::calculate_apps_usage(&mut instproxy).await {
                 Ok(apps_usage) => {
                     qt_thread.queue(move |t| {
-                        t.diskUsageRetrieved(true, apps_usage);
+                        t.appsDiskUsageRetrieved(true, apps_usage);
                     });
                 }
                 Err(e) => {
-                    eprintln!("fetch_disk_usage: Failed to calculate apps disk usage for device {udid}: {e}");
+                    eprintln!("fetch_apps_disk_usage: Failed to calculate apps disk usage for device {udid}: {e}");
                     qt_thread.queue(move |t| {
-                        t.diskUsageRetrieved(false, 0);
+                        t.appsDiskUsageRetrieved(false, 0);
                     });
                 }
             };
