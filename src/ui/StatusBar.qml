@@ -18,24 +18,7 @@ Item {
         anchors.fill: parent
         spacing: Qt.platform.os === "windows" ? 2 : 5
         Label {
-            text : qsTr("iDescriptor: %1 device(s) connected").arg(App.DeviceContext.getDeviceCount())
-        }
-        Button {
-            visible: App.DeviceContext.currentTab === 0
-            Layout.preferredWidth: root.buttonSize
-            Layout.preferredHeight: root.buttonSize
-            icon.source: "qrc:/resources/icons/lets-icons_horizontal-down-left-main-light.svg"
-            icon.width: root.buttonSize
-            icon.height: root.buttonSize
-            HoverHandler {
-                cursorShape: Qt.PointingHandCursor
-            }
-            onClicked: {
-                App.DeviceContext.showWelcomePage = !App.DeviceContext.showWelcomePage
-            }
-            background: Rectangle {
-                color: "transparent"
-            }
+            text : App.DeviceContext.getDeviceCount() ? qsTr("iDescriptor: %1 device(s) connected").arg(App.DeviceContext.getDeviceCount()) : qsTr("iDescriptor: no devices")
         }
         Button {
             id: myButton
@@ -50,7 +33,24 @@ Item {
             onClicked: {
                 var globalPos = myButton.mapToGlobal(0, 0)
                
-                StatusWindow.toggle(Window.window,globalPos)
+                StatusWindow.toggle(Window.window, globalPos, myButton.width, myButton.height)
+            }
+            background: Rectangle {
+                color: "transparent"
+            }
+        }
+        Button {
+            visible: App.DeviceContext.currentTab === 0
+            Layout.preferredWidth: root.buttonSize
+            Layout.preferredHeight: root.buttonSize
+            icon.source: "qrc:/resources/icons/lets-icons_horizontal-down-left-main-light.svg"
+            icon.width: root.buttonSize
+            icon.height: root.buttonSize
+            HoverHandler {
+                cursorShape: Qt.PointingHandCursor
+            }
+            onClicked: {
+                App.DeviceContext.showWelcomePage = !App.DeviceContext.showWelcomePage
             }
             background: Rectangle {
                 color: "transparent"
