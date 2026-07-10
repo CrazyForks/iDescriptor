@@ -35,6 +35,7 @@ Window {
     property bool auto_connect_wireless_devices: true
     property int connection_timeout: 30
     property bool use_unsecure_backend: false
+    property bool use_sqlite_gallery_backend: true
     property string default_jailbroken_root_password: "alpine"
     property real icon_size_base_multiplier: 1.0
     property int airplay_fps: 60
@@ -95,6 +96,7 @@ Window {
         auto_connect_wireless_devices = backendValue("auto_connect_wireless_devices", true)
         connection_timeout = backendValue("connection_timeout", 30)
         use_unsecure_backend = backendValue("use_unsecure_backend", false)
+        use_sqlite_gallery_backend = backendValue("use_sqlite_gallery_backend", true)
         default_jailbroken_root_password = backendValue("default_jailbroken_root_password", "alpine")
         icon_size_base_multiplier = backendValue("icon_size_base_multiplier", 1.0)
         airplay_fps = backendValue("airplay_fps", 60)
@@ -121,6 +123,7 @@ Window {
         callBackend("set_auto_connect_wireless_devices", auto_connect_wireless_devices)
         callBackend("set_connection_timeout", connection_timeout)
         callBackend("set_use_unsecure_backend", use_unsecure_backend)
+        callBackend("set_use_sqlite_gallery_backend", use_sqlite_gallery_backend)
         callBackend("set_default_jailbroken_root_password", default_jailbroken_root_password)
         callBackend("set_icon_size_base_multiplier", icon_size_base_multiplier)
         callBackend("set_airplay_fps", airplay_fps)
@@ -309,6 +312,17 @@ Window {
                         checked: root.auto_enable_wifi_connections
                         onToggled: {
                             root.auto_enable_wifi_connections = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    CheckBox {
+                        text: qsTr("Use SQLite gallery backend")
+                        checked: root.use_sqlite_gallery_backend
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Use the Photos database for gallery albums. Disable this to scan the DCIM folders directly.")
+                        onToggled: {
+                            root.use_sqlite_gallery_backend = checked
                             root.markDirty(false)
                         }
                     }

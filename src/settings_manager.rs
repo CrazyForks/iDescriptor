@@ -93,6 +93,8 @@ pub struct SettingsManager {
     set_unmount_ifuse_on_exit: qt_method!(fn(&self, enabled: bool)),
     use_unsecure_backend: qt_method!(fn(&self) -> bool),
     set_use_unsecure_backend: qt_method!(fn(&self, enabled: bool)),
+    use_sqlite_gallery_backend: qt_method!(fn(&self) -> bool),
+    set_use_sqlite_gallery_backend: qt_method!(fn(&self, enabled: bool)),
     theme: qt_method!(fn(&self) -> QString),
     set_theme: qt_method!(fn(&self, theme: QString)),
     language: qt_method!(fn(&self) -> QString),
@@ -398,6 +400,14 @@ impl SettingsManager {
         write_bool("useUnsecureBackend-ipatool", enabled);
     }
 
+    fn use_sqlite_gallery_backend(&self) -> bool {
+        read_bool("useSqliteGalleryBackend", true)
+    }
+
+    fn set_use_sqlite_gallery_backend(&self, enabled: bool) {
+        write_bool("useSqliteGalleryBackend", enabled);
+    }
+
     fn theme(&self) -> QString {
         read_string("theme", "System Default")
     }
@@ -471,6 +481,7 @@ impl SettingsManager {
         self.set_auto_enable_wifi_connections(true);
         self.set_unmount_ifuse_on_exit(false);
         self.set_use_unsecure_backend(false);
+        self.set_use_sqlite_gallery_backend(true);
         self.set_theme(QString::from("System Default"));
         self.set_language(default_language());
         self.set_connection_timeout(30);
