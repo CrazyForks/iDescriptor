@@ -65,6 +65,7 @@ qrc!(pub qml,
         "src/ui/tools/SSHTerminalTool.qml",
         "src/ui/tools/SSHProcessWindow.qml",
         "src/ui/tools/BackupManager.qml",
+        "src/ui/tools/TransferSpeedTest.qml",
 
         // app-store/
         "src/ui/app-store/AppDetails.qml",
