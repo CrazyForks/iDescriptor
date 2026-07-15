@@ -56,6 +56,7 @@ pub mod service_manager;
 pub mod settings_manager;
 pub mod springboard_services;
 pub mod status_window_controller;
+pub mod transfer_speed_tester;
 pub mod ui_qrc;
 // pub mod updater;
 pub mod qml_image;

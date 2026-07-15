@@ -2,6 +2,7 @@ use crate::device_ctx;
 use crate::query_sqlite::Query;
 use crate::service_manager::ServiceManager;
 use crate::springboard_services::SpringBoardServices;
+use crate::transfer_speed_tester::TransferSpeedTester;
 
 use crate::utils::{empty_qjsvalue, engine_ptr_new_object, vend_app_documents};
 
@@ -30,6 +31,7 @@ pub struct ServiceFactory {
     create_service_manager: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
     create_sqlite_query_backend: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
     create_springboard_services_client: qt_method!(fn(&self, udid: QString) -> QJSValue),
+    create_transfer_speed_tester: qt_method!(fn(&self, udid: QString) -> QJSValue),
 }
 
 impl ServiceFactory {
@@ -183,5 +185,27 @@ impl ServiceFactory {
                 empty_qjsvalue()
             }
         }
+    }
+
+    fn create_transfer_speed_tester(&self, udid: QString) -> QJSValue {
+        let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
+        if engine_ptr.is_null() {
+            log::error!("ServiceFactory: engine_ptr is null while creating transfer speed tester");
+            return empty_qjsvalue();
+        }
+
+        let udid = udid.to_string();
+        let device = run_sync({
+            let udid = udid.clone();
+            async move { device_ctx::get_device_opt(udid).await }
+        });
+        let Some(device) = device else {
+            log::warn!("ServiceFactory: device {udid} not found for transfer speed tester");
+            return empty_qjsvalue();
+        };
+
+        let tester = TransferSpeedTester::new(device.afc, udid);
+        let obj_ptr = qmetaobject::into_leaked_cpp_ptr(tester);
+        engine_ptr_new_object(engine_ptr, obj_ptr)
     }
 }
