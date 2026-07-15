@@ -101,4 +101,10 @@ QtObject {
         });
     }
 
+
+    function toFileUrl(path) {
+        if (Qt.platform.os === "windows")
+            return "file:///" + path.replace(/\\/g, "/")
+        return "file://" + path
+    }
 }

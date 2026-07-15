@@ -23,6 +23,7 @@ Window {
     readonly property var backend: typeof settingsManager !== "undefined" ? settingsManager : null
 
     property string downloadPath: ""
+    property string ipaDownloadPath: ""
     property string backupRootPath: ""
     property int wireless_file_server_port: 8080
     property bool unmount_ifuse_on_exit: false
@@ -84,6 +85,7 @@ Window {
 
     function loadSettings() {
         downloadPath = backendValue("dev_disk_img_path", "")
+        ipaDownloadPath = backendValue("ipa_download_path", "")
         backupRootPath = backendValue("backup_root_path", "")
         wireless_file_server_port = backendValue("wireless_file_server_port", 8080)
         unmount_ifuse_on_exit = backendValue("unmount_ifuse_on_exit", false)
@@ -110,6 +112,7 @@ Window {
 
     function applySettings() {
         callBackend("set_dev_disk_img_path", downloadPath)
+        callBackend("set_ipa_download_path", ipaDownloadPath)
         callBackend("set_backup_root_path", backupRootPath)
         callBackend("set_wireless_file_server_port", wireless_file_server_port)
         callBackend("set_unmount_ifuse_on_exit", unmount_ifuse_on_exit)
@@ -161,6 +164,15 @@ Window {
         title: qsTr("Select Backup Directory")
         onAccepted: {
             root.backupRootPath = QmlUtils.url_to_path(selectedFolder)
+            root.markDirty(false)
+        }
+    }
+
+    FolderDialog {
+        id: ipaDownloadPathDialog
+        title: qsTr("Select IPA Download Directory")
+        onAccepted: {
+            root.ipaDownloadPath = QmlUtils.url_to_path(selectedFolder)
             root.markDirty(false)
         }
     }
@@ -225,7 +237,7 @@ Window {
                         spacing: 10
 
                         Label {
-                            text: qsTr("Download Path")
+                            text: qsTr("Developer Disk Image Path")
                             Layout.preferredWidth: 175
                         }
 
@@ -239,6 +251,28 @@ Window {
                         Button {
                             text: qsTr("Browse")
                             onClicked: downloadPathDialog.open()
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("IPA Download Path")
+                            Layout.preferredWidth: 175
+                        }
+
+                        TextField {
+                            Layout.fillWidth: true
+                            text: root.ipaDownloadPath
+                            readOnly: true
+                            selectByMouse: true
+                        }
+
+                        Button {
+                            text: qsTr("Browse")
+                            onClicked: ipaDownloadPathDialog.open()
                         }
                     }
 

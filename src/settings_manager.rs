@@ -64,6 +64,9 @@ pub struct SettingsManager {
     dev_disk_img_path: qt_method!(fn(&self) -> QString),
     set_dev_disk_img_path: qt_method!(fn(&self, path: QString)),
     mk_dev_disk_img_path: qt_method!(fn(&self) -> QString),
+    ipa_download_path: qt_method!(fn(&self) -> QString),
+    set_ipa_download_path: qt_method!(fn(&self, path: QString)),
+    mk_ipa_download_path: qt_method!(fn(&self) -> QString),
     backup_root_path: qt_method!(fn(&self) -> QString),
     set_backup_root_path: qt_method!(fn(&self, path: QString)),
     mk_backup_root_path: qt_method!(fn(&self) -> QString),
@@ -176,6 +179,39 @@ impl SettingsManager {
             QString path = settings.value(
                 QStringLiteral("devdiskimgpath"),
                 settings_manager_home_path() + QStringLiteral("/devdiskimages")
+            ).toString();
+            QDir dir(path);
+            if (!dir.exists()) {
+                dir.mkpath(path);
+            }
+            return path;
+        })
+    }
+
+    pub(crate) fn ipa_download_path(&self) -> QString {
+        cpp!(unsafe [] -> QString as "QString" {
+            auto &settings = settings_manager_settings();
+            return settings.value(
+                QStringLiteral("ipaDownloadPath"),
+                settings_manager_home_path() + QStringLiteral("/ipa")
+            ).toString();
+        })
+    }
+
+    fn set_ipa_download_path(&self, path: QString) {
+        cpp!(unsafe [path as "QString"] {
+            auto &settings = settings_manager_settings();
+            settings.setValue(QStringLiteral("ipaDownloadPath"), path);
+            settings.sync();
+        });
+    }
+
+    fn mk_ipa_download_path(&self) -> QString {
+        cpp!(unsafe [] -> QString as "QString" {
+            auto &settings = settings_manager_settings();
+            QString path = settings.value(
+                QStringLiteral("ipaDownloadPath"),
+                settings_manager_home_path() + QStringLiteral("/ipa")
             ).toString();
             QDir dir(path);
             if (!dir.exists()) {
@@ -472,6 +508,10 @@ impl SettingsManager {
         )));
         self.set_backup_root_path(QString::from(format!(
             "{}/backups",
+            self.home_path().to_string()
+        )));
+        self.set_ipa_download_path(QString::from(format!(
+            "{}/ipa",
             self.home_path().to_string()
         )));
         self.set_auto_check_updates(true);

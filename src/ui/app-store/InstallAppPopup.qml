@@ -19,46 +19,124 @@ AnimatedDialog {
     padding: 20
 
     modal: true
+    focus: true
     width: 500
     title: qsTr("Install IPA")
     standardButtons: Dialog.NoButton
-    closePolicy: installing ? Popup.NoAutoClose : (Popup.CloseOnEscape | Popup.CloseOnPressOutside)
+    closePolicy: Popup.NoAutoClose
 
-    property string ipaPath: ""
-    property int selectedDeviceIndex: App.DeviceContext.devices.count > 0 ? 0 : -1
-    property var selectedDevice: selectedDeviceIndex >= 0 && selectedDeviceIndex < App.DeviceContext.devices.count
-                                 ? App.DeviceContext.devices.get(selectedDeviceIndex)
-                                 : null
+    readonly property bool hasDevice: App.DeviceContext.devices.count > 0
+    property int selectedDeviceIndex: hasDevice ? 0 : -1
+    readonly property var selectedDevice:
+        selectedDeviceIndex >= 0 && selectedDeviceIndex < App.DeviceContext.devices.count
+        ? App.DeviceContext.devices.get(selectedDeviceIndex)
+        : null
+    property string taskId: ""
     property bool installing: false
     property real progress: 0
     property string stateText: ""
     property string errorText: ""
 
-    FileDialog {
-        id: ipaDialog
-        title: qsTr("Choose IPA")
-        fileMode: FileDialog.OpenFile
-        nameFilters: [qsTr("IPA files (*.ipa)"), qsTr("All files (*)")]
-        onAccepted: root.ipaPath = QmlUtils.url_to_path(selectedFile)
+    function resetState() {
+        taskId = ""
+        installing = false
+        progress = 0
+        stateText = ""
+        errorText = ""
+        selectedDeviceIndex = hasDevice ? 0 : -1
+    }
+
+    function requestClose() {
+        if (installing) {
+            cancelConfirmation.open()
+            return
+        }
+        close()
+    }
+
+    function startInstall() {
+        if (!selectedDevice)
+            return
+
+        errorText = ""
+        progress = -1
+        stateText = qsTr("Preparing IPA download...")
+
+        const id = apps.install_app(bundleId, selectedDevice.udid)
+        if (!id || !id.length) {
+            progress = 0
+            errorText = qsTr("The App Store service is not initialized.")
+            stateText = errorText
+            return
+        }
+
+        taskId = id
+        installing = true
+    }
+
+    onOpened: resetState()
+    onClosed: {
+        if (taskId.length)
+            apps.cancel_task(taskId)
+        taskId = ""
+        installing = false
+    }
+
+    Keys.onEscapePressed: function(event) {
+        root.requestClose()
+        event.accepted = true
+    }
+
+    Overlay.modal: Rectangle {
+        color: Qt.rgba(0, 0, 0, 0.35)
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.requestClose()
+        }
+    }
+
+    MessageDialog {
+        id: cancelConfirmation
+        title: qsTr("Cancel installation?")
+        text: qsTr("The IPA download or installation is still in progress. Do you want to cancel it and close this dialog?")
+        buttons: MessageDialog.Yes | MessageDialog.No
+        onButtonClicked: function(button, role) {
+            if (button !== MessageDialog.Yes)
+                return
+
+            const id = root.taskId
+            root.taskId = ""
+            root.installing = false
+            if (id.length)
+                apps.cancel_task(id)
+            root.close()
+        }
     }
 
     Connections {
-        target: root.selectedDevice ? root.selectedDevice.service_manager : null
+        target: apps
 
-        function onInstallIpaInit(started, state) {
-            root.installing = started
-            root.stateText = state
-            root.errorText = started ? "" : state
-            if (!started)
-                root.progress = 0
+        function onInstallAppProgress(taskId, progress, phase) {
+            if (taskId !== root.taskId)
+                return
+
+            root.installing = true
+            root.progress = progress
+            root.stateText = phase === "install"
+                    ? qsTr("Installing IPA on device...")
+                    : qsTr("Downloading IPA...")
         }
 
-        function onInstallIpaProgress(progress, state) {
-            root.installing = progress < 1
-            root.progress = progress
-            root.stateText = state
-            if (progress >= 1)
-                root.stateText = qsTr("Installation finished")
+        function onInstallAppFinished(taskId, success, error) {
+            if (taskId !== root.taskId)
+                return
+
+            root.taskId = ""
+            root.installing = false
+            root.progress = success ? 1 : 0
+            root.errorText = success ? "" : (error || qsTr("Installation failed."))
+            root.stateText = success ? qsTr("Installation finished") : root.errorText
         }
     }
 
@@ -90,45 +168,39 @@ AnimatedDialog {
             id: deviceCombo
             Layout.minimumWidth: 220
             Layout.preferredWidth: 220
-            enabled: root.hasDevice
-
-            model: root.hasDevice ? App.DeviceContext.devices : [{ text: qsTr("No device connected"), udid: "" }]
+            enabled: root.hasDevice && !root.installing
+            model: App.DeviceContext.devices
             textRole: "text"
             valueRole: "udid"
+            currentIndex: root.selectedDeviceIndex
 
-            onActivated: (index) => {
-                //fixme
+            onActivated: function(index) {
+                root.selectedDeviceIndex = index
             }
 
             onCountChanged: {
-                //fixme
+                if (count === 0)
+                    root.selectedDeviceIndex = -1
+                else if (root.selectedDeviceIndex < 0 || root.selectedDeviceIndex >= count)
+                    root.selectedDeviceIndex = 0
             }
         }
 
-        RowLayout {
+        Label {
             Layout.fillWidth: true
-            spacing: 10
-
-            Label {
-                Layout.fillWidth: true
-                text: root.ipaPath.length ? root.ipaPath : qsTr("Choose a local IPA file")
-                color: "#6e6e73"
-                elide: Text.ElideMiddle
-            }
-
-            Button {
-                text: qsTr("Choose")
-                enabled: !root.installing
-                onClicked: ipaDialog.open()
-            }
+            visible: !root.hasDevice
+            text: qsTr("No device connected.")
+            color: "#6e6e73"
+            wrapMode: Text.WordWrap
         }
 
         ProgressBar {
             Layout.fillWidth: true
             visible: root.installing || root.progress > 0
+            indeterminate: root.installing && root.progress < 0
             from: 0
             to: 1
-            value: root.progress
+            value: Math.max(0, root.progress)
         }
 
         Label {
@@ -144,21 +216,14 @@ AnimatedDialog {
             Item { Layout.fillWidth: true }
 
             Button {
-                text: root.installing ? qsTr("Installing...") : qsTr("Cancel")
-                enabled: !root.installing
-                onClicked: root.close()
+                text: root.installing ? qsTr("Cancel") : qsTr("Close")
+                onClicked: root.requestClose()
             }
 
             Button {
                 text: qsTr("Install")
-                enabled: !root.installing && root.ipaPath.length > 0 && root.selectedDevice
-                onClicked: {
-                    root.errorText = ""
-                    root.progress = 0
-                    root.stateText = qsTr("Preparing installation...")
-                    root.installing = true
-                    root.selectedDevice.service_manager.install_ipa(root.ipaPath)
-                }
+                enabled: !root.installing && root.bundleId.length > 0 && root.selectedDevice
+                onClicked: root.startInstall()
             }
         }
     }

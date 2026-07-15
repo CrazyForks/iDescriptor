@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
-import "../" as App
 import "../base"
+import "../"
 
 AnimatedDialog {
     id: root
@@ -19,11 +19,13 @@ AnimatedDialog {
     padding: 20
 
     modal: true
+    focus: true
     width: 440
     title: qsTr("Get IPA")
     standardButtons: Dialog.NoButton
-    closePolicy: downloading ? Popup.NoAutoClose : (Popup.CloseOnEscape | Popup.CloseOnPressOutside)
+    closePolicy: Popup.NoAutoClose
 
+    property string taskId: ""
     property bool downloading: false
     property real progress: 0
     property string stateText: ""
@@ -31,27 +33,107 @@ AnimatedDialog {
     property string errorText: ""
     property string completedPath: ""
 
+    function resetState() {
+        taskId = ""
+        downloading = false
+        progress = 0
+        stateText = ""
+        errorText = ""
+        completedPath = ""
+        outputPath = settingsManager.ipa_download_path()
+    }
+
+    function requestClose() {
+        if (downloading) {
+            cancelConfirmation.open()
+            return
+        }
+        close()
+    }
+
+    function startDownload() {
+        errorText = ""
+        completedPath = ""
+        progress = -1
+        stateText = qsTr("Preparing download...")
+
+        const id = apps.download_ipa(bundleId, outputPath)
+        if (!id || !id.length) {
+            progress = 0
+            errorText = qsTr("The App Store service is not initialized.")
+            stateText = errorText
+            return
+        }
+
+        taskId = id
+        downloading = true
+    }
+
+    onOpened: resetState()
+    onClosed: {
+        if (taskId.length)
+            apps.cancel_task(taskId)
+        taskId = ""
+        downloading = false
+    }
+
+    Keys.onEscapePressed: function(event) {
+        root.requestClose()
+        event.accepted = true
+    }
+
+    Overlay.modal: Rectangle {
+        color: Qt.rgba(0, 0, 0, 0.35)
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.requestClose()
+        }
+    }
+
     FolderDialog {
         id: outputDialog
         title: qsTr("Choose download folder")
         onAccepted: root.outputPath = QmlUtils.url_to_path(selectedFolder)
     }
 
+    MessageDialog {
+        id: cancelConfirmation
+        title: qsTr("Cancel download?")
+        text: qsTr("The IPA download is still in progress. Do you want to cancel it and close this dialog?")
+        buttons: MessageDialog.Yes | MessageDialog.No
+        onButtonClicked: function(button, role) {
+            if (button !== MessageDialog.Yes)
+                return
+
+            const id = root.taskId
+            root.taskId = ""
+            root.downloading = false
+            if (id.length)
+                apps.cancel_task(id)
+            root.close()
+        }
+    }
+
     Connections {
         target: apps
 
-        function onDownload_ipa_progress(bundleId, progress, state) {
-            if (bundleId !== root.bundleId) return
+        function onDownloadIpaProgress(taskId, progress) {
+            if (taskId !== root.taskId)
+                return
             root.downloading = true
             root.progress = progress
-            root.stateText = state
+            root.stateText = qsTr("Downloading IPA...")
         }
 
-        function onDownload_ipa_finished(bundleId, success, path, error) {
-            if (bundleId !== root.bundleId) return
+        function onDownloadIpaFinished(taskId, success, path, error) {
+            if (taskId !== root.taskId)
+                return
+
+            root.taskId = ""
             root.downloading = false
-            root.progress = success ? 1 : root.progress
-            root.completedPath = path || ""
+            root.progress = success ? 1 : 0
+            root.completedPath = success ? path : ""
             root.errorText = success ? "" : (error || qsTr("Download failed."))
             root.stateText = success ? qsTr("Saved IPA") : root.errorText
         }
@@ -81,7 +163,7 @@ AnimatedDialog {
 
             Label {
                 Layout.fillWidth: true
-                text: root.outputPath.length ? root.outputPath : qsTr("Default download folder")
+                text: root.outputPath
                 color: "#6e6e73"
                 elide: Text.ElideMiddle
             }
@@ -96,14 +178,17 @@ AnimatedDialog {
         ProgressBar {
             Layout.fillWidth: true
             visible: root.downloading || root.progress > 0
+            indeterminate: root.downloading && root.progress < 0
             from: 0
             to: 1
-            value: root.progress
+            value: Math.max(0, root.progress)
         }
 
         Label {
             Layout.fillWidth: true
-            text: root.completedPath.length ? qsTr("Saved to %1").arg(root.completedPath) : root.stateText
+            text: root.completedPath.length
+                  ? qsTr("Saved to %1").arg(root.completedPath)
+                  : root.stateText
             color: root.errorText.length ? "#c00" : "#6e6e73"
             wrapMode: Text.WordWrap
             visible: text.length > 0
@@ -111,25 +196,26 @@ AnimatedDialog {
 
         RowLayout {
             Layout.fillWidth: true
+            Button {
+                text: !root.downloading && root.completedPath.length ? qsTr("Open Folder") : ""
+                visible: text.length > 0
+                enabled: !root.downloading
+                onClicked: {
+                    if (root.completedPath.length)
+                        Qt.openUrlExternally(Helpers.toFileUrl(root.outputPath))
+                }
+            }
             Item { Layout.fillWidth: true }
 
             Button {
-                text: root.downloading ? qsTr("Downloading...") : qsTr("Cancel")
-                enabled: !root.downloading
-                onClicked: root.close()
+                text: root.downloading ? qsTr("Cancel") : qsTr("Close")
+                onClicked: root.requestClose()
             }
 
             Button {
                 text: qsTr("Get IPA")
                 enabled: !root.downloading && root.bundleId.length > 0
-                onClicked: {
-                    root.errorText = ""
-                    root.completedPath = ""
-                    root.progress = 0
-                    root.stateText = qsTr("Preparing download...")
-                    root.downloading = true
-                    apps.download_ipa(root.bundleId, root.outputPath)
-                }
+                onClicked: root.startDownload()
             }
         }
     }
