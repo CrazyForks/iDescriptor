@@ -101,7 +101,7 @@ Item {
                                     const tb = gb / 1024
                                     return tb.toFixed(1) + " TB"
                                 } else {
-                                    return gb + " GB"
+                                    return gb.toFixed(0) + " GB"
                                 }
                             }
 
