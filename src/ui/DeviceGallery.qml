@@ -17,6 +17,7 @@ Item {
     readonly property bool isMainPage: nav.depth <= 1
     property int selectedAlbumCount: 0
     property var albumExportSelection: []
+    property var is_init: false
     property var pendingAlbumExportRequests: ({})
 
 
@@ -92,8 +93,10 @@ Item {
         target: query
 
         function onStateChanged() {
-            console.log("state changed")
-            query.read_albums()
+            if (query.state.init && !root.is_init) {
+                root.is_init = true
+                query.read_albums()
+            }
         }
 
         function onAlbumsChanged() {
@@ -150,7 +153,8 @@ Item {
         anchors.fill: parent
         autoSwitchContent: false
         // viewState: query.albums.length ? StateView.State.Content : StateView.State.Loading
-        viewState: query.albums.length ? StateView.State.Content : StateView.State.Loading
+        viewState: query.state.init ? StateView.State.Content : query.state.err ? StateView.State.Error : StateView.State.Loading 
+        errorText: query.state.err ? query.state.err : ""
         contentItem : ColumnLayout {
             anchors.fill : parent
             StackView {
@@ -244,8 +248,7 @@ Item {
 
                     Button {
                         text: qsTr("Import")
-                        enabled : nav.depth > 1
-                        onClicked : root.goBack()
+                        // TODO: onClicked
                     }
 
                     Item { Layout.fillWidth: true }

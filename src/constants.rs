@@ -71,3 +71,8 @@ pub static ALBUM_CONTENTS_QUERY_TEMPLATE: &str = r#"
     LEFT JOIN ZASSET ON {table}.Z_3ASSETS = ZASSET.Z_PK    
     WHERE ZGENERICALBUM.Z_PK = ?
 "#;
+
+
+pub static FS_GALLERY_PROVIDER_NAME: &str = "FS";
+
+pub static SQLITE_GALLERY_PROVIDER_NAME: &str = "SQLite";

@@ -1,11 +1,11 @@
 use qmetaobject::prelude::*;
 use qttypes::{QStringList, QVariantList, QVariantMap};
 
-use crate::RUNTIME;
+use crate::{RUNTIME, qvariantmap_insert};
 use crate::constants::{
     ALBUM_CONTENTS_QUERY_TEMPLATE, FAVS_ALBUM_ID, FAVS_ALBUM_QUERY, FAVS_QUERY,
     IOS_15_ALBUM_QUERY_STATEMENT, IOS_26_ALBUM_QUERY_STATEMENT, RECENTS_ALBUM_ID,
-    RECENTS_ALBUM_QUERY, RECENTS_QUERY,
+    RECENTS_ALBUM_QUERY, RECENTS_QUERY, FS_GALLERY_PROVIDER_NAME, SQLITE_GALLERY_PROVIDER_NAME
 };
 use crate::device_ctx;
 use crate::qt_threading::QtThreading;
@@ -38,6 +38,7 @@ trait GalleryProvider: Send + Sync {
         media_filter: GalleryMediaFilter,
         most_recent_first: bool,
     ) -> GalleryFuture<Vec<String>>;
+    fn name(&self) -> String;
 }
 
 #[derive(Clone)]
@@ -87,9 +88,14 @@ fn matches_media_filter(path: &str, filter: GalleryMediaFilter) -> bool {
 
 struct FsGalleryProvider {
     afc: Arc<Mutex<AfcClient>>,
+    name: String
 }
 
 impl GalleryProvider for FsGalleryProvider {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
     fn read_albums(&self) -> GalleryFuture<Vec<GalleryAlbum>> {
         let afc = self.afc.clone();
         Box::pin(async move { read_fs_albums(afc).await })
@@ -148,9 +154,14 @@ struct SqliteGalleryProvider {
     ios_version: u32,
     assets_table_name: String,
     assets_table_album_column: String,
+    name: String
 }
 
 impl GalleryProvider for SqliteGalleryProvider {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
     fn read_albums(&self) -> GalleryFuture<Vec<GalleryAlbum>> {
         let con_arc = self
             .connection
@@ -449,6 +460,7 @@ async fn build_sqlite_provider(
         ios_version,
         assets_table_name,
         assets_table_album_column,
+        name : SQLITE_GALLERY_PROVIDER_NAME.into()
     }))
 }
 
@@ -522,7 +534,7 @@ async fn read_fs_albums(afc: Arc<Mutex<AfcClient>>) -> anyhow::Result<Vec<Galler
 }
 
 async fn build_fs_provider(afc: Arc<Mutex<AfcClient>>) -> anyhow::Result<Arc<dyn GalleryProvider>> {
-    Ok(Arc::new(FsGalleryProvider { afc }))
+    Ok(Arc::new(FsGalleryProvider { afc, name: FS_GALLERY_PROVIDER_NAME.into() }))
 }
 
 async fn query_sqlite_album(
@@ -634,15 +646,16 @@ async fn query_recents(
 }
 
 #[derive(QObject, Default, QtThreading)]
+#[allow(non_snake_case)]
 pub struct Query {
     base: qt_base_class!(trait QObject),
     udid: String,
     ios_version: u32,
-    albums: qt_property!(QVariantList; NOTIFY albums_changed),
-    albums_changed: qt_signal!(),
+    albums: qt_property!(QVariantList; NOTIFY albumsChanged),
+    albumsChanged: qt_signal!(),
     provider: Option<Arc<dyn GalleryProvider>>,
-    state: qt_property!(QVariantMap; NOTIFY state_changed),
-    state_changed: qt_signal!(),
+    state: qt_property!(QVariantMap; NOTIFY stateChanged),
+    stateChanged: qt_signal!(),
 
     init: qt_method!(fn(&mut self, use_sqlite_backend: bool)),
     read_albums: qt_method!(fn(&mut self)),
@@ -659,11 +672,18 @@ pub struct Query {
     is_init: bool,
 }
 
+fn new_state(init:bool, err :&str, backend: &str) -> QVariantMap {
+    let mut state = QVariantMap::default();
+    qvariantmap_insert!(state,"init", init);
+    qvariantmap_insert!(state,"err", QString::from(err));
+    qvariantmap_insert!(state,"backend", QString::from(backend));
+
+    state
+}
+
 impl Query {
     pub fn with_device_attr(udid: QString, ios_version: u32) -> Self {
-        let mut state = QVariantMap::default();
-        state.insert(QString::from("init"), QVariant::from(false));
-        state.insert(QString::from("err"), QVariant::from(QString::default()));
+        let state = new_state(false,"","");
 
         let mut def = Self::default();
         def.state = state;
@@ -683,6 +703,7 @@ impl Query {
         );
         self.is_init = true;
         let udid_clone = self.udid.clone();
+        let udid_clone_for_fallback = self.udid.clone();
         let ios_version = self.ios_version;
         let qt_thread = self.qt_thread();
 
@@ -691,9 +712,17 @@ impl Query {
                 let afc_arc = device_ctx::get_device(udid_clone).await?.afc;
                 if use_sqlite_backend {
                     let mut afc = afc_arc.lock().await;
-                    build_sqlite_provider(&mut afc, ios_version).await
+                    let prov = build_sqlite_provider(&mut afc, ios_version).await?;
+                    prov.read_albums().await?;
+                    Ok(prov)
                 } else {
-                    build_fs_provider(afc_arc).await
+                    let prov = build_fs_provider(afc_arc).await?;
+                    /*
+                        Better not do this for fs backend 
+                        as this will most likely succeed
+                    */ 
+                    // prov.read_albums().await?;
+                    Ok(prov)
                 }
             })
             .await;
@@ -702,20 +731,56 @@ impl Query {
                 Ok(provider) => {
                     qt_thread.queue(move |s| {
                         println!("Gallery provider initialized successfully");
+                        let state = new_state(true,"", &provider.name());
                         s.provider = Some(provider);
-                        s.state[QString::from("err")] = QVariant::from(QString::default());
-                        s.state[QString::from("init")] = QVariant::from(true);
-                        s.state_changed();
+                        s.state = state;
+                        s.stateChanged();
                     });
                 }
                 Err(e) => {
                     println!("Gallery provider initialization failed: {}", e.to_string());
-                    qt_thread.queue(move |s| {
-                        s.state[QString::from("err")] =
-                            QVariant::from(QString::from(e.to_string()));
-                        s.state[QString::from("init")] = QVariant::from(false);
-                        s.state_changed();
-                    });
+
+                    /*
+                        fallback to fs if sqlite fails to query properly
+                        currently iOS 15....26 support is good  
+                    */
+                    if use_sqlite_backend {
+                        let fs_res :anyhow::Result<Arc<dyn GalleryProvider>> = async {
+                            let afc_arc = device_ctx::get_device(udid_clone_for_fallback).await?.afc;
+                            let prov = build_fs_provider(afc_arc).await?;
+                            prov.read_albums().await?;
+                            Ok(prov)
+                        }.await;
+                        
+                        match fs_res {
+                            Ok(fs) => {
+                                qt_thread.queue(move |s| {
+                                    println!("Fallback fs provider initialized successfully");
+                                    let state = new_state(true,"", &fs.name());
+                                    s.provider = Some(fs);
+                                    s.state = state;
+                                    s.stateChanged();
+                                });
+                            }
+                            Err(e) => {
+                                debug!("Failed to fallback to fs backend for gallery: {}",e.to_string());
+                                qt_thread.queue(move |s| {
+                                    let state = new_state(false,&e.to_string(), FS_GALLERY_PROVIDER_NAME);
+                                    s.state = state;
+                                    s.stateChanged();
+
+                                });
+                            }
+                        };
+                    } else {
+                        qt_thread.queue(move |s| {
+                            let state = new_state(false,&e.to_string(), FS_GALLERY_PROVIDER_NAME);
+                            s.state = state;
+                            s.stateChanged();
+
+                        });
+                    }
+
                 }
             };
         });
@@ -751,7 +816,7 @@ impl Query {
                         println!("Albums read fine firing events");
                         q_self.state[QString::from("err")] = QVariant::from(QString::default());
                         q_self.albums = albums;
-                        q_self.albums_changed();
+                        q_self.albumsChanged();
                     })
                 }
                 Err(e) => {
@@ -760,7 +825,7 @@ impl Query {
                         q_self.state[QString::from("err")] =
                             QVariant::from(QString::from(e.to_string()));
                         q_self.albums = albums;
-                        q_self.albums_changed();
+                        q_self.albumsChanged();
                     });
                 }
             }
