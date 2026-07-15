@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import "../base"
-import "../" as App
+import "../"
 
 ToolWindow {
     id: root
@@ -35,8 +35,8 @@ ToolWindow {
     function rebuildDeviceModel() {
         usbDeviceModel.clear()
 
-        for (let i = 0; i < App.DeviceContext.devices.count; ++i) {
-            const dev = App.DeviceContext.devices.get(i)
+        for (let i = 0; i < DeviceContext.devices.count; ++i) {
+            const dev = DeviceContext.devices.get(i)
             if (isWirelessDevice(dev))
                 continue // Skip wireless devices since ifuse only works with USB
 
@@ -78,12 +78,7 @@ ToolWindow {
         mountPath = iFuse.default_mount_path(item.productType)
     }
 
-    function localFileUrl(path) {
-        if (Qt.platform.os === "windows")
-            return "file:///" + path.replace(/\\/g, "/")
-        return "file://" + path
-    }
-
+    
     Component.onCompleted: {
         // FIXME: skipped WinFsp DiagnoseDialog check from QWidget port.
         // The original code showed DiagnoseDialog when IsWinFspInstalled() != SERVICE_AVAILABLE on Windows.
@@ -91,7 +86,7 @@ ToolWindow {
     }
 
     Connections {
-        target: App.DeviceContext.devices
+        target: DeviceContext.devices
         function onCountChanged() {
             root.rebuildDeviceModel()
         }
@@ -100,7 +95,7 @@ ToolWindow {
     FolderDialog {
         id: linuxFolderDialog
         title: qsTr("Select Mount Directory")
-        currentFolder: root.mountPath ? root.localFileUrl(root.mountPath) : ""
+        currentFolder: root.mountPath ? Helpers.toFileUrl(root.mountPath) : ""
         onAccepted: root.mountPath = QmlUtils.url_to_path(selectedFolder)
     }
 
@@ -108,7 +103,7 @@ ToolWindow {
         id: windowsMountDialog
         title: qsTr("Select Mount Directory")
         fileMode: FileDialog.SaveFile
-        currentFolder: root.mountPath ? root.localFileUrl(root.mountPath.substring(0, root.mountPath.lastIndexOf("/"))) : ""
+        currentFolder: root.mountPath ? Helpers.toFileUrl(root.mountPath.substring(0, root.mountPath.lastIndexOf("/"))) : ""
         onAccepted: root.mountPath = QmlUtils.url_to_path(selectedFile)
     }
 
@@ -198,7 +193,7 @@ ToolWindow {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (root.mountPath && !iFuse.state.busy)
-                                Qt.openUrlExternally(root.localFileUrl(root.mountPath))
+                                Qt.openUrlExternally(Helpers.toFileUrl(root.mountPath))
                         }
                     }
                 }
@@ -236,7 +231,7 @@ ToolWindow {
 
             if (iFuse.state.mounted && !iFuse.state.busy && iFuse.state.mountPath && !root.openedCurrentMount) {
                 root.openedCurrentMount = true
-                Qt.openUrlExternally(root.localFileUrl(iFuse.state.mountPath))
+                Qt.openUrlExternally(Helpers.toFileUrl(iFuse.state.mountPath))
             }
         }
     }
