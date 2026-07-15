@@ -1,13 +1,13 @@
 import QtQuick
-import QtQuick.Controls 
-import QtQuick.Layouts 
+import QtQuick.Controls
+import QtQuick.Layouts
 import "." as App
 
 Item {
     id: root
     Layout.fillWidth: true
     Layout.preferredHeight: 28
-    property int buttonSize: 26
+    // property int buttonSize: 26
 
     Layout.leftMargin: 10
     Layout.rightMargin: 10
@@ -20,32 +20,36 @@ Item {
         Label {
             text : App.DeviceContext.getDeviceCount() ? qsTr("iDescriptor: %1 device(s) connected").arg(App.DeviceContext.getDeviceCount()) : qsTr("iDescriptor: no devices")
         }
-        Button {
+        ToolButton {
             id: myButton
-            Layout.preferredWidth: root.buttonSize
-            Layout.preferredHeight: root.buttonSize
+            // Layout.preferredWidth: root.buttonSize
+            // Layout.preferredHeight: root.buttonSize
+            padding: 0
+            display: AbstractButton.IconOnly
+            icon.source: "qrc:/resources/icons/uim_process.svg"
+            icon.color: App.Theme.icon
             HoverHandler {
                 cursorShape: Qt.PointingHandCursor
             }
-            icon.source: "qrc:/resources/icons/uim_process.svg"
-            icon.width: root.buttonSize
-            icon.height: root.buttonSize
             onClicked: {
                 var globalPos = myButton.mapToGlobal(0, 0)
                
                 StatusWindow.toggle(Window.window, globalPos, myButton.width, myButton.height)
             }
             background: Rectangle {
-                color: "transparent"
+                radius: 4
+                color: myButton.down ? App.Theme.pressed : (myButton.hovered ? App.Theme.hover : "transparent")
             }
         }
-        Button {
+        ToolButton {
+            id: welcomeButton
             visible: App.DeviceContext.currentTab === 0
-            Layout.preferredWidth: root.buttonSize
-            Layout.preferredHeight: root.buttonSize
+            // Layout.preferredWidth: root.buttonSize
+            // Layout.preferredHeight: root.buttonSize
+            padding: 0
+            display: AbstractButton.IconOnly
             icon.source: "qrc:/resources/icons/lets-icons_horizontal-down-left-main-light.svg"
-            icon.width: root.buttonSize
-            icon.height: root.buttonSize
+            icon.color: App.Theme.icon
             HoverHandler {
                 cursorShape: Qt.PointingHandCursor
             }
@@ -53,25 +57,28 @@ Item {
                 App.DeviceContext.showWelcomePage = !App.DeviceContext.showWelcomePage
             }
             background: Rectangle {
-                color: "transparent"
+                radius: 4
+                color: welcomeButton.down ? App.Theme.pressed : (welcomeButton.hovered ? App.Theme.hover : "transparent")
             }
         }
         
         Item { Layout.fillWidth: true }
 
-        Button {
+        ToolButton {
             id: settingsButton
-            Layout.preferredWidth: root.buttonSize
-            Layout.preferredHeight: root.buttonSize
+            // Layout.preferredWidth: root.buttonSize
+            // Layout.preferredHeight: root.buttonSize
+            padding: 0
+            display: AbstractButton.IconOnly
             icon.source: "qrc:/resources/icons/mingcute_settings-7-line.svg"
-            icon.width: root.buttonSize
-            icon.height: root.buttonSize
+            icon.color: App.Theme.icon
             HoverHandler {
                 cursorShape: Qt.PointingHandCursor
             }
             onClicked: App.Settings.open()
             background: Rectangle {
-                color: "transparent"
+                radius: 4
+                color: settingsButton.down ? App.Theme.pressed : (settingsButton.hovered ? App.Theme.hover : "transparent")
             }
         }
         

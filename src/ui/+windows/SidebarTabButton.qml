@@ -1,12 +1,12 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import FluentUI
-import ".." as App
+import ".."
 
 FluExpander {
     id: root
-    property int currentSection : 1
+    property int currentSection : 1 
     required property string udid
     required property string title 
     property int item_height: 30
@@ -33,12 +33,32 @@ FluExpander {
                 font.bold: true
                 text:  root.title
             }
+
+            Menu {
+                id: contextMenu
+
+                MenuItem {
+                    text: qsTr("Remove")
+                    enabled: root.udid.length > 0
+                    onTriggered: DeviceContext.removeDevice(root.udid)
+                }
+            }
+
+            TapHandler {
+                acceptedButtons: Qt.RightButton
+                onTapped: function(point) {
+                    contextMenu.x = point.position.x
+                    contextMenu.y = point.position.y
+                    contextMenu.open()
+                }
+            }
         }
     }
 
     content: Item {
         anchors.fill: parent
 
+        
         ListView {
             id: nav_list
             anchors.fill: parent

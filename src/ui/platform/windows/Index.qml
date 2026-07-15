@@ -1,7 +1,7 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import FluentUI 1.0
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import FluentUI
+import QtQuick.Layouts
 import "../../"
 
 FluWindow {
@@ -13,10 +13,14 @@ FluWindow {
     minimumHeight: 320
     launchMode: FluWindowType.SingleTask
     fitsAppBarWindows: true
-    backgroundColor: "transparent"
 
     Component.onCompleted: {  
-        window.effect = "acrylic"
+        if (settingsManager.window_effect() === "acrylic") {
+            window.backgroundColor = "transparent"
+            window.effect = "acrylic"
+        } else {
+            window.effect = "normal"
+        }
     }  
 
     appBar: FluAppBar {
