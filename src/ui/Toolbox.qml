@@ -126,7 +126,8 @@ Item {
 
     // 0 Airplayer, 1 SimulateLocation, 2 LiveScreen, 3 QueryMobileGestalt, 4 DeveloperDiskImages,
     // 5 WirelessGalleryImport, 6 iFuse, 7 CableInfo, 8 NetworkDevices, 9 MountDevImage,
-    // 10 Restart, 11 Shutdown, 12 RecoveryMode, 13 EnableWifiConnections, 14 BackupManager
+    // 10 Restart, 11 Shutdown, 12 RecoveryMode, 13 EnableWifiConnections, 14 BackupManager,
+    // 15 TransferSpeedTest
     // signal toolClicked(int toolId, bool requiresDevice)
     function toolClicked(toolId, requiresDevice) {
         const device = App.DeviceContext.getDevice(currentDeviceUdid)
@@ -246,6 +247,9 @@ Item {
             case 14:
                 createSingletonComp("./tools/BackupManager.qml", "backupManagerInstance")
                 break;
+            case 15:
+                createCompWrapped("./tools/TransferSpeedTest.qml")
+                break;
             default:
             console.log(`No tool for id ${toolId}`)
         }
@@ -326,6 +330,14 @@ Item {
             description: qsTr("Discover and monitor devices on your network"),
             requiresDevice: false,
             iconSource: "qrc:/resources/icons/streamline_ultimate-multiple-users-network.svg",
+            visible: true
+        },
+        {
+            toolId: 15,
+            title: qsTr("Transfer Speed Test"),
+            description: qsTr("Measure upload and download speed to this device"),
+            requiresDevice: true,
+            iconSource: "qrc:/resources/icons/material-symbols_cable-rounded.svg",
             visible: true
         }
     ])
