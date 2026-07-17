@@ -84,6 +84,7 @@ cpp! {{
     #include <QQmlContext>
     #include <QLoggingCategory>
     #include <QtGui/QGuiApplication>
+    #include <QFont>
     #include <QQmlFileSelector>
     #include <QIcon>
 
@@ -252,6 +253,11 @@ fn main() {
 
     let mut engine = QmlEngine::new();
     let engine_ptr = engine.cpp_ptr();
+
+    #[cfg(target_os = "windows")]
+    cpp!(unsafe [] {
+        QGuiApplication::setFont(QFont("Segoe UI"));
+    });
 
     let settings_manager_impl = settings_manager::SettingsManager::default();
     let initial_language = settings_manager_impl.language();
