@@ -94,11 +94,11 @@ Item {
         else
             showInfo(qsTr("Action '%1' sent successfully.").arg(action))
     }
-    
+
     function createComp(loc, args = {}) {
         const comp = Qt.createComponent(loc)
         if (comp.status === Component.Ready) {
-            const win = comp.createObject(root,args)    
+            const win = comp.createObject(root,args)
             if (win !== null) {
                 win.show()
                 return win
@@ -131,7 +131,7 @@ Item {
     // signal toolClicked(int toolId, bool requiresDevice)
     function toolClicked(toolId, requiresDevice) {
         const device = App.DeviceContext.getDevice(currentDeviceUdid)
-        
+
         if (requiresDevice) {
             if (!device) {
                 console.log("DEVICE DISAPPERED")
@@ -172,7 +172,7 @@ Item {
         }
 
         switch (toolId) {
-            case 0: 
+            case 0:
                 // if (focusToolWindow(airplayInstance))
                     // return
 
@@ -198,7 +198,7 @@ Item {
 
                 createSingletonComp("./tools/Airplay.qml", "airplayInstance")
                 break;
-            case 1: 
+            case 1:
                 createCompWrapped("./tools/SimulateLocation.qml")
                 break;
             case 2:
@@ -254,10 +254,14 @@ Item {
             console.log(`No tool for id ${toolId}`)
         }
 
-        
+
     }
 
-    signal deviceSelectionChanged(string udid)
+    function deviceSelectionChanged(udid) {
+        if (udid && udid.length) {
+            App.DeviceContext.currentDeviceUdid = udid
+        }
+    }
 
     readonly property var mainToolsModel: ([
         {
@@ -410,8 +414,8 @@ Item {
 
             ComboBox {
                 id: deviceCombo
-                Layout.minimumWidth: 260
-                Layout.preferredWidth: 320
+                Layout.minimumWidth: 230
+                Layout.preferredWidth: 240
                 enabled: root.hasDevice
 
                 model: root.hasDevice ? App.DeviceContext.devices : [{ text: qsTr("No device connected"), udid: "" }]
@@ -419,7 +423,6 @@ Item {
                 valueRole: "udid"
 
                 onActivated: (index) => {
-                    console.log("ComboBox activated")
                     const udid = deviceCombo.currentValue || ""
                     root.currentDeviceUdid = udid
                     root.deviceSelectionChanged(udid)
