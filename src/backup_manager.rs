@@ -94,6 +94,8 @@ pub struct BackupManager {
     // is_init : bool,
     get_backup_info_without_device: qt_method!(fn(&self, udid: QString, root: QString)),
     cancel_operation: qt_method!(fn(&mut self, udid: String) -> bool),
+    has_active_tasks: qt_method!(fn(&self) -> bool),
+    cancel_all_operations: qt_method!(fn(&mut self) -> bool),
     get_backup_metadata: qt_method!(fn(&self, udid: QString, root: QString) -> QVariantMap),
     tasks: HashMap<String, JoinHandle<()>>,
 }
@@ -219,13 +221,13 @@ impl BackupManager {
             let result = run_backup(q_thread.clone(), udid, root.clone()).await;
             let success = result.is_ok();
             q_thread.queue(move |manager| {
+                manager.tasks.remove(&finish_udid);
+                manager.update_busy_from_tasks();
                 manager.operationFinished(
                     QString::from("backup"),
                     QString::from(finish_udid),
                     success,
                 );
-                manager.busy = false;
-                manager.busy_changed();
             });
         });
         if let Some(prev_task) = self.tasks.insert(udid_for_task, task) {
@@ -240,12 +242,41 @@ impl BackupManager {
     fn cancel_operation(&mut self, udid: String) -> bool {
         if let Some(task) = self.tasks.remove(&udid) {
             task.abort();
-            self.busy = false;
-            self.busy_changed();
+            self.update_busy_from_tasks();
             true
         } else {
             false
         }
+    }
+
+    fn has_active_tasks(&self) -> bool {
+        let val = self.tasks.values().any(|task| !task.is_finished());
+        println!("Active task {}", val);
+        return true;
+        val
+    }
+
+    fn cancel_all_operations(&mut self) -> bool {
+        let task_count = self.tasks.len();
+        for (_, task) in self.tasks.drain() {
+            task.abort();
+        }
+        self.update_busy_from_tasks();
+
+        if task_count > 0 {
+            info!("cancelled {task_count} backup manager task(s)");
+        }
+        task_count > 0
+    }
+
+    fn update_busy_from_tasks(&mut self) {
+        let busy = self.has_active_tasks();
+        if self.busy == busy {
+            return;
+        }
+
+        self.busy = busy;
+        self.busy_changed();
     }
 
     fn start_restore(
@@ -286,13 +317,12 @@ impl BackupManager {
             }
             q_thread.queue(move |manager| {
                 manager.tasks.remove(&finish_udid);
+                manager.update_busy_from_tasks();
                 manager.operationFinished(
                     QString::from("restore"),
                     QString::from(finish_udid),
                     success,
                 );
-                manager.busy = false;
-                manager.busy_changed();
             });
         });
 

@@ -26,8 +26,6 @@ ToolWindow {
     property string eraseName: ""
     property var deviceBackupSections: ({})
     property var passwordWasSet: false
-
-
     function deviceName(device) {
         if (!device)
             return qsTr("Unknown")
@@ -89,6 +87,15 @@ ToolWindow {
         })
     }
 
+    function openBackupAction(udid, title, iconPath, wireless) {
+        nav.push(backupActionHostComponent, {
+            sectionUdid: udid,
+            sectionTitle: title || udid,
+            sectionIconPath: iconPath || "qrc:/resources/icons/iphone_gen1.svg",
+            sectionWireless: wireless === true
+        })
+    }
+
     // function refreshBackups() {
     //     backupManager.refresh(backupRoot)
     // }
@@ -96,7 +103,7 @@ ToolWindow {
     function chooseBackupRoot(path) {
         backupRoot = path
         settingsManager.set_backup_root_path(path)
-        refreshBackups()
+        backupManager.init(path)
     }
 
     Component.onCompleted: {
@@ -104,15 +111,17 @@ ToolWindow {
         // refreshBackups()
     }
 
-    onClosing: {
-        // Prompt and cancel
-        backupManager.cancel()
+    onClosing: function(close) {
+        App.ClosingHandler.handler("backup", close, root)
     }
 
     Connections {
         target: backupManager
 
         function onOperationFinished(operation, udid, success) {
+            if (operation !== "restore")
+                return
+
             const section = root.deviceBackupSections[udid]
             if (!section)
                 return
@@ -123,19 +132,10 @@ ToolWindow {
 
         function onProgressUpdate(udid, progress) {
             const section = root.deviceBackupSections[udid]
-            if (!section)
+            if (!section || !section.isRestoring)
                 return
 
             section.updateProgress(progress)
-        }
-
-
-        function onFileReceived(udid, path) {
-            const section = root.deviceBackupSections[udid]
-            if (!section)
-                return
-
-            section.fileReceived(path)
         }
     }
 
@@ -179,7 +179,6 @@ ToolWindow {
                 section.isRestoring = true
                 section.progress = 0
                 section.cancelRequested = false
-                section.lastFileReceivedPath = ""
             }
         }
 
@@ -335,30 +334,25 @@ ToolWindow {
             property bool backupExists:false
             property string sectionUdid: ""
             property string sectionTitle: ""
-            property bool isBackingUp: false
+            property string sectionIconPath: ""
+            property bool sectionWireless: false
             property bool isRestoring: false
             property real progress: 0.0
-            property string lastFileReceivedPath: ""
             property bool cancelRequested: false
 
 
             signal detailsRequested(string udid, string title)
+            signal backupRequested(string udid, string title, string iconPath, bool wireless)
 
             function handleReset() {
-                isBackingUp = false
                 isRestoring = false
                 progress = 0.0
-                lastFileReceivedPath = ""
                 cancelRequested = false
             }
 
             function updateProgress(value, time_remaining) {
                 sectionRoot.progress = value
             }
-
-            function fileReceived(path) {
-                lastFileReceivedPath = "..." + path.slice(path.length - 20, path.length)
-            }   
 
             Layout.fillWidth: true
             spacing: 0
@@ -370,11 +364,11 @@ ToolWindow {
                     if (sectionRoot.backupExists) {
                         sectionRoot.detailsRequested(sectionRoot.sectionUdid, sectionRoot.sectionTitle)
                     }
-                } 
-                
+                }
+
 
                 contentItem : StackLayout {
-                    currentIndex: sectionRoot.isBackingUp || sectionRoot.isRestoring ? 1 : 0
+                    currentIndex: sectionRoot.isRestoring ? 1 : 0
 
                     // Normal state
                     RowLayout {
@@ -403,31 +397,39 @@ ToolWindow {
                         }
 
                         Button {
-                            text: !sectionRoot.backupExists ? qsTr("Back Up Now") : qsTr("Restore")
-                            highlighted: true
+                            text: qsTr("Restore")
+                            highlighted: sectionRoot.backupExists
+                            enabled: !root.busy && sectionRoot.backupExists
+                            visible: sectionRoot.backupExists
+                            onClicked: {
+                                root.selectBackupForRestore(sectionRoot.sectionUdid, sectionRoot.sectionTitle)
+                            }
+                        }
+
+                        Button {
+                            text: !sectionRoot.backupExists ? qsTr("Back Up Now") : qsTr("Back Up Again")
+                            highlighted: !sectionRoot.backupExists
                             enabled: !root.busy
                             onClicked: {
-                                //warn if wireless
-                                if (!sectionRoot.backupExists) {
-                                    backupManager.start_backup(root.backupRoot, sectionUdid)
-                                    sectionRoot.isBackingUp = true
-                                } else {
-                                    root.selectBackupForRestore(sectionRoot.sectionUdid, sectionRoot.sectionTitle)
-                                }
+                              sectionRoot.backupRequested(
+                                  sectionRoot.sectionUdid,
+                                  sectionRoot.sectionTitle,
+                                  sectionRoot.sectionIconPath,
+                                  sectionRoot.sectionWireless
+                              )
                             }
                         }
 
                         Button {
                             visible: sectionRoot.backupExists
                             text: qsTr("Details")
-                            highlighted: true
                             onClicked: {
                                 sectionRoot.detailsRequested(sectionRoot.sectionUdid, sectionRoot.sectionTitle)
                             }
                         }
                     }
 
-                    //Backup or Restore in progress state
+                    // Restore in progress state
                     RowLayout {
                         id: progressRow
                         anchors.fill: parent
@@ -438,11 +440,6 @@ ToolWindow {
                             switch (true) {
                                 case sectionRoot.cancelRequested:
                                     return qsTr("Cancelling…")
-                                case sectionRoot.isBackingUp:
-                                    if (sectionRoot.lastFileReceivedPath.length > 0) {
-                                        return sectionRoot.lastFileReceivedPath
-                                    } 
-                                    return qsTr("Backing up…")
                                 case sectionRoot.isRestoring:
                                     return qsTr("Restoring…")
                                 default:
@@ -559,51 +556,12 @@ ToolWindow {
                 }
             }
 
-            ColumnLayout {
+            LocationSelector {
                 Layout.fillWidth: true
-                spacing: 0
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 1
-                    color: App.Theme.sidebarDivider
-                }
-
-                ItemDelegate {
-                    Layout.fillWidth: true
-                    implicitHeight: 54
-                    enabled: !root.busy
-
-                    contentItem: RowLayout {
-                        spacing: 12
-
-                        Label {
-                            text: qsTr("Backup Location")
-                            color: App.Theme.text
-                            font.weight: Font.DemiBold
-                        }
-
-                        Label {
-                            Layout.fillWidth: true
-                            text: root.backupRoot
-                            color: App.Theme.textMuted
-                            horizontalAlignment: Text.AlignRight
-                            elide: Text.ElideMiddle
-                        }
-
-                        Button {
-                            text: qsTr("Change…")
-                            enabled: !root.busy
-                            onClicked: backupRootDialog.open()
-                        }
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 1
-                    color: App.Theme.sidebarDivider
-                }
+                labelText: qsTr("Backup Location")
+                location: root.backupRoot
+                changeEnabled: !root.busy
+                onChangeRequested: backupRootDialog.open()
             }
 
             RowLayout {
@@ -636,7 +594,7 @@ ToolWindow {
                 contentItem : Loader {
                     anchors.fill: parent
                     active: !root.state.loading
-                    sourceComponent: ScrollView {   
+                    sourceComponent: ScrollView {
                         id: backupsScroll
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -648,7 +606,7 @@ ToolWindow {
                             anchors.centerIn: parent
                             text: qsTr("Backups and connected devices will appear here")
                             color: palette.text
-                            visible: App.DeviceContext.devices.count === 0 && backupManager.backup_model.rowCount() === 0                            
+                            visible: App.DeviceContext.devices.count === 0 && backupManager.backup_model.rowCount() === 0
                         }
 
                         ColumnLayout {
@@ -659,7 +617,7 @@ ToolWindow {
                                 Layout.fillWidth: true
                                 Repeater {
 
-                                    model: App.DeviceContext.devices 
+                                    model: App.DeviceContext.devices
                                     Loader {
                                         id: deviceBackupLoader
                                         Layout.fillWidth: true
@@ -668,8 +626,11 @@ ToolWindow {
                                         onLoaded: {
                                             item.sectionUdid = model.udid
                                             item.sectionTitle = model.info.marketing_name
+                                            item.sectionIconPath = model.info.icon_path
+                                            item.sectionWireless = model.info.is_wireless === true
                                             item.backupExists = backupManager.does_backup_exist_for_udid(model.udid)
                                             item.detailsRequested.connect(root.openBackupDetails)
+                                            item.backupRequested.connect(root.openBackupAction)
                                             root.deviceBackupSections[model.udid] = item
                                         }
                                     }
@@ -724,6 +685,35 @@ ToolWindow {
                     backupRoot: root.backupRoot
                     title: itemRoot.sectionTitle
                     onBackRequested: nav.pop()
+                }
+            }
+        }
+    }
+
+    Component {
+        id: backupActionHostComponent
+
+        Item {
+            id: itemRoot
+            required property string sectionUdid
+            required property string sectionTitle
+            required property string sectionIconPath
+            required property bool sectionWireless
+
+            Loader {
+                anchors.fill: parent
+                sourceComponent: App.BackupAction {
+                    udid: itemRoot.sectionUdid
+                    backupRoot: root.backupRoot
+                    title: itemRoot.sectionTitle
+                    iconPath: itemRoot.sectionIconPath
+                    wireless: itemRoot.sectionWireless
+                    onBackRequested: nav.pop()
+                    onDoneRequested: nav.pop()
+                    onBackupRootSelected: function(path) {
+                        root.chooseBackupRoot(path)
+                    }
+                    onBackupFinished: backupManager.init(root.backupRoot)
                 }
             }
         }
