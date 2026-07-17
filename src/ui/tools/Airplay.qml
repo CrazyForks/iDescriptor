@@ -181,7 +181,7 @@ ToolWindow {
 
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Open Control Center on your device, choose Screen Mirroring, then select iDescriptor.")
+                        text: qsTr("Open Control Center on your device, choose Screen Mirroring, then select iDescriptor@UxPlay.")
                         wrapMode: Text.WordWrap
                         horizontalAlignment: Text.AlignHCenter
                         color: palette.text
