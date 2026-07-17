@@ -2,8 +2,9 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
-import QtQuick.Controls.impl 
+import QtQuick.Controls.impl
 import ".."
+import "../../"
 
 Rectangle {
     required property var name;
@@ -14,7 +15,7 @@ Rectangle {
     required property var useBundleIdForIcon;
     required property var sponsorLabel;
     required property var sponsorColor;
-    
+
     signal installRequested(string bundleId, string appName)
     signal getIpaRequested(string bundleId, string appName)
 
@@ -68,7 +69,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             spacing: 6
-  
+
 
             RowLayout {
                 ColumnLayout {
@@ -124,9 +125,17 @@ Rectangle {
                     Layout.minimumWidth: implicitWidth
 
                     Button {
+                        Layout.alignment: Qt.AlignCenter
                         id : installButton
-                        text: "Install"
+                        contentItem: Text {
+                            text: "Install"
+                            color: Theme.textSelected
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
                         font.pixelSize: 12
+
                         font.bold: true
                         background: Rectangle {
                             color:  installButton.down ? Theme.pressed
@@ -155,10 +164,10 @@ Rectangle {
                 }
 
             }
-            
+
             Rectangle {
                 height: 1
-                color: Theme.textMuted
+                color: Theme.separator
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 Layout.topMargin: 10
