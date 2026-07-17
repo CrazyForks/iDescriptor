@@ -19,7 +19,7 @@ use rusqlite::Connection;
 use serde_json::json;
 use std::ffi::c_void;
 use std::io::SeekFrom;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::sync::Mutex;
@@ -57,6 +57,56 @@ pub struct ParsedBatteryInfo {
     pub usb_connection_type: String,
     pub adapter_voltage: u64,
     pub adapter_watts: u64,
+}
+
+const DEFAULT_DEVICE_ICON_PATH: &str = "qrc:/resources/icons/iphone_gen1.svg";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedDeviceVersion {
+    pub family: String,
+    pub major: u32,
+    pub minor: u32,
+}
+
+impl ParsedDeviceVersion {
+    pub fn icon_path(&self) -> &'static str {
+        match self.family.as_str() {
+            "iPhone" => self.iphone_icon_path(),
+            "iPad" => self.ipad_icon_path(),
+            _ => DEFAULT_DEVICE_ICON_PATH,
+        }
+    }
+
+    fn iphone_icon_path(&self) -> &'static str {
+        let has_home_button = self.major < 10
+            || (self.major == 10 && !matches!(self.minor, 3 | 6))
+            || (self.major == 12 && self.minor == 8)
+            || (self.major == 14 && self.minor == 6);
+
+        if has_home_button {
+            DEFAULT_DEVICE_ICON_PATH
+        } else if (self.major == 15 && self.minor >= 2)
+            || (self.major >= 16 && !(self.major == 17 && self.minor == 5))
+        {
+            "qrc:/resources/icons/iphone_gen3.svg"
+        } else {
+            "qrc:/resources/icons/iphone_gen2.svg"
+        }
+    }
+
+    fn ipad_icon_path(&self) -> &'static str {
+        if self.major == 8 || self.major >= 13 {
+            "qrc:/resources/icons/ipad_gen2.svg"
+        } else {
+            "qrc:/resources/icons/ipad_gen1.svg"
+        }
+    }
+}
+
+pub fn device_icon_path(raw_product_type: &str) -> &'static str {
+    parse_device_ver(raw_product_type)
+        .map(|device| device.icon_path())
+        .unwrap_or(DEFAULT_DEVICE_ICON_PATH)
 }
 
 pub const PUBLIC_STAGING: &str = "PublicStaging";
@@ -158,11 +208,14 @@ pub fn parse_diag_info(dict: Dictionary, raw_product_type: String) -> ParsedBatt
         .and_then(|v| v.as_unsigned_integer())
         .unwrap_or(1);
 
-    let (_name, major, minor) = parse_device_ver(&raw_product_type).unwrap_or_default();
+    let parsed_device = parse_device_ver(&raw_product_type);
 
     // we need a better way to do this
     // but iPhone8,1
-    let newer_than_iphone8_1 = major > 8 || (major == 8 && minor > 1);
+    let newer_than_iphone8_1 = parsed_device
+        .as_ref()
+        .map(|device| device.major > 8 || (device.major == 8 && device.minor > 1))
+        .unwrap_or(false);
 
     let battery_serial_number = dict
         .get("BatteryData")
@@ -266,16 +319,79 @@ pub fn parse_diag_info(dict: Dictionary, raw_product_type: String) -> ParsedBatt
     }
 }
 
-fn parse_device_ver(s: &str) -> Option<(String, u32, u32)> {
+pub fn parse_device_ver(s: &str) -> Option<ParsedDeviceVersion> {
     // Find where the digits start
     let split_at = s.find(|c: char| c.is_ascii_digit())?;
-    let (name, rest) = s.split_at(split_at);
+    let (family, rest) = s.split_at(split_at);
 
-    let mut parts = rest.split(',');
-    let major = parts.next()?.parse::<u32>().ok()?;
-    let minor = parts.next()?.parse::<u32>().ok()?;
+    if family.is_empty() {
+        return None;
+    }
 
-    Some((name.to_string(), major, minor))
+    let (major, minor) = rest.split_once(',')?;
+
+    Some(ParsedDeviceVersion {
+        family: family.to_string(),
+        major: major.parse::<u32>().ok()?,
+        minor: minor.parse::<u32>().ok()?,
+    })
+}
+
+#[cfg(test)]
+mod device_version_tests {
+    use super::device_icon_path;
+
+    #[test]
+    fn selects_iphone_silhouette_from_raw_product_type() {
+        assert_eq!(
+            device_icon_path("iPhone8,1"),
+            "qrc:/resources/icons/iphone_gen1.svg"
+        );
+        assert_eq!(
+            device_icon_path("iPhone12,1"),
+            "qrc:/resources/icons/iphone_gen2.svg"
+        );
+        assert_eq!(
+            device_icon_path("iPhone15,2"),
+            "qrc:/resources/icons/iphone_gen3.svg"
+        );
+    }
+
+    #[test]
+    fn preserves_special_case_iphone_silhouettes() {
+        assert_eq!(
+            device_icon_path("iPhone10,6"),
+            "qrc:/resources/icons/iphone_gen2.svg"
+        );
+        assert_eq!(
+            device_icon_path("iPhone14,6"),
+            "qrc:/resources/icons/iphone_gen1.svg"
+        );
+        assert_eq!(
+            device_icon_path("iPhone17,5"),
+            "qrc:/resources/icons/iphone_gen2.svg"
+        );
+    }
+
+    #[test]
+    fn selects_ipad_silhouette_and_defaults_other_families() {
+        assert_eq!(
+            device_icon_path("iPad11,1"),
+            "qrc:/resources/icons/ipad_gen1.svg"
+        );
+        assert_eq!(
+            device_icon_path("iPad13,1"),
+            "qrc:/resources/icons/ipad_gen2.svg"
+        );
+        assert_eq!(
+            device_icon_path("iPod9,1"),
+            "qrc:/resources/icons/iphone_gen1.svg"
+        );
+        assert_eq!(
+            device_icon_path("invalid"),
+            "qrc:/resources/icons/iphone_gen1.svg"
+        );
+    }
 }
 
 pub async fn get_cable_info(diag: &mut DiagnosticsRelayClient) -> Option<Dictionary> {
@@ -1002,4 +1118,32 @@ pub fn deployed_qml_path(entry: &str) -> Option<String> {
 
 pub fn source_qml_path(entry: &str) -> String {
     format!("{}/{}", env!("CARGO_MANIFEST_DIR"), entry)
+}
+
+pub struct TempDirGuard {
+    path: Option<PathBuf>,
+}
+
+impl TempDirGuard {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path: Some(path) }
+    }
+
+    pub fn path(&self) -> &Path {
+        self.path.as_deref().expect("temp dir path is set")
+    }
+
+    pub fn keep(mut self) -> PathBuf {
+        self.path.take().expect("temp dir path is set")
+    }
+}
+
+impl Drop for TempDirGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.path.take() {
+            if let Err(e) = std::fs::remove_dir_all(&path) {
+                println!("Failed to remove temp gallery database dir: {}", e);
+            }
+        }
+    }
 }
