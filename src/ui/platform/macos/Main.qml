@@ -8,8 +8,8 @@ ApplicationWindow {
     title: qsTr("iDescriptor")
     width: 1000
     height: 668
-    minimumWidth: 668
-    minimumHeight: 320
+    minimumWidth: 900
+    minimumHeight: 600
     topPadding: 0
     leftPadding: 0
     rightPadding: 0
@@ -70,7 +70,7 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 30
-        enabled: true 
+        enabled: true
         acceptedButtons: Qt.LeftButton
         z: 1000
         onPressed: function(mouse) {
