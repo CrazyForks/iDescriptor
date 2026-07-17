@@ -23,6 +23,10 @@ FluWindow {
         }
     }  
 
+    onClosing: function(close) {
+        ClosingHandler.handler("*", close, window)
+    }
+
     appBar: FluAppBar {
         height: 28
         showDark: false

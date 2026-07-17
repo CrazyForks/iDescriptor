@@ -16,6 +16,10 @@ ApplicationWindow {
         Updater.checkAutomatically()
     }
 
+    onClosing: function(close) {
+        ClosingHandler.handler("*", close, window)
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0

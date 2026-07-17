@@ -164,7 +164,10 @@ Item {
                 return
 
             root[instanceName] = win
-            win.closing.connect(function() {
+            win.closing.connect(function(closeEvent) {
+                if (!closeEvent.accepted)
+                    return
+
                 if (root[instanceName] === win)
                     root[instanceName] = null
                 win.destroy(0)
@@ -317,7 +320,7 @@ Item {
             title: qsTr("iFuse Mount"),
             description: qsTr("Mount your iPhone's filesystem on your PC"),
             requiresDevice: true,
-            iconSource: "qrc:/resources/icons/fuse.png",
+            iconSource: "qrc:/resources/icons/fuse.svg",
             visible: (Qt.platform.os !== "osx" && Qt.platform.os !== "darwin")
         },
         {

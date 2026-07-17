@@ -79,6 +79,7 @@ pub struct IOManager {
             hause_arrest_afc: QString,
         )
     ),
+    has_active_tasks: qt_method!(fn(&self) -> bool),
     cancel_job: qt_method!(fn(&self, job_id: QString)),
     cancel_all_jobs: qt_method!(fn(&self)),
     file_transfer_progress: qt_signal!(
@@ -143,6 +144,14 @@ impl AfcKind {
 }
 
 impl IOManager {
+    fn has_active_tasks(&self) -> bool {
+        !self
+            .jobs
+            .lock()
+            .expect("IOManager jobs map mutex poisoned")
+            .is_empty()
+    }
+
     fn start_export(
         &self,
         udid: QString,

@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-labelledby="title desc">
+  <title id="title">FUSE drive icon</title>
+  <desc id="desc">A single-color, slightly tapered external drive with FUSE lettering.</desc>
+
+  <!-- The icon uses only currentColor; lettering and indicator are transparent cutouts. -->
+  <path
+    fill="currentColor"
+    fill-rule="evenodd"
+    d="
+      M37 7
+      C32.9 7 30.4 9.3 30 13.2
+      L20.5 122.2
+      C20.1 126.9 23.6 130 28.2 130
+      H171.8
+      C176.4 130 179.9 126.9 179.5 122.2
+      L170 13.2
+      C169.6 9.3 167.1 7 163 7
+      Z
+
+      M41 50 H64 V53 H44 V67 H61 V70 H44 V88 H41 Z
+
+      M68 50 H71 V74.5
+      C71 81.5 74.9 85 82 85
+      C89.1 85 93 81.5 93 74.5
+      V50 H96 V74.8
+      C96 83.6 90.8 88 82 88
+      C73.2 88 68 83.6 68 74.8
+      Z
+
+      M127.6 58 H124.4
+      C123.1 52.7 118.6 50 111 50
+      C103.7 50 100 52.8 100 57.7
+      C100 62.4 103.6 64.7 113.2 66.8
+      C123.7 69.1 128 72.5 128 78.7
+      C128 85 122.7 88 114.1 88
+      C104.9 88 99.5 84.2 98.6 77.5
+      H101.8
+      C102.7 82.7 106.7 85 114.2 85
+      C121.1 85 124.8 82.9 124.8 78.9
+      C124.8 75 121.4 72.7 112.5 70.8
+      C101.4 68.4 96.8 65 96.8 57.9
+      C96.8 51 102.1 47 111 47
+      C120.4 47 126.1 50.9 127.6 58
+      Z
+
+      M134 50 H159 V53 H137 V67 H157 V70 H137 V85 H160 V88 H134 Z
+    "
+  />
+
+  <path
+    fill="currentColor"
+    fill-rule="evenodd"
+    d="
+      M21 133
+      H179
+      L182.7 151.3
+      L181.5 177.6
+      C181.2 182.5 177.7 185 172 185
+      H28
+      C22.3 185 18.8 182.5 18.5 177.6
+      L17.3 151.3
+      Z
+
+      M147 169
+      A3 3 0 1 0 153 169
+      A3 3 0 1 0 147 169
+      Z
+    "
+  />
+</svg>
