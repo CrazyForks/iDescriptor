@@ -1,14 +1,14 @@
 pub const RECENTS_ALBUM_ID: i32 = -1;
 pub const FAVS_ALBUM_ID: i32 = -2;
 
-pub static IOS_15_ALBUM_QUERY_STATEMENT: &str = "SELECT   
+pub static IOS_15_ALBUM_QUERY_STATEMENT: &str = "SELECT
                 ZGENERICALBUM.Z_PK,
-                ZGENERICALBUM.ZTITLE,  
-                ZGENERICALBUM.ZCACHEDCOUNT,  
-                ZASSET.ZDIRECTORY,  
-                ZASSET.ZFILENAME  
+                ZGENERICALBUM.ZTITLE,
+                ZGENERICALBUM.ZCACHEDCOUNT,
+                ZASSET.ZDIRECTORY,
+                ZASSET.ZFILENAME
             FROM ZGENERICALBUM
-            LEFT JOIN ZASSET ON ZGENERICALBUM.ZKEYASSET = ZASSET.Z_PK  
+            LEFT JOIN ZASSET ON ZGENERICALBUM.ZKEYASSET = ZASSET.Z_PK
             WHERE ZGENERICALBUM.ZKEYASSET IS NOT NULL
         ";
 
@@ -26,7 +26,7 @@ pub static IOS_26_ALBUM_QUERY_STATEMENT: &str = "SELECT
                     ";
 
 pub static RECENTS_ALBUM_QUERY: &str = "
-    SELECT 
+    SELECT
     ZASSET.ZFILENAME,
     ZASSET.ZDIRECTORY,
     (SELECT COUNT(*) FROM ZASSET)
@@ -36,17 +36,17 @@ pub static RECENTS_ALBUM_QUERY: &str = "
 ";
 
 pub static RECENTS_QUERY: &str = "
-    SELECT 
+    SELECT
     ZASSET.ZFILENAME,
     ZASSET.ZDIRECTORY
     FROM ZASSET ORDER BY ZASSET.Z_PK DESC
 ";
 
 pub static FAVS_ALBUM_QUERY: &str = "
-    SELECT 
+    SELECT
         ZASSET.ZFILENAME,
-        ZASSET.ZDIRECTORY,  
-        (SELECT COUNT(*) FROM ZASSET WHERE ZASSET.ZFAVORITE = 1)  
+        ZASSET.ZDIRECTORY,
+        (SELECT COUNT(*) FROM ZASSET WHERE ZASSET.ZFAVORITE = 1)
     FROM ZASSET
     WHERE ZASSET.ZFAVORITE = 1
     ORDER BY ZASSET.Z_PK DESC
@@ -54,25 +54,29 @@ pub static FAVS_ALBUM_QUERY: &str = "
 ";
 
 pub static FAVS_QUERY: &str = "
-    SELECT 
+    SELECT
         ZASSET.ZFILENAME,
-        ZASSET.ZDIRECTORY 
+        ZASSET.ZDIRECTORY
     FROM ZASSET
     WHERE ZASSET.ZFAVORITE = 1
     ORDER BY ZASSET.Z_PK DESC
 ";
 //FIXME: is Z_3ASSETS consistent ?
 pub static ALBUM_CONTENTS_QUERY_TEMPLATE: &str = r#"
-    SELECT     
-        ZASSET.ZDIRECTORY,    
-        ZASSET.ZFILENAME  
-    FROM ZGENERICALBUM  
-    LEFT JOIN {table} ON ZGENERICALBUM.Z_PK = {table}.{album}  
-    LEFT JOIN ZASSET ON {table}.Z_3ASSETS = ZASSET.Z_PK    
+    SELECT
+        ZASSET.ZDIRECTORY,
+        ZASSET.ZFILENAME
+    FROM ZGENERICALBUM
+    LEFT JOIN {table} ON ZGENERICALBUM.Z_PK = {table}.{album}
+    LEFT JOIN ZASSET ON {table}.Z_3ASSETS = ZASSET.Z_PK
     WHERE ZGENERICALBUM.Z_PK = ?
 "#;
-
 
 pub static FS_GALLERY_PROVIDER_NAME: &str = "FS";
 
 pub static SQLITE_GALLERY_PROVIDER_NAME: &str = "SQLite";
+
+pub static PHOTOS_SQLITE_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite";
+pub static PHOTOS_SQLITE_SHM_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite-shm";
+pub static PHOTOS_SQLITE_WAL_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite-wal";
+pub static DCIM_REMOTE_PATH: &str = "/DCIM";

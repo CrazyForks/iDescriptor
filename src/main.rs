@@ -36,6 +36,9 @@ pub mod device_ctx;
 pub mod device_db;
 #[cfg(not(target_os = "macos"))]
 pub mod diagnose;
+pub mod gallery;
+pub mod gallery_fs_provider;
+pub mod gallery_sqlite_provider;
 #[cfg(not(target_os = "macos"))]
 pub mod ifuse;
 pub mod image_cache;
@@ -49,7 +52,6 @@ pub mod qml_utils;
 pub mod qquickimageprovider_imp;
 pub mod qrc;
 pub mod qt_threading;
-pub mod query_sqlite;
 pub mod screenshot;
 pub mod service_factory;
 pub mod service_manager;
@@ -197,6 +199,9 @@ fn main() {
     crate::qrc::rsrc();
     crate::ui_qrc::qml();
 
+    #[cfg(target_os = "macos")]
+    crate::ui_qrc::macos_qml();
+
     // workaround for gstreamer plugins not being loaded on Windows
     #[cfg(target_os = "windows")]
     {
@@ -224,12 +229,7 @@ fn main() {
         crate::ui_qrc::windows_qml();
     }
 
-    qml_register_type::<query_sqlite::Query>(
-        cstr::cstr!("iDescriptor"),
-        1,
-        0,
-        cstr::cstr!("Query"),
-    );
+    // qml_register_type::<gallery::Query>(cstr::cstr!("iDescriptor"), 1, 0, cstr::cstr!("Query"));
     qml_register_type::<screenshot::ScreenshotBackend>(
         cstr::cstr!("iDescriptor"),
         1,

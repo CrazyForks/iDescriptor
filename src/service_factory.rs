@@ -1,5 +1,5 @@
 use crate::device_ctx;
-use crate::query_sqlite::Query;
+use crate::gallery::Query;
 use crate::service_manager::ServiceManager;
 use crate::springboard_services::SpringBoardServices;
 use crate::transfer_speed_tester::TransferSpeedTester;

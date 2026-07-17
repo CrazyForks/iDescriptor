@@ -8,10 +8,10 @@ import "./base"
 
 Item {
     id: root
-    required property Query query
+    required property var query
     property bool loading: true
-    required property var udid 
-    required property var albumId 
+    required property var udid
+    required property var albumId
     property int mediaFilter: 0
     property bool mostRecentFirst: true
     property int selectedFileCount: 0
@@ -45,33 +45,6 @@ Item {
 
     ListModel {
         id: albumContentsModel
-    }
-
-    function selectItemsInRect(rect, append) {
-        for (let i = 0; i < gallery.count; i++) {
-            const item = gallery.itemAtIndex(i)
-            if (!item) continue
-
-            const itemRect = {
-                x: item.x,
-                y: item.y - gallery.contentY,
-                w: item.width,
-                h: item.height
-            }
-
-            const intersects =
-                itemRect.x < rect.x + rect.width &&
-                itemRect.x + itemRect.w > rect.x &&
-                itemRect.y < rect.y + rect.height &&
-                itemRect.y + itemRect.h > rect.y
-
-            if (intersects) {
-                albumContentsModel.setProperty(i, "selected", true)
-            } else if (!append) {
-                albumContentsModel.setProperty(i, "selected", false)
-            }
-        }
-        updateSelectedFileCount()
     }
 
     function updateSelectedFileCount() {
@@ -163,10 +136,10 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 Button {
-                    text: qsTr("BACK")
+                    icon.source: "qrc:/resources/icons/material-symbols_arrow-left-alt.svg"
                     enabled : nav.depth > 1
                     onClicked : root.goBack()
-                }        
+                }
 
                 Item { Layout.fillWidth: true }
 
@@ -192,7 +165,7 @@ Item {
                     currentIndex: Math.max(0, indexOfValue(root.mostRecentFirst))
                     onActivated: root.mostRecentFirst = currentValue
                 }
-                    
+
                 Button {
                     text: qsTr("Export Selected")
                     enabled: root.selectedFileCount > 0
@@ -236,7 +209,7 @@ Item {
                                 const comp = Qt.createComponent("PreviewWindow.qml")
 
                                 if (comp.status === Component.Ready) {
-                                    const win = comp.createObject(null,{ 
+                                    const win = comp.createObject(null,{
                                         filePath,
                                         udid : root.udid
                                     })
@@ -281,59 +254,16 @@ Item {
                     }
                 }
 
-                //rubber band
-                Item {
+                RubberBandSelection {
                     anchors.fill: parent
                     anchors.rightMargin: galleryScrollBar.visible ? galleryScrollBar.width : 0
-
-                    Rectangle {
-                        id: selectionRect
-                        color: "transparent"
-                        border.color: "blue"
-                        border.width: 1
-                        visible: false
-                        
-                        opacity: 0.3
-                        Rectangle { anchors.fill: parent; color: "blue"; opacity: 0.2 }
-                    }
-
-                    MouseArea {
-                        id: mouseArea
-                        anchors.fill: parent
-                        property point startPos
-                        
-                        propagateComposedEvents: true 
-
-                        onPressed: (mouse) => {
-                            // mouse.accepted = false  
-                            startPos = Qt.point(mouse.x, mouse.y)
-                            selectionRect.x = startPos.x
-                            selectionRect.y = startPos.y
-                            selectionRect.width = 0
-                            selectionRect.height = 0
-                            selectionRect.visible = true
-                        }
-
-                        onPositionChanged: {
-                            selectionRect.x = Math.min(mouse.x, startPos.x)
-                            selectionRect.y = Math.min(mouse.y, startPos.y)
-                            selectionRect.width = Math.abs(mouse.x - startPos.x)
-                            selectionRect.height = Math.abs(mouse.y - startPos.y)
-                        }
-
-                        onReleased: {
-                            selectionRect.visible = false
-
-                            const append = mouse.modifiers & Qt.ControlModifier
-
-                            selectItemsInRect({
-                                x: selectionRect.x,
-                                y: selectionRect.y,
-                                width: selectionRect.width,
-                                height: selectionRect.height
-                            }, append)
-                        }
-                    }
+                    targetView: gallery
+                    itemCount: albumContentsModel.count
+                    selectableItemWidth: 250
+                    selectableItemHeight: 250
+                    isItemSelected: (index) => albumContentsModel.get(index).selected
+                    setItemSelected: (index, selected) => albumContentsModel.setProperty(index, "selected", selected)
+                    onSelectionUpdated: root.updateSelectedFileCount()
                 }
             }
         }
