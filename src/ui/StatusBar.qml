@@ -7,6 +7,7 @@ Item {
     id: root
     Layout.fillWidth: true
     Layout.preferredHeight: 28
+    readonly property int iconSize: 16
     // property int buttonSize: 26
 
     Layout.leftMargin: 10
@@ -28,6 +29,8 @@ Item {
             display: AbstractButton.IconOnly
             icon.source: "qrc:/resources/icons/uim_process.svg"
             icon.color: App.Theme.icon
+            icon.width: root.iconSize
+            icon.height: root.iconSize
             HoverHandler {
                 cursorShape: Qt.PointingHandCursor
             }
@@ -50,6 +53,8 @@ Item {
             display: AbstractButton.IconOnly
             icon.source: "qrc:/resources/icons/lets-icons_horizontal-down-left-main-light.svg"
             icon.color: App.Theme.icon
+            icon.width: root.iconSize
+            icon.height: root.iconSize
             HoverHandler {
                 cursorShape: Qt.PointingHandCursor
             }
@@ -72,6 +77,8 @@ Item {
             display: AbstractButton.IconOnly
             icon.source: "qrc:/resources/icons/mingcute_settings-7-line.svg"
             icon.color: App.Theme.icon
+            icon.width: root.iconSize
+            icon.height: root.iconSize
             HoverHandler {
                 cursorShape: Qt.PointingHandCursor
             }
