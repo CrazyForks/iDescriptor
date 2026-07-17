@@ -44,6 +44,7 @@ Item {
                             anchors.fill: parent
                             currentSection: model.currentSection
                             title: info.product_type
+                            iconPath: info.icon_path
                             udid: info["UniqueDeviceID"]
                             wireless: info["connection_type"] === "Wireless"
                             onSectionChanged: {

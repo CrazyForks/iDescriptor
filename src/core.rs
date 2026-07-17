@@ -957,6 +957,11 @@ async fn collect_info(
         QVariant::from(&QString::from(db_info.marketing_name)),
     );
 
+    info.insert(
+        QString::from("icon_path"),
+        QVariant::from(&QString::from(utils::device_icon_path(product_type))),
+    );
+
     // region
     let region_info = def_vals_dict
         .get("RegionInfo")

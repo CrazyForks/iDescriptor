@@ -9,8 +9,10 @@ FluExpander {
     property int currentSection : 1 
     required property string udid
     required property string title 
+    required property string iconPath
     property int item_height: 30
     required property bool wireless
+    readonly property string displayTitle: title && title.length ? title : qsTr("Unknown device")
     signal sectionChanged(int sectionIndex)
 
     ListModel {
@@ -26,12 +28,30 @@ FluExpander {
 
     headerDelegate: Component {
         Item {
-            Label {
+            RowLayout {
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.left: parent.left
                 anchors.leftMargin: 10
-                font.bold: true
-                text:  root.title
+                anchors.right: parent.right
+                anchors.rightMargin: 10
+                spacing: 6
+
+                Image {
+                    source: root.iconPath
+                    sourceSize.width: 24
+                    sourceSize.height: 24
+                    Layout.preferredWidth: 24
+                    Layout.preferredHeight: 24
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    font.bold: true
+                    text: root.displayTitle
+                    elide: Text.ElideRight
+                }
             }
 
             Menu {

@@ -30,9 +30,16 @@ Item {
             sourceComponent: appsTabComponent
         }
 
-        Loader {
-            active: root.currentIndex === 2 || item
-            sourceComponent: toolboxTabComponent
+        AnimatedTab {
+            index: 2
+            currentIndex: root.currentIndex
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            Component.onCompleted: {
+                Toolbox.parent = this
+                Toolbox.anchors.fill = this
+            }
         }
 
         Loader {
@@ -51,21 +58,6 @@ Item {
             Layout.fillHeight: true
             AppsTab {
                 anchors.fill: parent
-            }
-        }
-    }
-
-    Component {
-        id: toolboxTabComponent
-        AnimatedTab {
-            index: 2
-            currentIndex: root.currentIndex
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-
-            Component.onCompleted: {
-                Toolbox.parent = this
-                Toolbox.anchors.fill = this
             }
         }
     }

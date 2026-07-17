@@ -9,11 +9,12 @@ Item {
     property int currentSection: 0
     property string title: ""
     property string udid: ""
+    required property string iconPath
     property bool expanded: true
     readonly property bool selectedDevice: udid.length > 0 && App.DeviceContext.currentDeviceUdid === udid
     property real animationProgress: expanded ? 1 : 0
     readonly property string displayTitle: title && title.length ? title : qsTr("Unknown device")
-    required property bool wireless 
+    required property bool wireless
 
     signal sectionChanged(int sectionIndex)
 
@@ -78,7 +79,7 @@ Item {
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: 5
-            spacing: 5
+            spacing: 3
 
             Item {
                 id: header
@@ -92,11 +93,6 @@ Item {
                     onTapped: root.selectDevice()
                 }
 
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 5
-                    color: headerHover.hovered ? App.Theme.hover : "transparent"
-                }
 
                 ColumnLayout {
                     id: headerColumn
@@ -107,7 +103,17 @@ Item {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 5
+                        spacing: 3
+
+                        Image {
+                            source: root.iconPath
+                            sourceSize.width: 28
+                            sourceSize.height: 28
+                            Layout.preferredWidth: 28
+                            Layout.preferredHeight: 28
+                            fillMode: Image.PreserveAspectFit
+                            smooth: true
+                        }
 
                         Label {
                             Layout.fillWidth: true
@@ -124,11 +130,10 @@ Item {
                         Image {
                             visible: root.wireless
                             source: "qrc:/resources/icons/qlementine-icons_wireless-1-16.svg"
-                            sourceSize.width: 16
-                            sourceSize.height: 16
-                            Layout.preferredWidth: 16
-                            Layout.preferredHeight: 16
-                            opacity: 0.8
+                            sourceSize.width: 20
+                            sourceSize.height: 20
+                            Layout.preferredWidth: 20
+                            Layout.preferredHeight: 20
                         }
                     }
 
@@ -187,7 +192,7 @@ Item {
             Item {
                 id: optionsClip
                 Layout.fillWidth: true
-                Layout.preferredHeight: optionsColumn.implicitHeight * root.animationProgress
+                Layout.preferredHeight: (optionsColumn.implicitHeight + 10) * root.animationProgress
                 clip: true
                 opacity: root.animationProgress
                 visible: root.animationProgress > 0.01
