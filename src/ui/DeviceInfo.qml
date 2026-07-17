@@ -44,65 +44,30 @@ Item {
                 RowLayout {
                     id: deviceActions
                     Layout.alignment: Qt.AlignHCenter
-                    readonly property int buttonSize: 30
-                    readonly property int iconSize: 16
                     spacing: 6
-                    Button {
-                        Layout.preferredWidth: deviceActions.buttonSize
-                        Layout.preferredHeight: deviceActions.buttonSize
-                        padding: 0
-                        display: AbstractButton.IconOnly
+                    IconToolButton {
+                        id: shutdownButton
                         icon.source: "qrc:/resources/icons/ic_outline-power-settings-new.svg"
-                        icon.width: deviceActions.iconSize
-                        icon.height: deviceActions.iconSize
                         ToolTip.visible: hovered
                         ToolTip.delay: 400
                         ToolTip.text: qsTr("Shut down device")
-                        HoverHandler {
-                            cursorShape: Qt.PointingHandCursor
-                        }
                         onClicked: Toolbox.toolClicked(11, true)
-                        background: Rectangle {
-                            color: "transparent"
-                        }
                     }
-                    Button {
-                        Layout.preferredWidth: deviceActions.buttonSize
-                        Layout.preferredHeight: deviceActions.buttonSize
-                        padding: 0
-                        display: AbstractButton.IconOnly
+                    IconToolButton {
+                        id: restartButton
                         icon.source: "qrc:/resources/icons/ic_twotone-restart-alt.svg"
-                        icon.width: deviceActions.iconSize
-                        icon.height: deviceActions.iconSize
                         ToolTip.visible: hovered
                         ToolTip.delay: 400
                         ToolTip.text: qsTr("Restart device")
-                        HoverHandler {
-                            cursorShape: Qt.PointingHandCursor
-                        }
                         onClicked: Toolbox.toolClicked(10, true)
-                        background: Rectangle {
-                            color: "transparent"
-                        }
                     }
-                    Button {
-                        Layout.preferredWidth: deviceActions.buttonSize
-                        Layout.preferredHeight: deviceActions.buttonSize
-                        padding: 0
-                        display: AbstractButton.IconOnly
+                    IconToolButton {
+                        id: recoveryButton
                         icon.source: "qrc:/resources/icons/hugeicons_wrench-01.svg"
-                        icon.width: deviceActions.iconSize
-                        icon.height: deviceActions.iconSize
                         ToolTip.visible: hovered
                         ToolTip.delay: 400
                         ToolTip.text: qsTr("Enter recovery mode")
-                        HoverHandler {
-                            cursorShape: Qt.PointingHandCursor
-                        }
                         onClicked: Toolbox.toolClicked(12, true)
-                        background: Rectangle {
-                            color: "transparent"
-                        }
                     }
                 }
             }
