@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls 
+import QtQuick.Controls
 import QtQuick.Layouts
 import "./base"
 
@@ -18,6 +18,14 @@ Item {
         return val
     }
 
+    function activationStateColor(state) {
+        if (state === "Activated" || state === "WildcardActivated")
+            return Theme.systemGreen
+        if (state === "FactoryActivated")
+            return Theme.systemOrange
+        return Theme.systemRed
+    }
+
     ColumnLayout {
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.max(root.contentMargin, (parent.height - implicitHeight) / 2)
@@ -29,29 +37,27 @@ Item {
             spacing: 20
 
             ColumnLayout {
-                DeviceImage { 
+                DeviceImage {
                     iosVersion: info ? info.ios_version_major : 0
                     displayName: v("product_type", "Unknown Device")
                 }
                 RowLayout {
-                    //center
-                    // anchors.horizontalCenter: parent.horizontalCenter
+                    id: deviceActions
                     Layout.alignment: Qt.AlignHCenter
-                    // implicitHeight: 50
-                    spacing: 10
-                    // 
+                    readonly property int buttonSize: 30
+                    readonly property int iconSize: 16
+                    spacing: 6
                     Button {
+                        Layout.preferredWidth: deviceActions.buttonSize
+                        Layout.preferredHeight: deviceActions.buttonSize
+                        padding: 0
+                        display: AbstractButton.IconOnly
                         icon.source: "qrc:/resources/icons/ic_outline-power-settings-new.svg"
-                        HoverHandler {
-                            cursorShape: Qt.PointingHandCursor
-                        }
-                        onClicked: Toolbox.toolClicked(10, true)
-                        background: Rectangle {
-                            color: "transparent"
-                        }
-                    }
-                    Button {
-                        icon.source: "qrc:/resources/icons/ic_twotone-restart-alt.svg"
+                        icon.width: deviceActions.iconSize
+                        icon.height: deviceActions.iconSize
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: qsTr("Shut down device")
                         HoverHandler {
                             cursorShape: Qt.PointingHandCursor
                         }
@@ -61,7 +67,35 @@ Item {
                         }
                     }
                     Button {
+                        Layout.preferredWidth: deviceActions.buttonSize
+                        Layout.preferredHeight: deviceActions.buttonSize
+                        padding: 0
+                        display: AbstractButton.IconOnly
+                        icon.source: "qrc:/resources/icons/ic_twotone-restart-alt.svg"
+                        icon.width: deviceActions.iconSize
+                        icon.height: deviceActions.iconSize
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: qsTr("Restart device")
+                        HoverHandler {
+                            cursorShape: Qt.PointingHandCursor
+                        }
+                        onClicked: Toolbox.toolClicked(10, true)
+                        background: Rectangle {
+                            color: "transparent"
+                        }
+                    }
+                    Button {
+                        Layout.preferredWidth: deviceActions.buttonSize
+                        Layout.preferredHeight: deviceActions.buttonSize
+                        padding: 0
+                        display: AbstractButton.IconOnly
                         icon.source: "qrc:/resources/icons/hugeicons_wrench-01.svg"
+                        icon.width: deviceActions.iconSize
+                        icon.height: deviceActions.iconSize
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: qsTr("Enter recovery mode")
                         HoverHandler {
                             cursorShape: Qt.PointingHandCursor
                         }
@@ -85,14 +119,17 @@ Item {
                     RowLayout {
                         spacing: 15
 
-                        Label {
+                        CopyableText {
                             text: v("product_type", qsTr("Unknown Device"))
                             font.bold: true
                             elide: Text.ElideRight
                         }
 
-                        Label {
-                            padding: 4
+                        CopyableText {
+                            horizontalPadding: 4
+                            verticalPadding: 4
+                            backgroundColor: Theme.accent
+                            backgroundRadius: 13
                             text: {
                                 const totalDiskCapacity = v("TotalDiskCapacity", null)
                                 if (totalDiskCapacity === null) return ""
@@ -105,33 +142,34 @@ Item {
                                 }
                             }
 
-                            background: Rectangle {
-                                color: Theme.accent
-                                radius: 13
-                            }
-                            color: palette.text
+                            color: palette.window
                         }
 
                         Item { Layout.fillWidth: true }
 
-                        Label {
-                            text: info.DIAG_INFO.is_charging ? qsTr("Charging") : info.is_wireless ? qsTr("Wireless") : qsTr("Not Charging")
-                            color: info.DIAG_INFO.is_charging ? Theme.green : palette.text
+                        RowLayout {
+                            spacing: 3.5
+
+                            CopyableText {
+                                text: info.DIAG_INFO.current_battery_level + "%"
+                                color: palette.text
+                                visible: info.DIAG_INFO.is_charging
+                            }
+
+                            BatteryIndicator {
+                                value: info.DIAG_INFO.current_battery_level
+                                isCharging: info.DIAG_INFO.is_charging
+                            }
                         }
 
-                        BatteryIndicator {
-                            value: info.DIAG_INFO.current_battery_level
-                            isCharging: info.DIAG_INFO.is_charging
-                        }
-
-                        Label {
-                            // FIXME: hardcoded 
+                        CopyableText {
+                            // FIXME: hardcoded
                             text: "5W/USB"
                             color: palette.text
                         }
                     }
                 }
-                
+
                 Item {
                     Layout.fillWidth: true
                     implicitHeight: grid.implicitHeight + 20
@@ -141,7 +179,7 @@ Item {
                         anchors.fill: parent
                         z: -1
                     }
-                
+
                     GridLayout {
                         id: grid
                         columns: 4
@@ -152,39 +190,44 @@ Item {
 
                         // Row 0
                         Label { text: "iOS Version:"; font.bold: true }
-                        Label { text: v("ProductVersion", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("ProductVersion", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Device Name:"; font.bold: true }
-                        Label { text: v("DeviceName", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("DeviceName", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 1
                         Label { text: "Activation State:"; font.bold: true }
-                        Label { text: v("ActivationState", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText {
+                            text: v("ActivationState", qsTr("Unknown"))
+                            color: root.activationStateColor(text)
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
                         Label { text: "Device Class:"; font.bold: true }
-                        Label { text: v("DeviceClass", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("DeviceClass", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 2
                         Label { text: "Jailbroken:"; font.bold: true }
-                        Label { text: v("Jailbroken", "No") ? "Yes" : "No"; elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("Jailbroken", false) ? qsTr("Yes") : qsTr("No"); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Model Number:"; font.bold: true }
-                        Label { text: v("ModelNumber", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("ModelNumber", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 3
                         Label { text: "CPU Architecture:"; font.bold: true }
-                        Label { text: v("CPUArchitecture", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("CPUArchitecture", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Build Version:"; font.bold: true }
-                        Label { text: v("BuildVersion", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("BuildVersion", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 4
                         Label { text: "Hardware Model:"; font.bold: true }
-                        Label { text: v("HardwareModel", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("HardwareModel", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Region:"; font.bold: true }
-                        Label { text: v("region", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("region", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 5
                         Label { text: "Hardware Platform:"; font.bold: true }
-                        Label { text: v("HardwarePlatform", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("HardwarePlatform", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Firmware Version:"; font.bold: true }
-                        Label { text: v("FirmwareVersion", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("FirmwareVersion", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Row 6
                         Label { text: "Bluetooth Address:"; font.bold: true }
@@ -196,11 +239,26 @@ Item {
                         Label { text: "Ethernet Address:"; font.bold: true }
                         PrivateText { text: v("EthernetAddress", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Battery Health:"; font.bold: true }
-                        Label { text: root.info.DIAG_INFO.battery_health; elide: Text.ElideRight; Layout.fillWidth: true }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+
+                            CopyableText {
+                                text: root.info.DIAG_INFO.battery_health
+                                elide: Text.ElideRight
+                            }
+
+                            Button {
+                                text: qsTr("More")
+                                onClicked: {
+                                    // TODO: Implement the battery health details UI.
+                                }
+                            }
+                        }
 
                         // Row 8
                         Label { text: "Production Device:"; font.bold: true }
-                        Label { text: v("ProductionDevice", "Unknown"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        CopyableText { text: v("ProductionDevice", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                         Label { text: "Serial Number:"; font.bold: true }
                         PrivateText { text: v("SerialNumber", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
@@ -211,7 +269,7 @@ Item {
                         PrivateText { text: v("UniqueDeviceID", qsTr("Unknown")); Layout.fillWidth: true }
                     }
                 }
-                
+
                 DiskUsage {
                     Layout.preferredWidth: detailsColumn.width * root.diskUsageWidthRatio
                     Layout.alignment: Qt.AlignHCenter

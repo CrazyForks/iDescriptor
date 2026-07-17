@@ -4,11 +4,9 @@ import Qt5Compat.GraphicalEffects
 
 Item {
     id: root
-    // width: 500
-    // height: 500
 
     implicitWidth: 200
-    implicitHeight: 500
+    implicitHeight: 400
 
     required property var displayName
     property string mockupName: getMockupNameFromDisplayName(displayName)
@@ -148,7 +146,7 @@ Item {
             styleColor: "#96000000"
         }
 
-        // time 
+        // time
         Text {
             id: timeText
             anchors.centerIn: parent
