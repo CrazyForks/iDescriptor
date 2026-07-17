@@ -93,7 +93,7 @@ Item {
             "version": app.CFBundleShortVersionString || "",
             "appType": app.app_type || "",
             "fileSharingEnabled": !!app.UIFileSharingEnabled,
-            "iconSource": "" 
+            "iconSource": ""
         });
     }
 
@@ -135,12 +135,7 @@ Item {
         root.selectedBundleId = bundleId;
         root.tabsDisabled = true;
         root.houseArrestAfcClient = null;
-        if (typeof serviceFactory === "undefined" || !serviceFactory) {
-            root.tabsDisabled = false;
-            root.errorMessage = qsTr("serviceFactory is not available in QML scope.");
-            updateViewState();
-            return ;
-        }
+
         var client = serviceFactory.create_hause_arrest_afc_client(root.udid, bundleId);
         root.houseArrestAfcClient = client;
         root.tabsDisabled = false;
@@ -219,7 +214,7 @@ Item {
             spacing: 0
 
             Rectangle {
-                Layout.preferredWidth: 400
+                Layout.preferredWidth: 275
                 Layout.minimumWidth: 100
                 Layout.maximumWidth: 500
                 Layout.fillHeight: true
@@ -229,6 +224,7 @@ Item {
 
                 ColumnLayout {
                     anchors.fill: parent
+                    anchors.margins: 10
                     spacing: 0
 
                     RowLayout {
