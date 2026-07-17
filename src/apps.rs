@@ -64,7 +64,7 @@ pub struct Apps {
     sign_in_busy: bool,
     pending_auth_code: Option<(String, SyncSender<AuthCodeResponse>)>,
     tasks: HashMap<String, JoinHandle<()>>,
-    init: qt_method!(fn(&mut self)),
+    init: qt_method!(fn(&mut self, load_saved_account: bool)),
     sign_in: qt_method!(fn(&mut self, email: QString, password: QString)),
     auth_code_received: qt_method!(fn(&mut self, request_id: QString, code: QString)),
     auth_code_cancelled: qt_method!(fn(&mut self, request_id: QString)),
@@ -115,16 +115,26 @@ impl Apps {
         self.state_changed();
     }
 
-    fn init(&mut self) {
+    fn init(&mut self, load_saved_account: bool) {
         let tool = match IpaTool::new_default() {
             Ok(tool) => tool,
             Err(err) => {
-                eprintln!("Error creating IpaTool: {}", err);
+                error!("Error creating IpaTool: {err}");
                 self.set_state(true, QString::default(), QString::from(format!("{}", err)));
                 return;
             }
         };
-        match tool.account_info() {
+
+        if !load_saved_account {
+            self.ipa_tool = Some(Arc::new(tool));
+            self.set_state(true, QString::default(), QString::default());
+            return;
+        }
+
+        let account_info = tool.account_info();
+        self.ipa_tool = Some(Arc::new(tool));
+
+        match account_info {
             Ok(maybe_acc) => {
                 let acc = maybe_acc.unwrap_or_default();
 
@@ -134,7 +144,6 @@ impl Apps {
                 self.set_state(true, QString::default(), QString::from(format!("{}", err)));
             }
         };
-        self.ipa_tool = Some(Arc::new(tool));
     }
 
     fn sign_in(&mut self, email: QString, password: QString) {

@@ -49,6 +49,13 @@ Item {
         anchors.centerIn: parent
     }
 
+    KeychainDialog {
+        id: keychainDialog
+        anchors.centerIn: parent
+        onContinueRequested: apps.init(true)
+        onSkipRequested: apps.init(false)
+    }
+
     function openInstallPopup(bundleId, appName) {
         root.bundleId = bundleId
         root.appName = appName
@@ -144,8 +151,13 @@ Item {
     }
 
     Component.onCompleted: {
-        // FIXME: show keychain/cred dialog.
-        apps.init()
+        const isMacOS = Qt.platform.os === "osx" || Qt.platform.os === "darwin"
+        if (isMacOS && settingsManager.show_keychain_dialog()) {
+            keychainDialog.open()
+            return
+        }
+
+        apps.init(true)
     }
 
     Connections {
