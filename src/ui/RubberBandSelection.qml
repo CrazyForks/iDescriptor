@@ -254,7 +254,10 @@ Item {
             root.handleClick(mouse)
             mouse.accepted = false
         }
-        onDoubleClicked: (mouse) => mouse.accepted = false
+        onDoubleClicked: (mouse) => {
+            root.cancelSelection()
+            mouse.accepted = false
+        }
 
         // scrollGestureEnabled passes trackpad gestures through. Explicitly reject
         // physical wheel events as well so the GridView can scroll underneath.
