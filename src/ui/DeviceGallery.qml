@@ -12,7 +12,6 @@ Item {
     property var query
     property bool loading: true
     required property var udid
-    property int albumId
     required property var info
     readonly property bool isMainPage: nav.depth <= 1
     property int selectedAlbumCount: 0
@@ -37,7 +36,6 @@ Item {
     }
 
     function openAlbum(id) {
-        root.albumId = id
         nav.push(albumContentsComponent, {
             albumId: id,
         })
@@ -46,8 +44,6 @@ Item {
     function goBack() {
         if (nav.depth > 1) {
             nav.pop()
-            // wtf ? do we still depend on albumId after pop 
-            root.albumId = 0
         }
     }
 
@@ -153,7 +149,7 @@ Item {
         anchors.fill: parent
         autoSwitchContent: false
         // viewState: query.albums.length ? StateView.State.Content : StateView.State.Loading
-        viewState: query.state.init ? StateView.State.Content : query.state.err ? StateView.State.Error : StateView.State.Loading 
+        viewState: query.state.init ? StateView.State.Content : query.state.err ? StateView.State.Error : StateView.State.Loading
         errorText: query.state.err ? query.state.err : ""
         contentItem : ColumnLayout {
             anchors.fill : parent
@@ -188,33 +184,6 @@ Item {
 
         Item {
             id: albumListPage
-
-            function selectItemsInRect(rect, append) {
-                for (let i = 0; i < gallery.count; i++) {
-                    const item = gallery.itemAtIndex(i)
-                    if (!item) continue
-
-                    const itemRect = {
-                        x: item.x,
-                        y: item.y - gallery.contentY,
-                        w: item.width,
-                        h: item.height
-                    }
-
-                    const intersects =
-                        itemRect.x < rect.x + rect.width &&
-                        itemRect.x + itemRect.w > rect.x &&
-                        itemRect.y < rect.y + rect.height &&
-                        itemRect.y + itemRect.h > rect.y
-
-                    if (intersects) {
-                        albumModel.setProperty(i, "selected", true)
-                    } else if (!append) {
-                        albumModel.setProperty(i, "selected", false)
-                    }
-                }
-                root.updateSelectedAlbumCount()
-            }
 
             function albumAt(index) {
                 const row = albumModel.get(index)
@@ -301,7 +270,8 @@ Item {
 
                             Rectangle {
                                 anchors.fill: parent
-                                color: selected ? "#4FC3F7" : "transparent"
+                                color: selected ? Theme.accent : "transparent"
+                                // color: selected ? "#4FC3F7" : "transparent"
                                 opacity : 0.3
                                 z : 1
                             }
@@ -323,65 +293,22 @@ Item {
                                 // text: fileName + albumId
                                 text: fileName
                                 font.pixelSize: 10
-                                color: "white"
+                                color: palette.text
                                 elide: Text.ElideMiddle
                             }
                         }
                     }
 
-                    //rubber band
-                    Item {
+                    RubberBandSelection {
                         anchors.fill: parent
                         anchors.rightMargin: galleryScrollBar.visible ? galleryScrollBar.width : 0
-
-                        Rectangle {
-                            id: selectionRect
-                            color: "transparent"
-                            border.color: "blue"
-                            border.width: 1
-                            visible: false
-
-                            opacity: 0.3
-                            Rectangle { anchors.fill: parent; color: "blue"; opacity: 0.2 }
-                        }
-
-                        MouseArea {
-                            id: mouseArea
-                            anchors.fill: parent
-                            property point startPos
-
-                            propagateComposedEvents: true
-
-                            onPressed: (mouse) => {
-                                // mouse.accepted = false
-                                startPos = Qt.point(mouse.x, mouse.y)
-                                selectionRect.x = startPos.x
-                                selectionRect.y = startPos.y
-                                selectionRect.width = 0
-                                selectionRect.height = 0
-                                selectionRect.visible = true
-                            }
-
-                            onPositionChanged: {
-                                selectionRect.x = Math.min(mouse.x, startPos.x)
-                                selectionRect.y = Math.min(mouse.y, startPos.y)
-                                selectionRect.width = Math.abs(mouse.x - startPos.x)
-                                selectionRect.height = Math.abs(mouse.y - startPos.y)
-                            }
-
-                            onReleased: {
-                                selectionRect.visible = false
-
-                                const append = mouse.modifiers & Qt.ControlModifier
-
-                                albumListPage.selectItemsInRect({
-                                    x: selectionRect.x,
-                                    y: selectionRect.y,
-                                    width: selectionRect.width,
-                                    height: selectionRect.height
-                                }, append)
-                            }
-                        }
+                        targetView: gallery
+                        itemCount: albumModel.count
+                        selectableItemWidth: 240
+                        selectableItemHeight: 240
+                        isItemSelected: (index) => albumModel.get(index).selected
+                        setItemSelected: (index, selected) => albumModel.setProperty(index, "selected", selected)
+                        onSelectionUpdated: root.updateSelectedAlbumCount()
                     }
                 }
             }
