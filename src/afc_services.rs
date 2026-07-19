@@ -66,7 +66,7 @@ impl AfcServices {
         RUNTIME.spawn(async move {
             let mut map = QVariantMap::default();
             let mut afc = afc_arc.lock().await;
-            match afc.list_dir(&path_str).await {
+            let success = match afc.list_dir(&path_str).await {
                 Ok(list) => {
                     for name in list {
                         // ui already has up/down buttons maybe unnecessary
@@ -83,14 +83,16 @@ impl AfcServices {
                         };
                         map.insert(QString::from(name), QVariant::from(&is_dir));
                     }
+                    true
                 }
                 Err(e) => {
                     eprintln!("Failed to read directory {path_str}: {e}");
+                    false
                 }
             };
 
             qt_thread.queue(move |q| {
-                q.check_is_dir_and_list_finished(true, map);
+                q.check_is_dir_and_list_finished(success, map);
             });
         });
     }
