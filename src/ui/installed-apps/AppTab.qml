@@ -16,7 +16,8 @@ Button {
     signal appClicked(string bundleId)
 
     width: ListView.view ? ListView.view.width : implicitWidth
-    height: 60
+    implicitHeight: contentRow.implicitHeight + 16
+    height: implicitHeight
     padding: 0
     hoverEnabled: true
     enabled: true
@@ -35,6 +36,7 @@ Button {
     }
 
     RowLayout {
+        id: contentRow
         anchors.fill: parent
         anchors.leftMargin: 10
         anchors.rightMargin: 10
