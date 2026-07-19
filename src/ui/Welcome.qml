@@ -16,9 +16,8 @@ Item {
 
     ColumnLayout {
         id: mainLayout
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: parent.width
-        y: Math.max(10, Math.round((parent.height - implicitHeight) / 2))
+        anchors.fill: parent
+        anchors.margins: 10
         spacing: 0
 
         Text {
@@ -49,39 +48,42 @@ Item {
 
         RowLayout {
             id: imageAndWirelessDevicesLayout
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 0
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.minimumHeight: 180
+            spacing: 24
 
-            Item { Layout.preferredWidth: 75 }
+            Item {
+                Layout.fillWidth: true
+            }
 
             Item {
                 id: connectImageSlot
                 readonly property real imageAspectRatio: 191 / 428
 
                 Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: Math.min(320, Math.max(220, mainLayout.width * 0.65))
-                Layout.preferredHeight: Math.min(520, Math.max(360, mainLayout.height * 0.65))
+                Layout.fillHeight: true
+                Layout.minimumWidth: 120
+                Layout.preferredWidth: Math.min(220, Math.max(120, imageAndWirelessDevicesLayout.height
+                                                                  * connectImageSlot.imageAspectRatio))
+                Layout.maximumWidth: 220
 
                 Image {
                     id: connectImage
-                    anchors.centerIn: parent
+                    anchors.fill: parent
                     source: "qrc:/resources/connect.png"
                     fillMode: Image.PreserveAspectFit
                     mipmap: true
                     smooth: true
-
-                    height: Math.min(parent.height, parent.width / connectImageSlot.imageAspectRatio)
-                    width: height * connectImageSlot.imageAspectRatio
                 }
             }
 
-            Item { Layout.preferredWidth: 75 }
-
             ColumnLayout {
                 id: explorerWithInstructionLayout
+                Layout.fillHeight: true
+                Layout.minimumWidth: 320
                 Layout.preferredWidth: 500
                 Layout.maximumWidth: 600
-                Layout.preferredHeight: 600
                 spacing: 12
 
                 NetworkDevicesToConnect {
@@ -90,7 +92,7 @@ Item {
                 }
 
                 Button {
-                    Layout.alignment: Qt.AlignHCenter
+                    Layout.alignment: Qt.AlignRight
                     text: qsTr("Connect with pairing file")
                     icon.source: "qrc:/resources/icons/ic_baseline-insert-drive-file.svg"
                     icon.width: 16
@@ -109,7 +111,7 @@ Item {
 
                 Text {
                     id: howToConnectLink
-                    Layout.alignment: Qt.AlignHCenter
+                    Layout.alignment: Qt.AlignRight
                     text: qsTr("How to connect a wireless device?")
                     color: root.linkColor
                     font.pixelSize: 12
@@ -132,6 +134,10 @@ Item {
                 }
 
                 Item { Layout.preferredHeight: 20 }
+            }
+
+            Item {
+                Layout.fillWidth: true
             }
         }
 
