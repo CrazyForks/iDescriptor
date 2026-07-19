@@ -36,6 +36,9 @@ QtObject {
     readonly property color controlFill: darkMode ? "#2c2c2e" : "#ffffff"
     readonly property color controlStroke: darkMode ? Qt.rgba(1, 1, 1, 0.13) : Qt.rgba(0, 0, 0, 0.1)
     readonly property color softBg: darkMode ? Qt.rgba(1, 1, 1, 0.04) : Qt.rgba(0, 0, 0, 0.04)
+    readonly property color acrylicSurface: darkMode ? Qt.rgba(31 / 255, 31 / 255, 34 / 255, 0.72) : Qt.rgba(1, 1, 1, 0.72)
+    readonly property color acrylicTabTextActive: Qt.rgba(1, 1, 1, 1)
+    readonly property color acrylicTabTextInactive: Qt.rgba(1, 1, 1, 0.72)
     readonly property color softBgBorder: darkMode ? Qt.rgba(1, 1, 1, 0.15) : Qt.rgba(0, 0, 0, 0.15)
     readonly property color windowBackground: darkMode ? "#1f1f22" : "#f5f5f7"
     readonly property color groupedBackground: darkMode ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.74)
