@@ -14,6 +14,9 @@ Item {
     property int visiblePrefixLength: 4
     property int horizontalPadding: 6
     property int verticalPadding: 2
+    property int fontPixelSize: 14
+    property bool showingCopied: false
+    property int copyFeedbackGeneration: 0
     readonly property bool hasPrivateValue: text !== "" && text !== qsTr("Unknown")
     readonly property string maskedText: maskValue(text)
     readonly property int reservedTextWidth: Math.ceil(Math.max(visibleMetrics.width, hiddenMetrics.width))
@@ -50,11 +53,16 @@ Item {
                 anchors.rightMargin: root.horizontalPadding
                 anchors.topMargin: root.verticalPadding
                 anchors.bottomMargin: root.verticalPadding
-                text: root.hidden && root.hasPrivateValue ? root.maskedText : root.text
+                text: root.showingCopied
+                      ? qsTr("Copied!")
+                      : root.hidden && root.hasPrivateValue
+                        ? root.maskedText
+                        : root.text
                 color: root.color
                 elide: root.elide
                 clip: true
                 verticalAlignment: Text.AlignVCenter
+                font.pixelSize: root.fontPixelSize
             }
 
             MouseArea {
@@ -66,10 +74,12 @@ Item {
 
                 onClicked: {
                     QmlUtils.copy_to_clipboard(root.text)
-                    const prevText  = valueLabel.text
-                    valueLabel.text = qsTr("Copied!")
+                    root.showingCopied = true
+                    const generation = ++root.copyFeedbackGeneration
                     Helpers.setTimeout(() => {
-                        valueLabel.text = prevText
+                        // prevent multiple clicks from causing the "Copied!" message to disappear too early
+                        if (root.copyFeedbackGeneration === generation)
+                            root.showingCopied = false
                     }, 1000)
                 }
             }
