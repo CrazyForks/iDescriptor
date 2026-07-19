@@ -24,6 +24,8 @@ Item {
     property var backStack: []
     property var forwardStack: []
 
+    signal favoritePlaceAdded(string alias, string path)
+
     function normalizePath(p) {
         var path = (p || "").trim()
         if (path.length === 0) path = "/"
@@ -34,7 +36,7 @@ Item {
         return path
     }
 
-    function _setLoading(on) {
+    function setLoading(on) {
         loading = on
         if (on) errorMessage = ""
     }
@@ -44,7 +46,7 @@ Item {
             errorMessage = qsTr("AFC client is not available.")
             return
         }
-        _setLoading(true)
+        setLoading(true)
         afcClient.check_is_dir_and_list(currentPath)
     }
 
@@ -62,7 +64,7 @@ Item {
         currentPath = next
         addressBar.text = next
         refresh()
-        _updateNavEnabled()
+        updateNavigationEnabled()
     }
 
     function goHome() { navigateToPath(rootPath, true) }
@@ -91,25 +93,28 @@ Item {
         navigateToPath(parentPath, true)
     }
 
-    function _updateNavEnabled() {
+    function updateNavigationEnabled() {
         backBtn.enabled = backStack.length > 0
         forwardBtn.enabled = forwardStack.length > 0
         upBtn.enabled = normalizePath(currentPath) !== "/"
     }
 
-    function _fullPath(name) {
+    function fullPath(name) {
         var base = normalizePath(currentPath)
         if (base === "/") return "/" + name
         return base + "/" + name
     }
 
-    function _openFileOnDevice(name) {
+    function openFileOnDevice(name) {
         if (!afcClient) return
-        var path = _fullPath(name)
+        var path = fullPath(name)
 
         if (Helpers.is_previewable(name)) {
             const comp = Qt.createComponent("PreviewWindow.qml")
             if (comp.status === Component.Ready) {
+                console.log("Opening preview for", path)
+                console.log("afcClient defined?", !!afcClient)
+                console.log("root.udid:", root.udid)
                 const win = comp.createObject(null, {
                     filePath: path,
                     udid: root.udid,
@@ -130,11 +135,11 @@ Item {
         errorMessage = qsTr("Open is not implemented for this file type yet.")
     }
 
-    function _deleteSelected() {
+    function deleteSelected() {
         if (!afcClient) return
         if (selectedPaths.length === 0) return
 
-        _setLoading(true)
+        setLoading(true)
         var ok = true
         for (var i = 0; i < selectedPaths.length; i++) {
             var p = selectedPaths[i]
@@ -144,7 +149,7 @@ Item {
 
         selectedPaths = []
         if (!ok) {
-            _setLoading(false)
+            setLoading(false)
             errorMessage = qsTr("Failed to delete one or more items.")
             return
         }
@@ -155,46 +160,37 @@ Item {
 
     property var selectedPaths: []
 
-    function _isSelected(path) { return selectedPaths.indexOf(path) !== -1 }
-    function _multiSelectModifierPressed(modifiers) {
+    function isSelected(path) { return selectedPaths.indexOf(path) !== -1 }
+    function multiSelectModifierPressed(modifiers) {
         if (Qt.platform.os === "osx" || Qt.platform.os === "darwin")
             return (modifiers & Qt.MetaModifier) !== 0
 
         return (modifiers & Qt.ControlModifier) !== 0
     }
 
-    function _toggleSelectedPath(path) {
+    function toggleSelectedPath(path) {
         var idx = selectedPaths.indexOf(path)
         if (idx === -1) selectedPaths = selectedPaths.concat([path])
         else selectedPaths = selectedPaths.slice(0, idx).concat(selectedPaths.slice(idx + 1))
-        _updateActionEnabled()
+        updateActionEnabled()
     }
 
-    function _selectPath(path, isDir, modifiers) {
-        // FIXME: dir
-        if (isDir) {
-            if (!_multiSelectModifierPressed(modifiers)) {
-                selectedPaths = []
-                _updateActionEnabled()
-            }
-            return
-        }
-
-        if (_multiSelectModifierPressed(modifiers)) {
-            _toggleSelectedPath(path)
+    function selectPath(path, modifiers) {
+        if (multiSelectModifierPressed(modifiers)) {
+            toggleSelectedPath(path)
             return
         }
 
         selectedPaths = [path]
-        _updateActionEnabled()
+        updateActionEnabled()
     }
 
-    function _updateActionEnabled() {
+    function updateActionEnabled() {
         exportBtn.enabled = selectedPaths.length > 0
         deleteBtn.enabled = selectedPaths.length > 0
     }
 
-    function _startExport(destinationDir) {
+    function startExport(destinationDir) {
         if (!ioManager || !root.udid || selectedPaths.length === 0)
             return
 
@@ -202,7 +198,7 @@ Item {
         App.StatusWindow.addProcess(
             jobId,
             qsTr("Exporting Files"),
-            "Export",
+            qsTr("Export"),
             selectedPaths.length,
             destinationDir
         )
@@ -214,7 +210,7 @@ Item {
             ioManager.start_export(root.udid, jobId, selectedPaths, destinationDir)
     }
 
-    function _startImport(localPaths) {
+    function startImport(localPaths) {
         if (!ioManager || !root.udid || localPaths.length === 0)
             return
 
@@ -222,7 +218,7 @@ Item {
         App.StatusWindow.addProcess(
             jobId,
             qsTr("Importing Files"),
-            "Import",
+            qsTr("Import"),
             localPaths.length,
             currentPath
         )
@@ -271,8 +267,8 @@ Item {
             root.loading = false
             root.errorMessage = ""
             root.selectedPaths = []
-            root._updateActionEnabled()
-            root._updateNavEnabled()
+            root.updateActionEnabled()
+            root.updateNavigationEnabled()
         }
 
     }
@@ -285,8 +281,8 @@ Item {
         addressBar.text = currentPath
         if (afcClient) refresh()
         else errorMessage = qsTr("AFC client is not available.")
-        _updateNavEnabled()
-        _updateActionEnabled()
+        updateNavigationEnabled()
+        updateActionEnabled()
     }
 
     ColumnLayout {
@@ -296,9 +292,9 @@ Item {
 
         SectionBox {
             id: navWidget
-            //Layout.fillWidth: true
+            Layout.fillWidth: true
             Layout.preferredHeight: 58
-            Layout.margins:20
+            Layout.margins: 12
 
             RowLayout {
                 anchors.fill: parent
@@ -335,10 +331,17 @@ Item {
                     onClicked: root.goUp()
                 }
 
+                ExplorerToolButton {
+                    iconSource: "qrc:/resources/icons/ic_outline-refresh.svg"
+                    tooltip: qsTr("Refresh")
+                    enabled: !!root.afcClient && !root.loading
+                    onClicked: root.refresh()
+                }
+
                 TextField {
                     id: addressBar
-                    //Layout.fillWidth: true
-                    Layout.maximumWidth: 200
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 100
 
                     placeholderText: qsTr("Enter path...")
                     text: root.currentPath
@@ -389,36 +392,44 @@ Item {
         }
 
 
-        // Content states
-        StackLayout {
-            id: contentStack
+        StateView {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            currentIndex: root.loading ? 1 : (root.errorMessage.length > 0 ? 2 : 0)
+            autoSwitchContent: false
+            viewState: root.loading
+                ? StateView.State.Loading
+                : root.errorMessage.length > 0 ? StateView.State.Error : StateView.State.Content
+            errorText: root.errorMessage
+            onRetryRequested: root.refresh()
 
-            // File list
-            Item {
+            contentItem: Item {
                 anchors.fill: parent
 
                 ListView {
                     id: listView
                     anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    anchors.bottomMargin: 12
                     clip: true
                     model: entriesModel
+                    spacing: 2
 
                     delegate: Rectangle {
                         id: row
                         width: ListView.view.width
                         height: 44
-                        radius: 6
+                        radius: App.Theme.sidebarCornerRadius
                         color: row.entrySelected
-                               ? App.Theme.selection
-                               : (mouseArea.containsMouse ? App.Theme.hover : "transparent")
+                            ? App.Theme.selectionSoft
+                            : mouseArea.containsMouse ? App.Theme.hover : "transparent"
+                        border.color: row.entrySelected ? App.Theme.selectionStroke : "transparent"
+                        border.width: 1
 
                         property string entryName: model.name
                         property bool entryIsDir: model.isDir
-                        property string entryPath: root._fullPath(entryName)
-                        property bool entrySelected: root._isSelected(entryPath)
+                        property string entryPath: root.fullPath(entryName)
+                        property bool entrySelected: root.isSelected(entryPath)
 
                         RowLayout {
                             anchors.fill: parent
@@ -426,18 +437,20 @@ Item {
                             anchors.rightMargin: 10
                             spacing: 10
 
-                            IconImage  {
+                            IconImage {
                                 source: model.iconSource
-                                Layout.preferredHeight: 34
-                                Layout.preferredWidth: 34
-                                color: row.entrySelected ? App.Theme.iconSelected : App.Theme.icon
+                                sourceSize.width: 22
+                                sourceSize.height: 22
+                                Layout.preferredHeight: 22
+                                Layout.preferredWidth: 22
+                                color: row.entrySelected ? App.Theme.systemBlue : App.Theme.icon
                             }
 
                             Text {
                                 Layout.fillWidth: true
                                 text: row.entryName
                                 elide: Text.ElideRight
-                                color: row.entrySelected ? App.Theme.textSelected : palette.text
+                                color: App.Theme.text
                             }
                         }
 
@@ -451,81 +464,70 @@ Item {
                                 if (row.entryIsDir) {
                                     root.navigateToPath(row.entryPath, true)
                                 } else {
-                                    root._openFileOnDevice(row.entryName)
+                                    root.openFileOnDevice(row.entryName)
                                 }
                             }
 
                             onClicked: (mouse) => {
                                 if (mouse.button === Qt.RightButton) {
-                                    contextMenu._name = row.entryName
-                                    contextMenu._isDir = row.entryIsDir
-                                    contextMenu._path = row.entryPath
+                                    contextMenu.entryName = row.entryName
+                                    contextMenu.entryIsDir = row.entryIsDir
+                                    contextMenu.entryPath = row.entryPath
                                     contextMenu.open()
                                     return
                                 }
-                                // Single click selects one file; platform modifier toggles multi-select.
-                                // Directories do not navigate on single-click.
-                                root._selectPath(row.entryPath, row.entryIsDir, mouse.modifiers)
+                                // Single click selects one item; platform modifier toggles multi-select.
+                                root.selectPath(row.entryPath, mouse.modifiers)
                             }
                         }
                     }
                 }
 
+                Label {
+                    anchors.centerIn: parent
+                    visible: entriesModel.count === 0
+                    text: qsTr("This folder is empty")
+                    color: App.Theme.textMuted
+                    font.pixelSize: 13
+                }
+
                 Menu {
                     id: contextMenu
-                    property string _name: ""
-                    property string _path: ""
-                    property bool _isDir: false
+                    property string entryName: ""
+                    property string entryPath: ""
+                    property bool entryIsDir: false
 
                     MenuItem {
                         text: qsTr("Open")
-                        enabled: !contextMenu._isDir
-                        onTriggered: root._openFileOnDevice(contextMenu._name)
-                    }
-
-                    MenuItem {
-                        text: qsTr("Open Externally")
-                        enabled: !contextMenu._isDir
-                        onTriggered: root._openFileOnDevice(contextMenu._name)
+                        onTriggered: {
+                            if (contextMenu.entryIsDir)
+                                root.navigateToPath(contextMenu.entryPath, true)
+                            else
+                                root.openFileOnDevice(contextMenu.entryName)
+                        }
                     }
 
                     MenuItem {
                         text: qsTr("Export")
-                        enabled: !contextMenu._isDir
                         onTriggered: {
-                            if (!root._isSelected(contextMenu._path))
-                                root.selectedPaths = [contextMenu._path]
-                            root._updateActionEnabled()
+                            if (!root.isSelected(contextMenu.entryPath))
+                                root.selectedPaths = [contextMenu.entryPath]
+                            root.updateActionEnabled()
                             exportDialog.open()
                         }
                     }
-                }
-            }
 
-            // Loading
-            ColumnLayout {
-                anchors.centerIn: parent
-                spacing: 10
-                BusyIndicator { running: true }
-                Text { text: qsTr("Loading..."); color: "#444" }
-            }
+                    MenuSeparator {}
 
-            // Error
-            ColumnLayout {
-                anchors.centerIn: parent
-                spacing: 10
-                width: Math.min(parent.width * 0.8, 520)
-
-                Text {
-                    text: root.errorMessage
-                    wrapMode: Text.WordWrap
-                    horizontalAlignment: Text.AlignHCenter
-                    color: "#444"
-                }
-
-                RowLayout {
-                    Layout.alignment: Qt.AlignHCenter
-                    Button { text: qsTr("Try Again"); onClicked: root.refresh() }
+                    MenuItem {
+                        text: qsTr("Delete")
+                        onTriggered: {
+                            if (!root.isSelected(contextMenu.entryPath))
+                                root.selectedPaths = [contextMenu.entryPath]
+                            root.updateActionEnabled()
+                            confirmDelete.open()
+                        }
+                    }
                 }
             }
         }
@@ -543,14 +545,13 @@ Item {
 
             Text { text: qsTr("Enter alias for this location:") }
             TextField { id: favAlias; placeholderText: qsTr("Alias here") }
-            Text { text: qsTr("Path: ") + root.currentPath; color: "#666" }
+            Text { text: qsTr("Path: ") + root.currentPath; color: App.Theme.textMuted }
         }
 
         onAccepted: {
             var alias = (favAlias.text || "").trim()
             if (alias.length === 0) return
-            // FIXME: persist
-            // favoritePlaceAdded(alias, root.currentPath)
+            root.favoritePlaceAdded(alias, root.currentPath)
             favAlias.text = ""
         }
         onRejected: favAlias.text = ""
@@ -569,16 +570,16 @@ Item {
                 text: qsTr("Are you sure you want to delete the selected item(s)?")
                 wrapMode: Text.WordWrap
             }
-            Text { text: qsTr("Count: ") + root.selectedPaths.length; color: "#666" }
+            Text { text: qsTr("Count: ") + root.selectedPaths.length; color: App.Theme.textMuted }
         }
 
-        onAccepted: root._deleteSelected()
+        onAccepted: root.deleteSelected()
     }
 
     FolderDialog {
         id: exportDialog
         title: qsTr("Choose Export Folder")
-        onAccepted: root._startExport(QmlUtils.url_to_path(selectedFolder))
+        onAccepted: root.startExport(QmlUtils.url_to_path(selectedFolder))
     }
 
     FileDialog {
@@ -589,7 +590,7 @@ Item {
             var paths = []
             for (var i = 0; i < selectedFiles.length; i++)
                 paths.push(QmlUtils.url_to_path(selectedFiles[i]))
-            root._startImport(paths)
+            root.startImport(paths)
         }
     }
 

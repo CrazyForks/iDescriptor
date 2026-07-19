@@ -1,334 +1,415 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
 import QtQuick.Controls.impl
+import QtQuick.Layouts
+import "./base"
+import "." as App
 
 Item {
     id: root
-    anchors.fill: parent
 
-    required property string udid
-    visible: (parent && parent.currentSection !== undefined) ? (parent.currentSection === 2) : true
+    required property var device
+    property string udid: device.udid
 
-    /* clients are created from Rust side */
     property var afcClient: null
     property var afc2Client: null
     property bool afc2Available: false
-
     property bool loading: true
     property string errorMessage: ""
-
-    /* 0 = default, 1 = afc2 */
     property int currentExplorerIndex: 0
+    property string selectedSidebarKey: "default"
+    property bool componentReady: false
 
-    function _resetUi() {
-        loading = true
-        errorMessage = ""
-        afcClient = null
-        afc2Client = null
-        afc2Available = false
-        currentExplorerIndex = 0
+    readonly property string favoritePlacesPrefix: "favorite_places/"
+    readonly property string favoritePlacesAfc2Prefix: "favorite_places_afc2/"
+
+    ListModel {
+        id: favoritesModel
+    }
+
+    function resetUi() {
+        root.loading = true
+        root.errorMessage = ""
+        root.afcClient = null
+        root.afc2Client = null
+        root.afc2Available = false
+        root.currentExplorerIndex = 0
+        root.selectedSidebarKey = "default"
+        root.updateState()
+    }
+
+    function updateState() {
+        if (root.loading) {
+            stateView.viewState = StateView.State.Loading
+        } else if (root.errorMessage.length > 0) {
+            stateView.errorText = root.errorMessage
+            stateView.viewState = StateView.State.Error
+        } else {
+            stateView.viewState = StateView.State.Content
+        }
     }
 
     function loadClients() {
-        _resetUi()
+        root.resetUi()
 
-        if (!root.udid || root.udid.length === 0) {
-            console.log
-            loading = false
-            console.log("wtf no device")
-            errorMessage = qsTr("No device selected.")
+        if (!root.udid.length) {
+            root.loading = false
+            root.errorMessage = qsTr("No device selected.")
+            root.updateState()
             return
         }
 
-        if (typeof serviceFactory === "undefined" || !serviceFactory) {
-            loading = false
-            errorMessage = qsTr("serviceFactory is not available in QML scope.")
+        root.afcClient = root.device.afcClient
+        if (!root.afcClient) {
+            root.loading = false
+            root.errorMessage = qsTr("The default file service is unavailable.")
+            root.updateState()
             return
         }
 
-        afcClient = serviceFactory.create_afc_client(root.udid, false)
-        afc2Client = serviceFactory.create_afc_client(root.udid, true)
-
-        if (afcClient === null) {
-            console.log("No AFC client in FilesSection.qml")
-            loading = false
-            errorMessage = qsTr("Failed to create AFC client.")
-            return
-        }
-        console.log("AFC client ready")
-
-        afc2Available = (afc2Client !== null)
-        loading = false
+        root.afc2Client = serviceFactory.create_afc_client(root.udid, true)
+        root.afc2Available = Boolean(root.afc2Client)
+        root.loading = false
+        root.updateState()
     }
 
-    Component.onCompleted: loadClients()
+    function loadFavoritePlaces() {
+        favoritesModel.clear()
 
-    // FIXME: wire up settings )
-    ListModel { id: favoritesModel }
+        const defaultFavorites = settingsManager.get_favorite_places(root.favoritePlacesPrefix)
+        for (let i = 0; i < defaultFavorites.length; ++i) {
+            const favorite = defaultFavorites[i]
+            favoritesModel.append({
+                alias: favorite.alias,
+                path: favorite.path,
+                afc2: false
+            })
+        }
 
-    RowLayout {
+        const afc2Favorites = settingsManager.get_favorite_places(root.favoritePlacesAfc2Prefix)
+        for (let j = 0; j < afc2Favorites.length; ++j) {
+            const favorite = afc2Favorites[j]
+            favoritesModel.append({
+                alias: favorite.alias,
+                path: favorite.path,
+                afc2: true
+            })
+        }
+    }
+
+    function saveFavoritePlace(alias, path, afc2) {
+        const prefix = afc2 ? root.favoritePlacesAfc2Prefix : root.favoritePlacesPrefix
+        settingsManager.save_favorite_place(path, alias, prefix)
+    }
+
+    function removeFavoritePlace(index) {
+        if (index < 0 || index >= favoritesModel.count)
+            return
+
+        const favorite = favoritesModel.get(index)
+        const sidebarKey = "favorite:" + (favorite.afc2 ? "afc2:" : "default:") + favorite.path
+        if (root.selectedSidebarKey === sidebarKey)
+            root.selectedSidebarKey = favorite.afc2 ? "afc2" : "default"
+
+        const prefix = favorite.afc2 ? root.favoritePlacesAfc2Prefix : root.favoritePlacesPrefix
+        settingsManager.remove_favorite_place(prefix, favorite.path)
+    }
+
+    function selectExplorer(afc2, path, sidebarKey) {
+        if (afc2 && !root.afc2Available)
+            return
+
+        root.currentExplorerIndex = afc2 ? 1 : 0
+        root.selectedSidebarKey = sidebarKey
+
+        const explorer = afc2 ? explorerAfc2 : explorerDefault
+        if (path && path.length > 0)
+            explorer.navigateToPath(path)
+        else
+            explorer.goHome()
+    }
+
+    Component.onCompleted: {
+        root.componentReady = true
+        root.loadFavoritePlaces()
+        root.loadClients()
+    }
+
+    onUdidChanged: {
+        if (root.componentReady)
+            root.loadClients()
+    }
+
+    Connections {
+        target: settingsManager
+
+        function onFavoritePlacesChanged() {
+            root.loadFavoritePlaces()
+        }
+    }
+
+    StateView {
+        id: stateView
         anchors.fill: parent
-        spacing: 0
+        autoSwitchContent: false
+        viewState: StateView.State.Loading
+        errorText: qsTr("The file explorer could not be loaded.")
+        onRetryRequested: root.loadClients()
 
-        // Sidebar
-        Rectangle {
-            id: sidebar
-            Layout.preferredWidth: 250
-            Layout.maximumWidth: 250
-            Layout.fillHeight: true
-            color: "transparent"
-            border.color: "#1f000000"
-            border.width: 1
+        contentItem: SplitView {
+            anchors.fill: parent
+            orientation: Qt.Horizontal
 
-            ListView {
-                id: sidebarList
-                anchors.fill: parent
-                clip: true
+            handle: Rectangle {
+                implicitWidth: 7
+                color: SplitHandle.pressed
+                    ? App.Theme.focus
+                    : SplitHandle.hovered ? App.Theme.selectionStroke : App.Theme.sidebarDivider
 
-                model: ListModel {
-                    id: sidebarModel
-
-                    ListElement { kind: "header"; title: "Explorer"; icon: "qrc:/resources/icons/material-symbols_folder.svg" }
-                    ListElement { kind: "explorer"; title: "Default"; icon: "qrc:/resources/icons/material-symbols_folder.svg"; afc2: false }
-                    ListElement { kind: "explorer"; title: "Jailbroken (AFC2)"; icon: "qrc:/resources/icons/material-symbols_folder.svg"; afc2: true }
-
-                    ListElement { kind: "header"; title: "Common Places"; icon: "qrc:/resources/icons/material-symbols_favorite.svg" }
-                    ListElement { kind: "place"; title: "Pictures"; icon: "qrc:/resources/icons/material-symbols_folder.svg"; path: "/DCIM"; afc2: false }
-
-                    ListElement { kind: "header"; title: "Favorite Places"; icon: "qrc:/resources/icons/material-symbols_favorite.svg" }
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 1
+                    height: parent.height
+                    color: App.Theme.sidebarDivider
                 }
+            }
 
-                delegate: Item {
-                    id: row
-                    width: ListView.view.width
-                    height: (model.kind === "header") ? 44 : 40
+            Rectangle {
+                id: sidebar
+                SplitView.preferredWidth: 230
+                SplitView.minimumWidth: 160
+                SplitView.maximumWidth: 320
+                SplitView.fillHeight: true
+                color: App.Theme.sidebarBackground
 
-                    property bool isHeader: model.kind === "header"
-                    property bool isExplorer: model.kind === "explorer"
-                    property bool isPlace: model.kind === "place"
+                ScrollView {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    clip: true
+                    contentWidth: availableWidth
+                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-                    Rectangle {
-                        anchors.fill: parent
-                        color: "transparent"
-                    }
+                    ColumnLayout {
+                        width: Math.max(parent.width, 1)
+                        spacing: 4
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 10
-                        spacing: 10
-
-                        IconImage {
-                            source: model.icon
-                            Layout.preferredHeight: 34
-                            Layout.preferredWidth: 34
-                            color: palette.text
-                            opacity: 1.0
+                        SidebarSectionLabel {
+                            text: qsTr("Explorer")
                         }
 
-                        Text {
+                        SidebarRow {
+                            title: qsTr("Default")
+                            iconSource: "qrc:/resources/icons/material-symbols_folder.svg"
+                            selected: root.selectedSidebarKey === "default"
+                            onActivated: root.selectExplorer(false, "", "default")
+                        }
+
+                        SidebarRow {
+                            title: qsTr("Jailbroken (AFC2)")
+                            subtitle: root.afc2Available ? qsTr("Full filesystem") : qsTr("Unavailable")
+                            iconSource: "qrc:/resources/icons/material-symbols_folder.svg"
+                            rowEnabled: root.afc2Available
+                            selected: root.selectedSidebarKey === "afc2"
+                            onActivated: root.selectExplorer(true, "", "afc2")
+                        }
+
+                        SidebarSectionLabel {
+                            Layout.topMargin: 10
+                            text: qsTr("Common Places")
+                        }
+
+                        SidebarRow {
+                            title: qsTr("Pictures")
+                            subtitle: qsTr("/DCIM")
+                            iconSource: "qrc:/resources/icons/material-symbols_image-outline-sharp.svg"
+                            selected: root.selectedSidebarKey === "pictures"
+                            onActivated: root.selectExplorer(false, "/DCIM", "pictures")
+                        }
+
+                        SidebarSectionLabel {
+                            Layout.topMargin: 10
+                            text: qsTr("Favorite Places")
+                        }
+
+                        Label {
                             Layout.fillWidth: true
-                            text: qsTr(model.title)
-                            font.bold: row.isHeader
-                            elide: Text.ElideRight
-                            color: palette.text
+                            Layout.leftMargin: 10
+                            Layout.rightMargin: 10
+                            Layout.preferredHeight: favoritesModel.count === 0 ? implicitHeight : 0
+                            visible: favoritesModel.count === 0
+                            text: qsTr("No favorite locations yet")
+                            color: App.Theme.textMuted
+                            font.pixelSize: 11
+                            wrapMode: Text.WordWrap
                         }
-
-                        Text {
-                            visible: row.isExplorer && model.afc2 && !root.afc2Available
-                            text: qsTr("(unavailable)")
-                            color: "#666"
-                            font.pixelSize: 12
-                        }
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        enabled: !row.isHeader && !(row.isExplorer && model.afc2 && !root.afc2Available)
-                        onClicked: {
-                            if (row.isExplorer) {
-                                root.currentExplorerIndex = model.afc2 ? 1 : 0
-                                if (root.currentExplorerIndex === 0) explorerDefault.goHome()
-                                else explorerAfc2.goHome()
-                                return
-                            }
-                            if (row.isPlace) {
-                                root.currentExplorerIndex = model.afc2 ? 1 : 0
-                                if (root.currentExplorerIndex === 0) explorerDefault.navigateToPath(model.path)
-                                else explorerAfc2.navigateToPath(model.path)
-                                return
-                            }
-                        }
-                    }
-                }
-
-                footer: Item {
-                    width: sidebarList.width
-                    height: favCol.implicitHeight
-
-                    Column {
-                        id: favCol
-                        width: parent.width
 
                         Repeater {
                             model: favoritesModel
 
-                            delegate: Item {
-                                id: favRow
-                                width: favCol.width
-                                height: 40
+                            delegate: SidebarRow {
+                                required property int index
+                                required property string alias
+                                required property string path
+                                required property bool afc2
 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 10
-                                    anchors.rightMargin: 10
-                                    spacing: 10
+                                title: alias
+                                subtitle: afc2 ? qsTr("AFC2 · %1").arg(path) : path
+                                iconSource: "qrc:/resources/icons/material-symbols_favorite.svg"
+                                rowEnabled: !afc2 || root.afc2Available
+                                selected: root.selectedSidebarKey === "favorite:" + (afc2 ? "afc2:" : "default:") + path
+                                acceptsRightClick: true
 
-                                    Image {
-                                        source: "qrc:/resources/icons/material-symbols_folder.svg"
-                                        Layout.preferredHeight: 34
-                                        Layout.preferredWidth: 34
-                                        // FIXME:theming
-                                    }
-
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: alias
-                                        elide: Text.ElideRight
-                                    }
-
-                                    Text {
-                                        visible: afc2 === true
-                                        text: qsTr("AFC2")
-                                        color: "#666"
-                                        font.pixelSize: 12
-                                    }
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-
-                                    onClicked: (mouse) => {
-                                        if (mouse.button === Qt.RightButton) {
-                                            favMenu._index = index
-                                            favMenu.open()
-                                            return
-                                        }
-                                        root.currentExplorerIndex = afc2 ? 1 : 0
-                                        if (root.currentExplorerIndex === 0) explorerDefault.navigateToPath(path)
-                                        else explorerAfc2.navigateToPath(path)
-                                    }
+                                onActivated: root.selectExplorer(
+                                    afc2,
+                                    path,
+                                    "favorite:" + (afc2 ? "afc2:" : "default:") + path
+                                )
+                                onContextRequested: {
+                                    favoriteMenu.favoriteIndex = index
+                                    favoriteMenu.open()
                                 }
                             }
+                        }
+
+                        Item {
+                            Layout.fillHeight: true
                         }
                     }
                 }
             }
 
-            Menu {
-                id: favMenu
-                property int _index: -1
+            Rectangle {
+                SplitView.fillWidth: true
+                SplitView.fillHeight: true
+                color: App.Theme.controlFill
 
-                MenuItem {
-                    text: qsTr("Remove from Favorites")
-                    onTriggered: {
-                        if (favMenu._index >= 0) favoritesModel.remove(favMenu._index)
+                StackLayout {
+                    anchors.fill: parent
+                    currentIndex: root.currentExplorerIndex
+
+                    FileExplorer {
+                        id: explorerDefault
+                        udid: root.udid
+                        afcClient: root.afcClient
+                        useAfc2: false
+                        favEnabled: true
+                        onFavoritePlaceAdded: (alias, path) => root.saveFavoritePlace(alias, path, false)
+                    }
+
+                    FileExplorer {
+                        id: explorerAfc2
+                        udid: root.udid
+                        afcClient: root.afc2Client
+                        useAfc2: true
+                        favEnabled: true
+                        onFavoritePlaceAdded: (alias, path) => root.saveFavoritePlace(alias, path, true)
                     }
                 }
             }
         }
+    }
 
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+    Menu {
+        id: favoriteMenu
+        property int favoriteIndex: -1
 
-            StackLayout {
-                id: mainStack
-                anchors.fill: parent
-                currentIndex: root.loading ? 1 : (root.errorMessage.length > 0 ? 2 : 0)
+        MenuItem {
+            text: qsTr("Remove from Favorites")
+            onTriggered: root.removeFavoritePlace(favoriteMenu.favoriteIndex)
+        }
+    }
 
-                // Content
-                Item {
-                    id: contentView
-                    anchors.fill: parent
+    component SidebarSectionLabel: Label {
+        Layout.fillWidth: true
+        Layout.leftMargin: 10
+        Layout.rightMargin: 10
+        Layout.preferredHeight: 28
+        verticalAlignment: Text.AlignVCenter
+        color: App.Theme.textMuted
+        font.pixelSize: 11
+        font.weight: Font.DemiBold
+        font.capitalization: Font.AllUppercase
+    }
 
-                    StackLayout {
-                        anchors.fill: parent
-                        currentIndex: root.currentExplorerIndex
+    component SidebarRow: Rectangle {
+        id: sidebarRow
 
-                        FileExplorer {
-                            id: explorerDefault
-                            udid: root.udid
-                            afcClient: root.afcClient
-                            useAfc2: false
-                            favEnabled: true
+        property string title: ""
+        property string subtitle: ""
+        property url iconSource: ""
+        property bool selected: false
+        property bool rowEnabled: true
+        property bool acceptsRightClick: false
 
-                            // onFavoritePlaceAdded: (alias, path) => {
-                            //     // FIXME
-                            //     favoritesModel.append({ "alias": alias, "path": path, "afc2": false })
-                            // }
-                        }
+        signal activated()
+        signal contextRequested()
 
-                        Item {
-                            anchors.fill: parent
+        Layout.fillWidth: true
+        Layout.preferredHeight: subtitle.length > 0 ? 50 : 40
+        radius: App.Theme.sidebarCornerRadius
+        color: selected
+            ? App.Theme.selectionSoft
+            : rowHover.hovered && rowEnabled ? App.Theme.hover : "transparent"
+        border.color: selected ? App.Theme.selectionStroke : "transparent"
+        border.width: 1
+        opacity: rowEnabled ? 1 : 0.5
 
-                            FileExplorer {
-                                id: explorerAfc2
-                                anchors.fill: parent
-                                udid: root.udid
-                                afcClient: root.afc2Client
-                                useAfc2: true
-                                favEnabled: true
+        Behavior on color {
+            ColorAnimation { duration: App.Theme.fastAnimation }
+        }
 
-                                visible: root.afc2Available
-                                // onFavoritePlaceAdded: (alias, path) => {
-                                //     favoritesModel.append({ "alias": alias, "path": path, "afc2": true })
-                                // }
-                            }
+        HoverHandler {
+            id: rowHover
+        }
 
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: 10
-                                visible: !root.afc2Available
+        TapHandler {
+            acceptedButtons: sidebarRow.acceptsRightClick
+                ? Qt.LeftButton | Qt.RightButton
+                : Qt.LeftButton
+            enabled: sidebarRow.rowEnabled
+            onTapped: (eventPoint, button) => {
+                if (button === Qt.RightButton)
+                    sidebarRow.contextRequested()
+                else
+                    sidebarRow.activated()
+            }
+        }
 
-                                Text { text: qsTr("AFC2 is not available on this device."); color: "#444" }
-                                Button {
-                                    text: qsTr("Switch to Default")
-                                    onClicked: root.currentExplorerIndex = 0
-                                }
-                            }
-                        }
-                    }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            spacing: 9
+
+            IconImage {
+                source: sidebarRow.iconSource
+                sourceSize.width: 19
+                sourceSize.height: 19
+                Layout.preferredWidth: 19
+                Layout.preferredHeight: 19
+                color: sidebarRow.selected ? App.Theme.systemBlue : App.Theme.icon
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 1
+
+                Label {
+                    Layout.fillWidth: true
+                    text: sidebarRow.title
+                    color: App.Theme.text
+                    font.pixelSize: 13
+                    font.weight: sidebarRow.selected ? Font.DemiBold : Font.Normal
+                    elide: Text.ElideRight
                 }
 
-                // Loading
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    spacing: 10
-
-                    BusyIndicator { running: true }
-                    Text { text: qsTr("Loading file explorer..."); color: "#444" }
-                }
-
-                // Error
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    spacing: 10
-                    width: Math.min(parent.width * 0.8, 520)
-
-                    Text {
-                        text: root.errorMessage
-                        wrapMode: Text.WordWrap
-                        horizontalAlignment: Text.AlignHCenter
-                        color: "#444"
-                    }
-
-                    RowLayout {
-                        Layout.alignment: Qt.AlignHCenter
-                        Button { text: qsTr("Try Again"); onClicked: root.loadClients() }
-                    }
+                Label {
+                    Layout.fillWidth: true
+                    visible: sidebarRow.subtitle.length > 0
+                    text: sidebarRow.subtitle
+                    color: App.Theme.textMuted
+                    font.pixelSize: 10
+                    elide: Text.ElideMiddle
                 }
             }
         }
