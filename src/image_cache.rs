@@ -1,9 +1,9 @@
+use ::log::debug;
 use lru::LruCache;
 use once_cell::sync::Lazy;
 use qttypes::QImage;
 use std::num::NonZeroUsize;
 use std::sync::Mutex;
-use ::log::debug;
 
 const IMAGE_CACHE_CAPACITY: usize = 512;
 
@@ -60,7 +60,11 @@ pub fn clear_for_udid(udid: &str) {
             .filter_map(|(key, _)| (key.udid == udid).then(|| key.clone()))
             .collect();
 
-        debug!("Clearing {} images from cache for UDID {}", keys.len(), udid);
+        debug!(
+            "Clearing {} images from cache for UDID {}",
+            keys.len(),
+            udid
+        );
 
         for key in keys {
             guard.pop(&key);
