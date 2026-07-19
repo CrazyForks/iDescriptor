@@ -6,4 +6,5 @@ Window {
     property bool showMaximize: false  
     property bool showMinimize: false     
     property bool showClose: false 
+    property bool auto_close: true
 }
