@@ -102,6 +102,8 @@ pub struct SettingsManager {
     set_theme: qt_method!(fn(&self, theme: QString)),
     window_effect: qt_method!(fn(&self) -> QString),
     set_window_effect: qt_method!(fn(&self, effect: QString)),
+    is_window_effect_choice_presented: qt_method!(fn(&self) -> bool),
+    set_is_window_effect_choice_presented: qt_method!(fn(&self, presented: bool)),
     language: qt_method!(fn(&self) -> QString),
     set_language: qt_method!(fn(&self, language: QString)),
     connection_timeout: qt_method!(fn(&self) -> i32),
@@ -460,6 +462,14 @@ impl SettingsManager {
 
     fn set_window_effect(&self, effect: QString) {
         write_string("windowEffect", normalize_window_effect(effect));
+    }
+
+    fn is_window_effect_choice_presented(&self) -> bool {
+        read_bool("windowEffectChoicePresented", false)
+    }
+
+    fn set_is_window_effect_choice_presented(&self, presented: bool) {
+        write_bool("windowEffectChoicePresented", presented);
     }
 
     pub fn language(&self) -> QString {

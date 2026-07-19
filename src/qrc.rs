@@ -86,7 +86,6 @@ qrc!(pub rsrc,
         "resources/airplay-tutorial.mp4",
         "resources/ipad-mockups/ipad.png",
         "DeveloperDiskImages.json",
-        "resources/keychain.mp4",
         "resources/wireless-gallery-import.mp4",
         "resources/dev-mode.mp4",
         "resources/unlock.mp4",
@@ -95,5 +94,21 @@ qrc!(pub rsrc,
         // ------- Translations --------
         "translations/de.qm",
 
+    }
+);
+
+#[cfg(target_os = "macos")]
+qrc!(pub macos_rsrc,
+    "/" {
+        "resources/keychain.mp4",
+    }
+);
+
+#[cfg(target_os = "windows")]
+qrc!(pub windows_rsrc,
+    "/" {
+        // TODO: Replace these placeholder previews with final normal/acrylic desktop images.
+        "resources/repo/win-11-mica-light.png",
+        "resources/repo/win-11-mica-dark.png",
     }
 );

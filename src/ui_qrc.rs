@@ -25,7 +25,6 @@ qrc!(pub qml,
         "src/ui/HowToConnect.qml",
         "src/ui/IconLoader.qml",
         "src/ui/Jailbroken.qml",
-        "src/ui/KeychainDialog.qml",
         "src/ui/LoginDialog.qml",
         "src/ui/Main.qml",
         "src/ui/NetworkDevicesToConnect.qml",
@@ -95,6 +94,7 @@ qrc!(pub windows_qml,
     "/" {
         "src/ui/platform/windows/Index.qml",
         "src/ui/platform/windows/Main.qml",
+        "src/ui/platform/windows/WindowEffectDialog.qml",
         "src/ui/+windows/SidebarTabButton.qml",
         "src/ui/base/+windows/DefaultWindow.qml",
         "src/ui/base/+windows/ToolWindow.qml",
@@ -105,6 +105,7 @@ qrc!(pub windows_qml,
 #[cfg(target_os = "macos")]
 qrc!(pub macos_qml,
     "/" {
+        "src/ui/KeychainDialog.qml",
         "src/ui/platform/macos/Main.qml"
     }
 );

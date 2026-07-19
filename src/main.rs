@@ -201,7 +201,10 @@ fn main() {
     crate::ui_qrc::qml();
 
     #[cfg(target_os = "macos")]
-    crate::ui_qrc::macos_qml();
+    {
+        crate::qrc::macos_rsrc();
+        crate::ui_qrc::macos_qml();
+    }
 
     // workaround for gstreamer plugins not being loaded on Windows
     #[cfg(target_os = "windows")]
@@ -227,6 +230,7 @@ fn main() {
             }
         }
 
+        crate::qrc::windows_rsrc();
         crate::ui_qrc::windows_qml();
     }
 
