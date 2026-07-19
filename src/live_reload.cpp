@@ -6,6 +6,7 @@
 #include <QDirIterator>
 #include <QFileSystemWatcher>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQuickItem>
@@ -74,20 +75,45 @@ void init_live_reload(QQmlApplicationEngine *engine, const QString &watchPath,
         prevFile.clear();
         add_watch_paths(w, watchPath);
 
+        const bool quitOnLastWindowClosed = QGuiApplication::quitOnLastWindowClosed();
+        QGuiApplication::setQuitOnLastWindowClosed(false);
+
         const auto roots = engine->rootObjects();
         for (QObject *rootObj : roots) {
             if (!rootObj)
                 continue;
+
+            if (rootObj->metaObject()->indexOfMethod("prepareLiveReload()") >= 0) {
+                QMetaObject::invokeMethod(rootObj, "prepareLiveReload",
+                                          Qt::DirectConnection);
+            }
+
             rootObj->setParent(nullptr);
             rootObj->deleteLater();
         }
 
-        engine->clearComponentCache();
-        engine->trimComponentCache();
-        engine->load(mainPath);
+        qDebug() << "live reload: teardown scheduled"
+                 << "roots" << roots.size();
 
-        if (engine->rootObjects().isEmpty())
-            qWarning() << "live reload: reload produced no root objects" << mainPath;
+        // Let FluentUI's native frameless windows and the launcher process their
+        // DeferredDelete events naturally. Forcing them through sendPostedEvents()
+        // here can destroy Windows event-filter objects reentrantly.
+        QTimer::singleShot(100, engine, [engine, mainPath, quitOnLastWindowClosed]() {
+            qDebug() << "live reload: teardown complete"
+                     << "roots" << engine->rootObjects().size()
+                     << "windows" << QGuiApplication::allWindows().size();
+
+            // Keep QML singleton instances alive so external singleton services
+            // such as FluentUI do not retain references to deleted instances.
+            engine->clearComponentCache();
+            engine->load(mainPath);
+            QGuiApplication::setQuitOnLastWindowClosed(quitOnLastWindowClosed);
+
+            qDebug() << "live reload: loaded" << mainPath
+                     << "roots" << engine->rootObjects().size();
+            if (engine->rootObjects().isEmpty())
+                qWarning() << "live reload: reload produced no root objects" << mainPath;
+        });
     });
 
     auto scheduleReload = [=](const QString &path) mutable {
