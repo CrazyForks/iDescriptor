@@ -1,9 +1,6 @@
-use crate::device_ctx::{DeviceServices, get_device_opt};
-use crate::{
-    RUNTIME,
-    qt_threading::{QtThread, QtThreading},
-    run_sync, utils,
-};
+use crate::device_ctx::DeviceServices;
+use crate::{RUNTIME, qt_threading::QtThreading, run_sync, utils};
+use idevice::afc::opcode::AfcFopenMode;
 use idevice::services::core_device_proxy::CoreDeviceProxy;
 use idevice::{
     IdeviceService, RsdService, amfi,
@@ -13,18 +10,17 @@ use idevice::{
     provider::IdeviceProvider,
     rsd::RsdHandshake,
     simulate_location::LocationSimulationService,
-    springboardservices::SpringBoardServicesClient,
 };
-use idevice::{afc::opcode::AfcFopenMode, provider};
 use macros::QtThreading;
 use plist::Value;
 use qmetaobject::prelude::*;
 use qttypes::{QStringList, QVariantMap};
 
+use ::log::error;
 use plist_macro::plist;
 use serde_json;
 use std::sync::Arc;
-use std::{io::Read, pin::Pin, time::Duration};
+use std::{io::Read, time::Duration};
 use tokio::sync::Mutex;
 
 #[allow(non_snake_case)]
@@ -47,6 +43,7 @@ pub struct ServiceManager {
     enter_recovery_mode: qt_method!(fn(&self) -> bool),
     install_ipa: qt_method!(fn(&self, ipa_path: QString)),
     enable_wifi_connections: qt_method!(fn(&self)),
+    get_battery_info: qt_method!(fn(&self, raw_product_type: QString)),
 
     // Signals
     cableInfoRetrieved: qt_signal!(info: QString),
@@ -61,7 +58,8 @@ pub struct ServiceManager {
         sig_length: u64
     ),
     installedAppsRetrieved: qt_signal!(success : bool,apps: QVariantMap),
-    batteryInfoUpdated: qt_signal!(info: QString),
+    batteryInfoUpdated: qt_signal!(info: QVariantMap),
+    batteryInfoUpdateFailed: qt_signal!(error: QString),
     appsDiskUsageRetrieved: qt_signal!(success: bool, apps_usage: u64),
     installIpaInit: qt_signal!(started: bool, state: QString),
     installIpaProgress: qt_signal!(progress: f64, state: QString),
@@ -83,44 +81,6 @@ impl ServiceManager {
         s.udid = udid;
         s.ios_version = ios_version;
         s
-    }
-
-    pub fn start_update_battery_info_interval(&self) {
-        let udid = self.udid.clone();
-        let qt_thread = self.qt_thread();
-        println!("Starting battery info update interval for device {udid}");
-        RUNTIME.spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(30));
-
-            loop {
-                interval.tick().await;
-
-                let maybe_device = get_device_opt(udid.as_str()).await;
-
-                let device = match maybe_device {
-                    Some(d) => d,
-                    None => {
-                        println!("Battery info interval: Device {udid} not found");
-                        return;
-                    }
-                };
-
-                println!("Battery info interval: Fetching battery info for device {udid}");
-
-                utils::query_battery_info(&mut *device.diag.lock().await)
-                    .await
-                    .map(|info| {
-                        let mut buf = Vec::new();
-                        if Value::Dictionary(info).to_writer_xml(&mut buf).is_ok() {
-                            if let Ok(s) = String::from_utf8(buf) {
-                                qt_thread.queue(move |t| {
-                                    t.batteryInfoUpdated(QString::from(s));
-                                });
-                            }
-                        }
-                    });
-            }
-        });
     }
 
     fn query_mobilegestalt(&self, keys: QStringList) {
@@ -872,6 +832,39 @@ impl ServiceManager {
             qt_thread.queue(move |t| {
                 t.developerModeStatusChecked(developer_mode_status);
             });
+        });
+    }
+
+    fn get_battery_info(&self, raw_product_type: QString) {
+        let udid = self.udid.clone();
+        let qt_t = self.qt_thread();
+
+        let diag_guard = self.device.as_ref().unwrap().clone().diag;
+
+        RUNTIME.spawn(async move {
+            let qt_thread = qt_t.clone();
+            let mut diag = diag_guard.lock().await;
+            let mut info = QVariantMap::default();
+            match crate::core::insert_battery_info(
+                &mut diag,
+                &mut info,
+                raw_product_type.to_string(),
+            )
+            .await
+            {
+                Ok(_) => {
+                    qt_thread.queue(move |t| {
+                        t.batteryInfoUpdated(info);
+                    });
+                }
+                Err(e) => {
+                    error!("get_battery_info: Failed to get battery info for device {udid}: {e}");
+                    let error = QString::from(e.to_string());
+                    qt_thread.queue(move |t| {
+                        t.batteryInfoUpdateFailed(error);
+                    });
+                }
+            }
         });
     }
 }
