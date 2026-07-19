@@ -333,25 +333,26 @@ impl Apps {
                 let task_dir = TaskDirectory::create(&output_path, &task_id_for_task).await?;
                 let progress_qt = q_thread.clone();
                 let progress_task_id = task_id_for_task.clone();
-                let downloaded_path = tool.download_with_progress(
-                    DownloadArgs {
-                        bundle_id,
-                        output_path: Some(task_dir.path.to_string_lossy().into_owned()),
-                        external_version_id: None,
-                        acquire_license: false,
-                    },
-                    move |downloaded, total| {
-                        let progress = total
-                            .filter(|total| *total > 0)
-                            .map(|total| downloaded as f64 / total as f64)
-                            .unwrap_or(-1.0);
-                        let id = progress_task_id.clone();
-                        progress_qt.queue(move |apps| {
-                            apps.downloadIpaProgress(QString::from(id), progress);
-                        });
-                    },
-                )
-                .await?;
+                let downloaded_path = tool
+                    .download_with_progress(
+                        DownloadArgs {
+                            bundle_id,
+                            output_path: Some(task_dir.path.to_string_lossy().into_owned()),
+                            external_version_id: None,
+                            acquire_license: false,
+                        },
+                        move |downloaded, total| {
+                            let progress = total
+                                .filter(|total| *total > 0)
+                                .map(|total| downloaded as f64 / total as f64)
+                                .unwrap_or(-1.0);
+                            let id = progress_task_id.clone();
+                            progress_qt.queue(move |apps| {
+                                apps.downloadIpaProgress(QString::from(id), progress);
+                            });
+                        },
+                    )
+                    .await?;
 
                 let downloaded_path = PathBuf::from(downloaded_path);
                 let file_name = downloaded_path
@@ -425,30 +426,31 @@ impl Apps {
                     TaskDirectory::create(&std::env::temp_dir(), &task_id_for_task).await?;
                 let progress_qt = q_thread.clone();
                 let progress_task_id = task_id_for_task.clone();
-                let ipa_path = tool.download_with_progress(
-                    DownloadArgs {
-                        bundle_id,
-                        output_path: Some(task_dir.path.to_string_lossy().into_owned()),
-                        external_version_id: None,
-                        acquire_license: false,
-                    },
-                    move |downloaded, total| {
-                        let progress = total
-                            .filter(|total| *total > 0)
-                            .map(|total| (downloaded as f64 / total as f64) * 0.5)
-                            .unwrap_or(-1.0);
-                        let id = progress_task_id.clone();
-                        progress_qt.queue(move |apps| {
-                            apps.installAppProgress(
-                                QString::from(id),
-                                progress,
-                                QString::from("download"),
-                            );
-                        });
-                    },
-                )
-                .await
-                .context("Failed to download the IPA")?;
+                let ipa_path = tool
+                    .download_with_progress(
+                        DownloadArgs {
+                            bundle_id,
+                            output_path: Some(task_dir.path.to_string_lossy().into_owned()),
+                            external_version_id: None,
+                            acquire_license: false,
+                        },
+                        move |downloaded, total| {
+                            let progress = total
+                                .filter(|total| *total > 0)
+                                .map(|total| (downloaded as f64 / total as f64) * 0.5)
+                                .unwrap_or(-1.0);
+                            let id = progress_task_id.clone();
+                            progress_qt.queue(move |apps| {
+                                apps.installAppProgress(
+                                    QString::from(id),
+                                    progress,
+                                    QString::from("download"),
+                                );
+                            });
+                        },
+                    )
+                    .await
+                    .context("Failed to download the IPA")?;
 
                 let installing_qt = q_thread.clone();
                 let installing_task_id = task_id_for_task.clone();
