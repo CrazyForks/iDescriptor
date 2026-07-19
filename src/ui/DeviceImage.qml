@@ -5,7 +5,7 @@ import Qt5Compat.GraphicalEffects
 Item {
     id: root
 
-    implicitWidth: 200
+    implicitWidth: 175
     implicitHeight: 400
 
     required property var displayName
