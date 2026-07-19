@@ -1,5 +1,6 @@
 pub const RECENTS_ALBUM_ID: i32 = -1;
 pub const FAVS_ALBUM_ID: i32 = -2;
+pub const RECENTLY_DELETED_ALBUM_ID: i32 = -3;
 
 pub static IOS_15_ALBUM_QUERY_STATEMENT: &str = "SELECT
                 ZGENERICALBUM.Z_PK,
@@ -12,18 +13,52 @@ pub static IOS_15_ALBUM_QUERY_STATEMENT: &str = "SELECT
             WHERE ZGENERICALBUM.ZKEYASSET IS NOT NULL
         ";
 
-pub static IOS_26_ALBUM_QUERY_STATEMENT: &str = "SELECT
-                            ZGENERICALBUM.Z_PK,
-                            ZGENERICALBUM.ZTITLE,
-                            ZGENERICALBUM.ZCACHEDCOUNT,
-                            ZASSET.ZDIRECTORY,
-                            ZASSET.ZFILENAME
-                        FROM ZGENERICALBUM
-                        LEFT JOIN ZASSET ON ZGENERICALBUM.Z_ENT = ZASSET.Z_PK
-                        WHERE ZGENERICALBUM.Z_ENT IS NOT NULL
-                        AND ZGENERICALBUM.ZTITLE IS NOT NULL
-                        AND ZGENERICALBUM.ZCACHEDCOUNT IS NOT 0
-                    ";
+// pub static IOS_26_ALBUM_QUERY_STATEMENT: &str = "SELECT
+//                             ZGENERICALBUM.Z_PK,
+//                             ZGENERICALBUM.ZTITLE,
+//                             ZGENERICALBUM.ZCACHEDCOUNT,
+//                             ZASSET.ZDIRECTORY,
+//                             ZASSET.ZFILENAME
+//                         FROM ZGENERICALBUM
+//                         LEFT JOIN ZASSET ON ZGENERICALBUM.Z_ENT = ZASSET.Z_PK
+//                         WHERE ZGENERICALBUM.Z_ENT IS NOT NULL
+//                         AND ZGENERICALBUM.ZTITLE IS NOT NULL
+//                         AND ZGENERICALBUM.ZCACHEDCOUNT IS NOT 0
+//                     ";
+
+pub static IOS_26_ALBUM_QUERY_STATEMENT: &str = "
+    SELECT
+        ZGENERICALBUM.Z_PK,
+        ZGENERICALBUM.ZTITLE,
+        ZGENERICALBUM.ZCACHEDCOUNT,
+        COALESCE(ZASSET.ZDIRECTORY, ''),
+        COALESCE(ZASSET.ZFILENAME, '')
+    FROM ZGENERICALBUM
+    LEFT JOIN ZASSET
+        ON ZASSET.Z_PK = COALESCE(
+            (
+                SELECT ZASSET.Z_PK
+                FROM ZASSET
+                WHERE ZASSET.Z_PK = ZGENERICALBUM.ZCUSTOMKEYASSET
+                AND ZASSET.ZDIRECTORY IS NOT NULL
+                AND ZASSET.ZFILENAME IS NOT NULL
+                LIMIT 1
+            ),
+            (
+                SELECT {table}.Z_3ASSETS
+                FROM {table}
+                JOIN ZASSET
+                    ON ZASSET.Z_PK = {table}.Z_3ASSETS
+                WHERE {table}.{album} = ZGENERICALBUM.Z_PK
+                AND ZASSET.ZDIRECTORY IS NOT NULL
+                AND ZASSET.ZFILENAME IS NOT NULL
+                ORDER BY {table}.Z_FOK_3ASSETS DESC
+                LIMIT 1
+            )
+        )
+    WHERE ZGENERICALBUM.ZTITLE IS NOT NULL
+    AND ZGENERICALBUM.ZCACHEDCOUNT > 0;
+";
 
 pub static RECENTS_ALBUM_QUERY: &str = "
     SELECT
@@ -61,6 +96,27 @@ pub static FAVS_QUERY: &str = "
     WHERE ZASSET.ZFAVORITE = 1
     ORDER BY ZASSET.Z_PK DESC
 ";
+
+pub static RECENTLY_DELETED_ALBUM_QUERY: &str = "
+    SELECT
+        ZASSET.ZFILENAME,
+        ZASSET.ZDIRECTORY,
+        (SELECT COUNT(*) FROM ZASSET WHERE ZASSET.ZTRASHEDSTATE = 1)
+    FROM ZASSET
+    WHERE ZASSET.ZTRASHEDSTATE = 1
+    ORDER BY ZASSET.Z_PK DESC
+    LIMIT 1
+";
+
+pub static RECENTLY_DELETED_QUERY: &str = "
+    SELECT
+        ZASSET.ZFILENAME,
+        ZASSET.ZDIRECTORY
+    FROM ZASSET
+    WHERE ZASSET.ZTRASHEDSTATE = 1
+    ORDER BY ZASSET.Z_PK DESC
+";
+
 //FIXME: is Z_3ASSETS consistent ?
 pub static ALBUM_CONTENTS_QUERY_TEMPLATE: &str = r#"
     SELECT
@@ -73,9 +129,7 @@ pub static ALBUM_CONTENTS_QUERY_TEMPLATE: &str = r#"
 "#;
 
 pub static FS_GALLERY_PROVIDER_NAME: &str = "FS";
-
 pub static SQLITE_GALLERY_PROVIDER_NAME: &str = "SQLite";
-
 pub static PHOTOS_SQLITE_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite";
 pub static PHOTOS_SQLITE_SHM_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite-shm";
 pub static PHOTOS_SQLITE_WAL_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite-wal";
