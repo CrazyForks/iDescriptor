@@ -10,7 +10,8 @@ Item {
     id: root
     required property var query
     property bool loading: true
-    required property var udid
+    required property var device
+    property var udid: device.udid
     required property var albumId
     property int mediaFilter: 0
     property bool mostRecentFirst: true
@@ -223,7 +224,8 @@ Item {
                                 if (comp.status === Component.Ready) {
                                     const win = comp.createObject(null,{
                                         filePath,
-                                        udid : root.udid
+                                        udid : root.udid,
+                                        afcClient: root.device.afcClient
                                     })
                                     if (win !== null) {
                                         win.show()

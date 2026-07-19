@@ -28,8 +28,7 @@ Item {
 
         /*load gallery as soon as possible*/
         DeviceGallery {
-            udid: root.udid
-            info: root.info
+            device: root.device
         }
 
         Loader {
@@ -61,7 +60,7 @@ Item {
         id: filesComponent
 
         FilesSection {
-            udid: root.udid
+            device: root.device
         }
     }
 }

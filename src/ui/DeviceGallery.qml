@@ -11,8 +11,9 @@ Item {
 
     property var query
     property bool loading: true
-    required property var udid
-    required property var info
+    required property var device
+    property var udid: device.udid
+    property var info: device.info
     readonly property bool isMainPage: nav.depth <= 1
     property int selectedAlbumCount: 0
     property var albumExportSelection: []
@@ -382,8 +383,8 @@ Item {
         id: albumContentsComponent
 
         AlbumContents {
-            query : root.query
-            udid : root.udid
+            query: root.query
+            device: root.device
             onGoBack : root.goBack()
         }
     }
