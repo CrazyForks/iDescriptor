@@ -101,6 +101,34 @@ QtObject {
         });
     }
 
+    function messageBox(parent, title, message) {
+        var dialog = Qt.createQmlObject(
+            "import QtQuick; import QtQuick.Dialogs; MessageDialog { buttons: MessageDialog.Ok }",
+            parent || root,
+            "dynamicMessageBox"
+        );
+
+        dialog.title = title;
+        dialog.text = message;
+        dialog.buttonClicked.connect(function() {
+            dialog.destroy();
+        });
+        dialog.open();
+        return dialog;
+    }
+
+    function showError(parent, message) {
+        return messageBox(parent, qsTr("Error"), message);
+    }
+
+    function showWarning(parent, message) {
+        return messageBox(parent, qsTr("Warning"), message);
+    }
+
+    function showInfo(parent, message) {
+        return messageBox(parent, qsTr("Information"), message);
+    }
+
 
     function toFileUrl(path) {
         if (Qt.platform.os === "windows")
