@@ -98,6 +98,11 @@ Item {
     Connections {
         target: query
 
+        function onReloadFinished(success, revision, error) {
+            if (success)
+                query.query_album(root.albumId, root.mediaFilter, root.mostRecentFirst)
+        }
+
         function onAlbumQueried(id, mediaFilter, mostRecentFirst, items) {
             if (id !== albumId || mediaFilter !== root.mediaFilter || mostRecentFirst !== root.mostRecentFirst || !items) return
             albumContentsModel.clear()
@@ -139,6 +144,13 @@ Item {
                     icon.source: "qrc:/resources/icons/material-symbols_arrow-left-alt.svg"
                     enabled : nav.depth > 1
                     onClicked : root.goBack()
+                }
+
+                Button {
+                    text: qsTr("Refresh")
+                    icon.source: "qrc:/resources/icons/ic_outline-refresh.svg"
+                    enabled: !query.reloading
+                    onClicked: query.reload()
                 }
 
                 Item { Layout.fillWidth: true }

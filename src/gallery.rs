@@ -1,34 +1,28 @@
 use qmetaobject::prelude::*;
 use qttypes::{QStringList, QVariantList, QVariantMap};
 
-use crate::constants::{
-    ALBUM_CONTENTS_QUERY_TEMPLATE, FAVS_ALBUM_ID, FAVS_ALBUM_QUERY, FAVS_QUERY,
-    FS_GALLERY_PROVIDER_NAME, IOS_15_ALBUM_QUERY_STATEMENT, IOS_26_ALBUM_QUERY_STATEMENT,
-    RECENTS_ALBUM_ID, RECENTS_ALBUM_QUERY, RECENTS_QUERY, SQLITE_GALLERY_PROVIDER_NAME,
-};
+use crate::constants::FS_GALLERY_PROVIDER_NAME;
 use crate::device_ctx;
 use crate::gallery_fs_provider::build_fs_provider;
-use crate::gallery_sqlite_provider::{SqliteGalleryProvider, build_sqlite_provider};
+use crate::gallery_sqlite_provider::build_sqlite_provider;
 use crate::qt_threading::QtThreading;
 use crate::utils::{MediaFileType, create_album_info, media_file_type};
 use crate::{RUNTIME, qvariantmap_insert};
 use ::log::debug;
-use anyhow::{Context, anyhow};
 use idevice::afc::AfcClient;
 use idevice::afc::opcode::AfcFopenMode;
 use macros::QtThreading;
-use rusqlite::{Connection, OptionalExtension};
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::Mutex;
 
 pub type GalleryFuture<T> = Pin<Box<dyn Future<Output = anyhow::Result<T>> + Send>>;
 
 pub trait GalleryProvider: Send + Sync {
     fn read_albums(&self) -> GalleryFuture<(Vec<GalleryAlbum>, i32)>;
+    fn reload(&self) -> GalleryFuture<(Vec<GalleryAlbum>, i32)>;
     fn query_album(
         &self,
         id: i32,
@@ -96,8 +90,11 @@ pub struct Query {
     provider: Option<Arc<dyn GalleryProvider>>,
     state: qt_property!(QVariantMap; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
+    reloading: qt_property!(bool; NOTIFY reloadingChanged),
+    reloadingChanged: qt_signal!(),
 
     init: qt_method!(fn(&mut self, use_sqlite_backend: bool)),
+    reload: qt_method!(fn(&mut self)),
     read_albums: qt_method!(fn(&mut self)),
     query_album: qt_method!(fn(&mut self, id: i32, media_filter: i32, most_recent_first: bool)),
     resolve_album_export:
@@ -109,7 +106,10 @@ pub struct Query {
         album_name: QString,
         items: QStringList
     ),
+    reloadFinished: qt_signal!(success: bool, revision: i32, error: QString),
     is_init: bool,
+    use_sqlite_backend: bool,
+    revision: i32,
 }
 
 fn new_state(init: bool, err: &str, backend: &str) -> QVariantMap {
@@ -141,6 +141,7 @@ impl Query {
             "Query: initializing with udid={} ios_version={} use_sqlite_backend={}",
             self.udid, self.ios_version, use_sqlite_backend
         );
+        self.use_sqlite_backend = use_sqlite_backend;
         self.is_init = true;
         let udid_clone = self.udid.clone();
         let udid_clone_for_fallback = self.udid.clone();
@@ -151,8 +152,7 @@ impl Query {
             let res: anyhow::Result<Arc<dyn GalleryProvider>> = (async {
                 let afc_arc = device_ctx::get_device(udid_clone).await?.afc;
                 if use_sqlite_backend {
-                    let mut afc = afc_arc.lock().await;
-                    let prov = build_sqlite_provider(&mut afc, ios_version).await?;
+                    let prov = build_sqlite_provider(afc_arc, ios_version).await?;
                     prov.read_albums().await?;
                     Ok(prov)
                 } else {
@@ -229,12 +229,66 @@ impl Query {
         });
     }
 
+    fn reload(&mut self) {
+        if self.reloading {
+            debug!("Query: reload already in progress, skipping");
+            return;
+        }
+
+        let Some(provider) = self.provider.clone() else {
+            debug!("Query: no provider available, cannot reload");
+            return;
+        };
+
+        self.reloading = true;
+        self.reloadingChanged();
+        self.state[QString::from("err")] = QVariant::from(QString::default());
+        self.stateChanged();
+
+        let q_thread = self.qt_thread();
+        RUNTIME.spawn(async move {
+            let result = provider.reload().await;
+            q_thread.queue(move |query| {
+                // saturating_add is probably overkill
+                let next_revision = query.revision.saturating_add(1);
+                match result {
+                    Ok((provider_albums, failed_albums_count)) => {
+                        query.albums = albums_to_variant_list(provider_albums);
+                        query.failed_albums_count = failed_albums_count;
+                        query.state[QString::from("init")] = QVariant::from(true);
+                        query.state[QString::from("err")] = QVariant::from(QString::default());
+                        query.revision = next_revision;
+                        query.albumsChanged();
+                        query.failedAlbumsCountChanged();
+                        query.stateChanged();
+                    }
+                    Err(err) => {
+                        let error = err.to_string();
+                        query.state[QString::from("init")] = QVariant::from(false);
+                        query.state[QString::from("err")] =
+                            QVariant::from(QString::from(error.clone()));
+                        query.stateChanged();
+                        query.reloading = false;
+                        query.reloadingChanged();
+                        query.reloadFinished(false, query.revision, QString::from(error));
+
+                        return;
+                    }
+                }
+
+                query.reloading = false;
+                query.reloadingChanged();
+                query.reloadFinished(true, query.revision, QString::default());
+            });
+        });
+    }
+
     fn read_albums(&mut self) {
         let q_thread = self.qt_thread();
         let provider = match &self.provider {
             Some(provider) => provider.clone(),
             None => {
-                println!("NO GALLERY PROVIDER");
+                debug!("Query: no provider available, cannot read albums");
                 return;
             }
         };
@@ -243,17 +297,7 @@ impl Query {
             let mut albums = QVariantList::default();
             match provider.read_albums().await {
                 Ok((provider_albums, failed_albums_count)) => {
-                    for album in provider_albums {
-                        let (asset_dir, asset_file_name) = split_device_path(&album.preview_path);
-                        let album_data = create_album_info(
-                            &album.name,
-                            album.id,
-                            album.item_count,
-                            asset_dir,
-                            asset_file_name,
-                        );
-                        albums.push(QVariant::from(&QString::from(album_data)));
-                    }
+                    albums = albums_to_variant_list(provider_albums);
 
                     q_thread.queue(move |q_self| {
                         println!("Albums read fine firing events");
@@ -262,6 +306,7 @@ impl Query {
                         q_self.albumsChanged();
                         q_self.failed_albums_count = failed_albums_count;
                         q_self.failedAlbumsCountChanged();
+                        q_self.stateChanged();
                     })
                 }
                 Err(e) => {
@@ -273,6 +318,7 @@ impl Query {
                         q_self.albumsChanged();
                         q_self.failed_albums_count = 0;
                         q_self.failedAlbumsCountChanged();
+                        q_self.stateChanged();
                     });
                 }
             }
@@ -287,6 +333,7 @@ impl Query {
 
         let media_filter = GalleryMediaFilter::from_i32(media_filter);
         let media_filter_id = media_filter.as_i32();
+        let revision = self.revision;
         let q_thread = self.qt_thread();
         RUNTIME.spawn(async move {
             match provider
@@ -301,7 +348,14 @@ impl Query {
 
                     println!("Album loaded has length :{}", list.len());
                     q_thread.queue(move |q| {
-                        q.albumQueried(id, media_filter_id, most_recent_first, list);
+                        if q.revision == revision {
+                            q.albumQueried(id, media_filter_id, most_recent_first, list);
+                        } else {
+                            debug!(
+                                "Discarding stale album query for revision {revision}; current revision is {}",
+                                q.revision
+                            );
+                        }
                     });
                 }
                 Err(e) => {
@@ -355,6 +409,22 @@ impl Query {
             }
         });
     }
+}
+
+fn albums_to_variant_list(provider_albums: Vec<GalleryAlbum>) -> QVariantList {
+    let mut albums = QVariantList::default();
+    for album in provider_albums {
+        let (asset_dir, asset_file_name) = split_device_path(&album.preview_path);
+        let album_data = create_album_info(
+            &album.name,
+            album.id,
+            album.item_count,
+            asset_dir,
+            asset_file_name,
+        );
+        albums.push(QVariant::from(&QString::from(album_data)));
+    }
+    albums
 }
 
 fn split_device_path(path: &str) -> (String, String) {

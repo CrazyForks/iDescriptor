@@ -42,6 +42,10 @@ impl GalleryProvider for FsGalleryProvider {
         Box::pin(async move { Ok((read_fs_albums(afc).await?, 0)) })
     }
 
+    fn reload(&self) -> GalleryFuture<(Vec<GalleryAlbum>, i32)> {
+        self.read_albums()
+    }
+
     fn query_album(
         &self,
         id: i32,

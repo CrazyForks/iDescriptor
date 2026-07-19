@@ -22,12 +22,12 @@ Item {
 
     Component.onCompleted: {
         console.log("DeviceGallery.qml: Component.onCompleted")
-        query = serviceFactory.create_sqlite_query_backend(root.udid, info.ios_version_major)
+        query = serviceFactory.create_query_backend(root.udid, info.ios_version_major)
         if (query) {
             query.init(settingsManager.use_sqlite_gallery_backend());
         } else {
             // FIXME:show error
-            console.error("Query is null after create_sqlite_query_backend")
+            console.error("Query is null after create_query_backend")
         }
     }
 
@@ -54,6 +54,14 @@ Item {
                 count += 1
         }
         root.selectedAlbumCount = count
+    }
+
+    function albumExists(albumId) {
+        for (let i = 0; i < albumModel.count; i++) {
+            if (albumModel.get(i).albumId === albumId)
+                return true
+        }
+        return false
     }
 
     function chooseAlbumExportDestination(albums) {
@@ -107,11 +115,22 @@ Item {
                     albumId : obj.album_id ?  obj.album_id : -99,
                     fileName: obj.album_name,
                     filePath: obj.file_path,
+                    itemCount: obj.item_count === undefined || obj.item_count === null ? 0 : obj.item_count,
                     dateTime: new Date(),
                     selected: false,
                     thumbVersion: 0
                 })
             })
+        }
+
+        function onReloadFinished(success, revision, error) {
+            if (!success || nav.depth <= 1 || !nav.currentItem)
+                return
+
+            if (!root.albumExists(nav.currentItem.albumId)) {
+                root.goBack()
+                albumRemovedDialog.open()
+            }
         }
 
         function onAlbumExportResolved(requestId, albumId, albumName, items) {
@@ -146,11 +165,17 @@ Item {
     }
 
     StateView {
+        id: galleryStateView
         anchors.fill: parent
         autoSwitchContent: false
-        // viewState: query.albums.length ? StateView.State.Content : StateView.State.Loading
-        viewState: query.state.init ? StateView.State.Content : query.state.err ? StateView.State.Error : StateView.State.Loading
+        viewState: query.state.err
+                   ? StateView.State.Error
+                   : query.reloading || !query.state.init
+                     ? StateView.State.Loading
+                     : StateView.State.Content
         errorText: query.state.err ? query.state.err : ""
+        retryable: true
+        onRetryRequested: query.reload()
         contentItem : ColumnLayout {
             anchors.fill : parent
             StackView {
@@ -220,6 +245,13 @@ Item {
                         // TODO: onClicked
                     }
 
+                    Button {
+                        text: qsTr("Refresh")
+                        icon.source: "qrc:/resources/icons/ic_outline-refresh.svg"
+                        enabled: !query.reloading
+                        onClicked: query.reload()
+                    }
+
                     Item { Layout.fillWidth: true }
 
                     Button {
@@ -236,6 +268,15 @@ Item {
                     }
                 }
 
+                Label {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 4
+                    text: qsTr("Albums")
+                    color: Theme.text
+                    font.pixelSize: 28
+                    font.bold: true
+                }
+
                 Item {
                     id: galleryPane
                     Layout.fillWidth: true
@@ -245,7 +286,7 @@ Item {
                         id: gallery
                         anchors.fill: parent
                         cellWidth: 250
-                        cellHeight: 250
+                        cellHeight: 292
 
                         clip: true
                         model: albumModel
@@ -255,7 +296,7 @@ Item {
                         }
                         delegate: ItemDelegate {
                             width: 240
-                            height: 240
+                            height: 284
                             highlighted: selected
                             background: Rectangle {
                                 color: "transparent"
@@ -269,32 +310,54 @@ Item {
                             }
 
                             Rectangle {
-                                anchors.fill: parent
-                                color: selected ? Theme.accent : "transparent"
-                                // color: selected ? "#4FC3F7" : "transparent"
-                                opacity : 0.3
-                                z : 1
+                                id: albumCover
+                                anchors.top: parent.top
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: 240
+                                height: 240
+                                radius: 8
+                                clip: true
+
+                                Image {
+                                    cache: false
+                                    anchors.fill: parent
+                                    //FIXME:use encodeuricomp
+                                    source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
+                                    fillMode: Image.PreserveAspectCrop
+                                    sourceSize.width: 240 * Screen.devicePixelRatio
+                                    sourceSize.height: 240 * Screen.devicePixelRatio
+                                }
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: selected ? Theme.accent : "transparent"
+                                    opacity: 0.3
+                                }
                             }
 
-                            Image {
-                                cache: false
-                                anchors.fill: parent
-                                //FIXME:use encodeuricomp
-                                source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
-                                fillMode: Image.PreserveAspectFit
-                                sourceSize.width: 240 * Screen.devicePixelRatio
-                                sourceSize.height: 240 * Screen.devicePixelRatio
-                            }
-
-                            Text {
-                                anchors.bottom: parent.bottom
+                            Column {
+                                anchors.top: albumCover.bottom
+                                anchors.topMargin: 6
                                 anchors.left: parent.left
                                 anchors.right: parent.right
-                                // text: fileName + albumId
-                                text: fileName
-                                font.pixelSize: 10
-                                color: palette.text
-                                elide: Text.ElideMiddle
+                                spacing: 1
+
+                                Text {
+                                    width: parent.width
+                                    text: fileName
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: Theme.text
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: itemCount
+                                    font.pixelSize: 13
+                                    color: Theme.textMuted
+                                    elide: Text.ElideRight
+                                }
                             }
                         }
                     }
@@ -305,7 +368,7 @@ Item {
                         targetView: gallery
                         itemCount: albumModel.count
                         selectableItemWidth: 240
-                        selectableItemHeight: 240
+                        selectableItemHeight: 284
                         isItemSelected: (index) => albumModel.get(index).selected
                         setItemSelected: (index, selected) => albumModel.setProperty(index, "selected", selected)
                         onSelectionUpdated: root.updateSelectedAlbumCount()
@@ -329,5 +392,11 @@ Item {
         id: albumExportDialog
         title: qsTr("Choose Export Folder")
         onAccepted: root.startAlbumExports(QmlUtils.url_to_path(selectedFolder))
+    }
+
+    MessageDialog {
+        id: albumRemovedDialog
+        title: qsTr("Album unavailable")
+        text: qsTr("This album is no longer available on the device.")
     }
 }
