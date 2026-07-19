@@ -34,6 +34,8 @@ Item {
 
         property string action: ""
         property string message: ""
+        property bool removeDevice: false
+        property string udid: ""
 
         Label {
             text: confirmActionDialog.message
@@ -41,7 +43,7 @@ Item {
             width: Math.min(root.width - 64, 420)
         }
 
-        onAccepted: root.performDeviceAction(action)
+        onAccepted: root.performDeviceAction(action, udid, removeDevice)
     }
 
     property string currentDeviceUdid: ""
@@ -63,15 +65,17 @@ Item {
         infoDialog.open()
     }
 
-    function confirmDeviceAction(action, title, message) {
+    function confirmDeviceAction(action, title, message, removeDevice, udid) {
         confirmActionDialog.action = action
         confirmActionDialog.title = title
         confirmActionDialog.message = message
+        confirmActionDialog.removeDevice = removeDevice
+        confirmActionDialog.udid = udid
         confirmActionDialog.open()
     }
 
-    function performDeviceAction(action) {
-        const device = App.DeviceContext.getDevice(currentDeviceUdid)
+    function performDeviceAction(action, udid, removeDevice) {
+        const device = App.DeviceContext.getDevice(udid)
 
         let success = false
         switch (action) {
@@ -91,8 +95,12 @@ Item {
 
         if (!success)
             showError(qsTr("Failed to send the command to the device. Make sure it is connected and unlocked."))
-        else
+        else {
             showInfo(qsTr("Action '%1' sent successfully.").arg(action))
+            if (removeDevice) {
+                App.DeviceContext.removeDevice(udid)
+            }
+        }
     }
 
     function createComp(loc, args = {}) {
@@ -129,12 +137,17 @@ Item {
     // 10 Restart, 11 Shutdown, 12 RecoveryMode, 13 EnableWifiConnections, 14 BackupManager,
     // 15 TransferSpeedTest
     // signal toolClicked(int toolId, bool requiresDevice)
-    function toolClicked(toolId, requiresDevice) {
+    function toolClicked(toolId, requiresDevice, wirelessNotAllowed) {
         const device = App.DeviceContext.getDevice(currentDeviceUdid)
 
         if (requiresDevice) {
             if (!device) {
                 console.log("DEVICE DISAPPERED")
+                return
+            }
+         
+            if (wirelessNotAllowed && device.info.is_wireless) {
+                showError(qsTr("This tool is not available for wireless devices. Please connect your device via USB."))
                 return
             }
         }
@@ -230,21 +243,27 @@ Item {
                 confirmDeviceAction(
                     "restart",
                     qsTr("Restart Device"),
-                    qsTr("Are you sure you want to restart this device?")
+                    qsTr("Are you sure you want to restart this device?"),
+                    true,
+                    currentDeviceUdid
                 )
                 break;
             case 11:
                 confirmDeviceAction(
                     "shutdown",
                     qsTr("Shut Down Device"),
-                    qsTr("Are you sure you want to shut down this device?")
+                    qsTr("Are you sure you want to shut down this device?"),
+                    true,
+                    currentDeviceUdid
                 )
                 break;
             case 12:
                 confirmDeviceAction(
                     "recovery",
                     qsTr("Enter Recovery Mode"),
-                    qsTr("Are you sure you want to put this device into recovery mode?")
+                    qsTr("Are you sure you want to put this device into recovery mode?"),
+                    true,
+                    currentDeviceUdid
                 )
                 break;
             case 14:
@@ -262,7 +281,7 @@ Item {
 
     function deviceSelectionChanged(udid) {
         if (udid && udid.length) {
-            App.DeviceContext.currentDeviceUdid = udid
+            App.DeviceContext.selectConnectedDevice(udid)
         }
     }
 
@@ -321,7 +340,8 @@ Item {
             description: qsTr("Mount your iPhone's filesystem on your PC"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/fuse.svg",
-            visible: (Qt.platform.os !== "osx" && Qt.platform.os !== "darwin")
+            visible: (Qt.platform.os !== "osx" && Qt.platform.os !== "darwin"),
+            wirelessNotAllowed: true
         },
         {
             toolId: 7,
@@ -486,7 +506,7 @@ Item {
                             enabled: !requiresDevice || root.hasDevice
 
                             onClicked: {
-                                root.toolClicked(toolId, requiresDevice)
+                                root.toolClicked(toolId, requiresDevice, modelData.wirelessNotAllowed || false)
                             }
                         }
                     }
