@@ -3,7 +3,6 @@ use crate::{
     device_ctx::get_device_opt,
     qt_threading::{QtThread, QtThreading},
 };
-use base64::{Engine as _, engine::general_purpose};
 use idevice::{IdeviceError, services::core_device_proxy::CoreDeviceProxy};
 use idevice::{
     IdeviceService, RsdService, dvt::remote_server::RemoteServerClient, provider::IdeviceProvider,
@@ -16,9 +15,15 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
+use tokio::time::{Duration, Instant, sleep_until};
 
 use log::debug;
 
+const CAPTURE_FPS: u64 = 15;
+const FRAME_INTERVAL: Duration =
+    Duration::from_nanos((1_000_000_000 + CAPTURE_FPS - 1) / CAPTURE_FPS);
+
+#[allow(non_snake_case)]
 #[derive(QObject, Default, QtThreading)]
 pub struct ScreenshotBackend {
     base: qt_base_class!(trait QObject),
@@ -31,8 +36,8 @@ pub struct ScreenshotBackend {
     start_capture: qt_method!(fn(&mut self)),
     stop_capture: qt_method!(fn(&mut self)),
 
-    screenshot_captured: qt_signal!(data_url: QString),
-    init_failed: qt_signal!(reason: QString, need: QString),
+    screenshotCaptured: qt_signal!(data: QByteArray),
+    initFailed: qt_signal!(reason: QString, need: QString),
 
     //TODO: do we really need this?
     capture_active: Arc<AtomicBool>,
@@ -60,7 +65,7 @@ impl ScreenshotBackend {
                     eprintln!("screenshot: device {} not found", udid_str);
                     qt_thread.queue(move |backend_qobj| {
                         backend_qobj
-                            .init_failed(QString::from("Device not found"), QString::default());
+                            .initFailed(QString::from("Device not found"), QString::default());
                     });
                     return;
                 }
@@ -83,11 +88,6 @@ impl ScreenshotBackend {
     }
 }
 
-fn png_data_url(bytes: &[u8]) -> QString {
-    let image_base64_string = general_purpose::STANDARD.encode(bytes);
-    QString::from(format!("data:image/png;base64,{}", image_base64_string))
-}
-
 async fn run_capture_ios17_and_above(
     qt_thread: QtThread<ScreenshotBackend>,
     provider: &dyn IdeviceProvider,
@@ -98,7 +98,7 @@ async fn run_capture_ios17_and_above(
         Err(e) => {
             eprintln!("screenshot CoreDeviceProxy connect failed: {e}");
             qt_thread.queue(move |b| {
-                b.init_failed(
+                b.initFailed(
                     QString::from(format!("Failed to connect to CoreDeviceProxy: {e}")),
                     QString::default(),
                 )
@@ -113,7 +113,7 @@ async fn run_capture_ios17_and_above(
         Err(e) => {
             eprintln!("screenshot dvt tunnel err: {e}");
             qt_thread.queue(move |b| {
-                b.init_failed(
+                b.initFailed(
                     QString::from(format!("Failed to create software tunnel: {e}")),
                     QString::default(),
                 )
@@ -127,7 +127,7 @@ async fn run_capture_ios17_and_above(
         Err(e) => {
             eprintln!("screenshot dvt connect err: {e}");
             qt_thread.queue(move |b| {
-                b.init_failed(
+                b.initFailed(
                     QString::from(format!("Failed to connect to RSD port: {e}")),
                     QString::default(),
                 )
@@ -141,7 +141,7 @@ async fn run_capture_ios17_and_above(
         Err(e) => {
             eprintln!("screenshot handshake err: {e}");
             qt_thread.queue(move |b| {
-                b.init_failed(
+                b.initFailed(
                     QString::from(format!("Failed to complete RSD handshake: {e}")),
                     QString::default(),
                 )
@@ -159,7 +159,7 @@ async fn run_capture_ios17_and_above(
                 "Potentially developer mode disabled, prompting user to enable developer mode on device"
             );
             qt_thread.queue(move |b| {
-                b.init_failed(
+                b.initFailed(
                     QString::from("Remote Server service not found on device"),
                     QString::from("dev-mode"),
                 )
@@ -169,7 +169,7 @@ async fn run_capture_ios17_and_above(
         Err(e) => {
             eprintln!("screenshot remote err: {e}");
             qt_thread.queue(move |b| {
-                b.init_failed(
+                b.initFailed(
                     QString::from(format!("Failed to connect to Remote Server: {e}")),
                     QString::default(),
                 )
@@ -181,7 +181,7 @@ async fn run_capture_ios17_and_above(
     if let Err(e) = remote_server.read_message(0).await {
         eprintln!("screenshot read_message err: {e}");
         qt_thread.queue(move |b| {
-            b.init_failed(
+            b.initFailed(
                 QString::from(format!("Failed to read initial message: {e}")),
                 QString::default(),
             )
@@ -189,31 +189,58 @@ async fn run_capture_ios17_and_above(
         return;
     }
 
+    // FIXME: not working fine for some reason
     match ScreenshotClient::new(&mut remote_server).await {
         Ok(mut client) => {
             while capture_active.load(Ordering::Relaxed) {
-                match client.take_screenshot().await {
-                    Ok(b) => {
-                        let data_url = png_data_url(&b);
-                        qt_thread.queue(move |backend| backend.screenshot_captured(data_url));
+                let frame_started = Instant::now();
+                tokio::select! {
+                    res = client.take_screenshot() => {
+                        match res {
+                            Ok(b) => {
+                                qt_thread.queue(move |backend| {
+                                    backend.screenshotCaptured(QByteArray::from(b.as_slice()))
+                                });
+                            }
+                            Err(e) => {
+                                eprintln!("screenshot take err: {e}");
+                                qt_thread.queue(move |b| {
+                                    b.initFailed(
+                                        QString::from(format!("Failed to take screenshot: {e}")),
+                                        QString::default(),
+                                    )
+                                });
+                                return;
+                            }
+                        }
                     }
-                    Err(e) => {
-                        qt_thread.queue(move |b| {
-                            b.init_failed(
-                                QString::from(format!("Failed to take screenshot: {e}")),
-                                QString::default(),
-                            )
-                        });
-                        return;
-                    }
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
+                        eprintln!("screenshot take_screenshot timed out");}
                 }
+                // match client.take_screenshot().await {
+                //     Ok(b) => {
+                //         qt_thread.queue(move |backend| {
+                //             backend.screenshotCaptured(QByteArray::from(b.as_slice()))
+                //         });
+                //     }
+                //     Err(e) => {
+                //         qt_thread.queue(move |b| {
+                //             b.initFailed(
+                //                 QString::from(format!("Failed to take screenshot: {e}")),
+                //                 QString::default(),
+                //             )
+                //         });
+                //         return;
+                //     }
+                // }
+                sleep_until(frame_started + FRAME_INTERVAL).await;
             }
             eprint!("screenshot service loop ended");
         }
         Err(e) => {
             eprintln!("screenshot client err: {e}");
             qt_thread.queue(move |b| {
-                b.init_failed(
+                b.initFailed(
                     QString::from(format!("Failed to initialize screenshot client: {e}")),
                     QString::default(),
                 )
@@ -230,17 +257,19 @@ async fn run_capture_ios16_and_lower(
     match ScreenshotService::connect(provider).await {
         Ok(mut service) => {
             while capture_active.load(Ordering::Relaxed) {
+                let frame_started = Instant::now();
                 match service.take_screenshot().await {
                     Ok(b) => {
-                        let data_url = png_data_url(&b);
-                        qt_thread.queue(move |backend| backend.screenshot_captured(data_url));
+                        qt_thread.queue(move |backend| {
+                            backend.screenshotCaptured(QByteArray::from(b.as_slice()))
+                        });
                     }
                     Err(IdeviceError::ServiceNotFound) => {
                         debug!(
                             "ScreenshotR vanished or is unavailable, prompting developer image mount"
                         );
                         qt_thread.queue(move |b| {
-                            b.init_failed(
+                            b.initFailed(
                                 QString::from("ScreenshotR service not found on device"),
                                 QString::from("dev-img"),
                             )
@@ -250,7 +279,7 @@ async fn run_capture_ios16_and_lower(
                     Err(e) => {
                         eprintln!("screenshotr take err: {e}");
                         qt_thread.queue(move |b| {
-                            b.init_failed(
+                            b.initFailed(
                                 QString::from(format!("Failed to take screenshot: {e}")),
                                 QString::default(),
                             )
@@ -258,13 +287,14 @@ async fn run_capture_ios16_and_lower(
                         return;
                     }
                 }
+                sleep_until(frame_started + FRAME_INTERVAL).await;
             }
             eprint!("screenshot service loop ended");
         }
         Err(IdeviceError::ServiceNotFound) => {
             debug!("Potentially no developer image mounted");
             qt_thread.queue(move |b| {
-                b.init_failed(
+                b.initFailed(
                     QString::from("ScreenshotR service not found on device"),
                     QString::from("dev-img"),
                 )
@@ -273,7 +303,7 @@ async fn run_capture_ios16_and_lower(
         Err(e) => {
             eprintln!("screenshotr connect failed: {e}");
             qt_thread.queue(move |b| {
-                b.init_failed(
+                b.initFailed(
                     QString::from(format!("Failed to connect to ScreenshotR service: {e}")),
                     QString::default(),
                 )
