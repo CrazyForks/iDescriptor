@@ -8,8 +8,8 @@ ApplicationWindow {
     title: qsTr("iDescriptor")
     width: 1000
     height: 668
-    minimumWidth: 668
-    minimumHeight: 320
+    minimumWidth: 900
+    minimumHeight: 600
     visible: true
 
     Component.onCompleted: {

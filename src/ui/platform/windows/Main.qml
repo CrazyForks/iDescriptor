@@ -1,13 +1,18 @@
-import QtQuick 2.15
-import QtQuick.Window 2.15
-// import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-import FluentUI 1.0
-import "../../"
+import QtQuick
+import QtQuick.Window
+// import QtQuick.Controls
+import FluentUI
 
 FluLauncher {
     id: app
-    objectName: "Main" 
+    objectName: "Main"
+
+    function prepareLiveReload() {
+        const managedWindows = FluRouter.windows.slice()
+        for (let i = managedWindows.length - 1; i >= 0; --i)
+            FluRouter.removeWindow(managedWindows[i])
+        FluApp.launcher = null
+    }
 
     // Connections{
     //     target: FluTheme
@@ -41,7 +46,7 @@ FluLauncher {
         FluTheme.animationEnabled = true
 
         FluRouter.routes = {
-            "/": "qrc:/src/ui/platform/windows/Index.qml",
+            "/": Qt.resolvedUrl("Index.qml"),
         }
         var args = Qt.application.arguments
         if(args.length>=2 && args[1].startsWith("-crashed=")){
