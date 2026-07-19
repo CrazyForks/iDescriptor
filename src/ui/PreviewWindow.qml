@@ -62,9 +62,9 @@ Window {
     onClosing: cleanupVideoStream()
 
     Connections {
-        target : imageLoader 
+        target: imageLoader 
 
-        function onThumbnailReady(path, data, rowHint) {
+        function onThumbnailReady(path,rowHint) {
             if (path == root.filePath && rowHint == root.row) {
                 root.thumbVersion++
             }
