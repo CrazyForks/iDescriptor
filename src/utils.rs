@@ -60,6 +60,7 @@ pub struct ParsedBatteryInfo {
 }
 
 const DEFAULT_DEVICE_ICON_PATH: &str = "qrc:/resources/icons/iphone_gen1.svg";
+const DEFAULT_DEVICE_PLACEHOLDER_PATH: &str = "qrc:/resources/icons/iphone_gen1_placeholder.png";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedDeviceVersion {
@@ -74,6 +75,14 @@ impl ParsedDeviceVersion {
             "iPhone" => self.iphone_icon_path(),
             "iPad" => self.ipad_icon_path(),
             _ => DEFAULT_DEVICE_ICON_PATH,
+        }
+    }
+
+    pub fn placeholder_path(&self) -> &'static str {
+        match self.family.as_str() {
+            "iPhone" => self.iphone_placeholder_path(),
+            "iPad" => self.ipad_placeholder_path(),
+            _ => DEFAULT_DEVICE_PLACEHOLDER_PATH,
         }
     }
 
@@ -101,12 +110,43 @@ impl ParsedDeviceVersion {
             "qrc:/resources/icons/ipad_gen1.svg"
         }
     }
+
+    fn iphone_placeholder_path(&self) -> &'static str {
+        let has_home_button = self.major < 10
+            || (self.major == 10 && !matches!(self.minor, 3 | 6))
+            || (self.major == 12 && self.minor == 8)
+            || (self.major == 14 && self.minor == 6);
+
+        if has_home_button {
+            DEFAULT_DEVICE_PLACEHOLDER_PATH
+        } else if (self.major == 15 && self.minor >= 2)
+            || (self.major >= 16 && !(self.major == 17 && self.minor == 5))
+        {
+            "qrc:/resources/icons/iphone_gen3_placeholder.png"
+        } else {
+            "qrc:/resources/icons/iphone_gen2_placeholder.png"
+        }
+    }
+
+    fn ipad_placeholder_path(&self) -> &'static str {
+        if self.major == 8 || self.major >= 13 {
+            "qrc:/resources/icons/ipad_gen2_placeholder.png"
+        } else {
+            "qrc:/resources/icons/ipad_gen1_placeholder.png"
+        }
+    }
 }
 
 pub fn device_icon_path(raw_product_type: &str) -> &'static str {
     parse_device_ver(raw_product_type)
         .map(|device| device.icon_path())
         .unwrap_or(DEFAULT_DEVICE_ICON_PATH)
+}
+
+pub fn device_placeholder_path(raw_product_type: &str) -> &'static str {
+    parse_device_ver(raw_product_type)
+        .map(|device| device.placeholder_path())
+        .unwrap_or(DEFAULT_DEVICE_PLACEHOLDER_PATH)
 }
 
 pub const PUBLIC_STAGING: &str = "PublicStaging";
@@ -137,12 +177,13 @@ pub fn parse_diag_info_old(dict: Dictionary) -> ParsedBatteryInfo {
         .and_then(|v| v.as_unsigned_integer())
         .unwrap_or(0);
 
-    let old_current_battery_level = if apple_raw_current_capacity > 0 && apple_raw_max_capacity > 0
-    {
-        (apple_raw_current_capacity * 100) / apple_raw_max_capacity
-    } else {
-        0
-    };
+    let mut old_current_battery_level =
+        if apple_raw_current_capacity > 0 && apple_raw_max_capacity > 0 {
+            (apple_raw_current_capacity * 100) / apple_raw_max_capacity
+        } else {
+            0
+        };
+    old_current_battery_level = old_current_battery_level.clamp(0, 100);
 
     // adaptor details
     let usb_connection_type = dict
@@ -247,7 +288,12 @@ pub fn parse_diag_info(dict: Dictionary, raw_product_type: String) -> ParsedBatt
     // to get the battery health percentage
     let battery_health = format!(
         "{}%",
-        ((max_capacity * 100) / design_capacity).clamp(0, 100)
+        if design_capacity != 0 {
+            (max_capacity * 100) / design_capacity
+        } else {
+            0
+        }
+        .clamp(0, 100)
     );
 
     let is_charging = dict
@@ -273,11 +319,13 @@ pub fn parse_diag_info(dict: Dictionary, raw_product_type: String) -> ParsedBatt
         .and_then(|v| v.as_unsigned_integer())
         .unwrap_or(0);
 
-    let current_battery_level = if (apple_raw_current_capacity > 0 && apple_raw_max_capacity > 0) {
+    let mut current_battery_level = if apple_raw_current_capacity > 0 && apple_raw_max_capacity > 0
+    {
         (apple_raw_current_capacity * 100) / apple_raw_max_capacity
     } else {
         0
     };
+    current_battery_level = current_battery_level.clamp(0, 100);
 
     // check if is equal to usb type-c
     // in frontend
@@ -1044,11 +1092,10 @@ pub fn qvariant_to_ptr(item: QVariant) -> usize {
     })
 }
 
-pub fn compare_signatures(version: &str, mounted_sig: &[u8]) -> bool {
+pub fn compare_signatures(version: &str, mounted_sig: &[u8], dir: String) -> bool {
     let local_sig = match std::fs::read(format!(
         "{}{}/DeveloperDiskImage.dmg.signature",
-        crate::dev_imgs_manager::IMG_BASE_PATH,
-        version
+        dir, version
     )) {
         Ok(data) => data,
         Err(e) => {
