@@ -97,9 +97,9 @@ jobs:
       - name: Build qml6glsink from gst-plugins-good
         shell: bash
         run: |
-          wget https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.24.2.tar.xz
-          tar -xf gst-plugins-good-1.24.2.tar.xz
-          cd gst-plugins-good-1.24.2
+          wget https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.24.13.tar.xz
+          tar -xf gst-plugins-good-1.24.13.tar.xz
+          cd gst-plugins-good-1.24.13
 
           meson setup build-qml6 . \
           --prefix=/usr \
