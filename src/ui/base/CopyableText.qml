@@ -10,8 +10,8 @@ Item {
     property color color: Theme.text
     property color backgroundColor: "transparent"
     property real backgroundRadius: 5
-    property int horizontalPadding: 6
-    property int verticalPadding: 2
+    property int horizontalPadding: 0
+    property int verticalPadding: 0
     property alias font: valueLabel.font
     readonly property bool canCopy: text.length > 0 && text !== qsTr("Unknown")
     property bool showingCopied: false
@@ -36,7 +36,7 @@ Item {
         anchors.rightMargin: root.horizontalPadding
         anchors.topMargin: root.verticalPadding
         anchors.bottomMargin: root.verticalPadding
-        text: root.showingCopied ? qsTr("Copied") : root.text
+        text: root.showingCopied ? qsTr("Copied!") : root.text
         color: root.color
         elide: root.elide
         clip: true
