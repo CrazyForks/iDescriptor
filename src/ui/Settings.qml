@@ -8,7 +8,7 @@ import QtQuick.Window
 import "." as App
 import "./base"
 
-Window {
+DefaultWindow {
     id: root
     width: 400
     height: 500
@@ -17,7 +17,13 @@ Window {
     title: qsTr("Settings - iDescriptor")
     visible: false
     modality: Qt.ApplicationModal
+    autoDestroy: false
 
+    /* Windows only*/
+    showMaximize: false
+    showMinimize: false
+    signal windowEffectChanged(string effect)
+    /*----------*/
     property bool dirty: false
     property bool restartRequired: false
     readonly property var backend: typeof settingsManager !== "undefined" ? settingsManager : null
@@ -153,6 +159,18 @@ Window {
 
     Component.onCompleted: loadSettings()
 
+    onVisibleChanged: {
+        //restore the window effect when the settings window is closed, in case it was changed
+        if (Qt.platform.os === "windows") {
+            const effect = settingsManager.window_effect()
+            root.window_effect = effect
+            Qt.callLater(() => {
+                root.applyEffect(effect)
+            })
+            root.windowEffectChanged(effect)
+        }
+    }
+
     FolderDialog {
         id: downloadPathDialog
         title: qsTr("Select Download Directory")
@@ -211,26 +229,24 @@ Window {
         }
     }
 
-    Rectangle {
-        anchors.fill: parent
-        color: palette.window
-    }
-
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
         ScrollView {
+            id: settingsScroll
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
+            contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
             ColumnLayout {
-                width: Math.min(560, root.width - 28)
+                width: Math.min(560, Math.max(0, settingsScroll.availableWidth - 32))
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: 22
 
-                Item { Layout.preferredHeight: 12 }
+                Item { Layout.preferredHeight: 16 }
 
                 SettingsSection {
                     title: qsTr("General")
@@ -406,6 +422,9 @@ Window {
                             onActivated: {
                                 root.window_effect = currentValue
                                 root.markDirty(false)
+                                //defined in DefaultWindow.qml
+                                root.applyEffect(root.window_effect)
+                                root.windowEffectChanged(root.window_effect)
                             }
                         }
 
@@ -644,12 +663,9 @@ Window {
             }
         }
 
-        Rectangle {
+        Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 58
-            color: palette.window
-            border.color: Qt.rgba(0, 0, 0, 0.10)
-            border.width: 1
 
             RowLayout {
                 anchors.fill: parent
