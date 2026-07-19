@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import iDescriptor 1.0
+import iDescriptor
 import "." as App
 
 Item {
@@ -14,7 +14,7 @@ Item {
     Text {
         text: qsTr("Connected devices will appear here")
         anchors.centerIn: parent
-        visible: !App.DeviceContext.showWelcomePage && App.DeviceContext.getDeviceCount() === 0
+        visible: !App.DeviceContext.showWelcomePage && App.DeviceContext.getVisibleDeviceCount() === 0
         color: palette.text
         font.pixelSize: 24
     }
@@ -31,12 +31,12 @@ Item {
 
             ColumnLayout {
                 Layout.fillHeight : true
-                Layout.preferredWidth: 220
+                Layout.preferredWidth: 185
                 Repeater {
                     model: App.DeviceContext.devices
                     delegate: Item {
                         Layout.preferredHeight: button.implicitHeight
-                        Layout.preferredWidth: 200
+                        Layout.preferredWidth: 170
                         Layout.alignment: Qt.AlignHCenter
                         readonly property var info: model.info
                         SidebarTabButton {
@@ -44,15 +44,29 @@ Item {
                             anchors.fill: parent
                             currentSection: model.currentSection
                             title: info.product_type
-                            iconPath: info.icon_path
+                            iconPath: info.placeholder_path
                             udid: info["UniqueDeviceID"]
-                            wireless: info["connection_type"] === "Wireless"
+                            wireless: info.is_wireless
                             onSectionChanged: {
                                 if (model.currentSection !== sectionIndex)
                                     model.currentSection = sectionIndex
 
-                                App.DeviceContext.currentDeviceUdid  = info["UniqueDeviceID"]
+                                App.DeviceContext.selectConnectedDevice(info["UniqueDeviceID"])
                             }
+                        }
+                    }
+                }
+                Repeater {
+                    model: App.DeviceContext.pendingDevices
+                    delegate: Item {
+                        Layout.preferredHeight: button.implicitHeight
+                        Layout.preferredWidth: 175
+                        Layout.alignment: Qt.AlignHCenter
+
+                        PendingDeviceSidebar {
+                            id: button
+                            anchors.fill: parent
+                            udid: model.udid
                         }
                     }
                 }
@@ -60,7 +74,7 @@ Item {
                     model: App.DeviceContext.recoveryDevices
                     delegate: Item {
                         Layout.preferredHeight: button.implicitHeight
-                        Layout.preferredWidth: 200
+                        Layout.preferredWidth: 185
                         Layout.alignment: Qt.AlignHCenter
                         readonly property var info: model.info
                         RecoveryDeviceSidebar {
@@ -107,6 +121,20 @@ Item {
                         anchors.fill: parent
                         udid: model.udid
                         info: model.info
+                    }
+                }
+            }
+
+            Repeater {
+                model: App.DeviceContext.pendingDevices
+                delegate: Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    visible: model.udid === App.DeviceContext.currentPendingDeviceUdid
+
+                    PendingDevice {
+                        anchors.fill: parent
+                        udid: model.udid
                     }
                 }
             }
