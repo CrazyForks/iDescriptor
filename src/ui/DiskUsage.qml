@@ -107,10 +107,11 @@ Item {
     }
 
     ColumnLayout {
-        anchors.fill: parent
-        anchors.leftMargin: 0
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: parent.width * 0.85
         anchors.topMargin: 0
-        anchors.rightMargin: 14
         anchors.bottomMargin: 10
         spacing: 4
 
