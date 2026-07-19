@@ -10,6 +10,7 @@ Item {
     readonly property int contentMargin: 10
     readonly property int contentMaxWidth: 1040
     readonly property real diskUsageWidthRatio: 0.8
+    property var batteryInfoWindow: null
 
     function v(key, fallback) {
         if (!info) return fallback
@@ -41,10 +42,43 @@ Item {
         root.info = nextInfo
     }
 
-    BatteryInfo {
-        id: batteryInfoDialog
-        device: root.device
-        info: root.info
+    function openBatteryInfo() {
+        if (batteryInfoWindow) {
+            batteryInfoWindow.show()
+            batteryInfoWindow.raise()
+            batteryInfoWindow.requestActivate()
+            return
+        }
+
+        const comp = Qt.createComponent("./BatteryInfo.qml")
+        if (comp.status !== Component.Ready) {
+            console.error("Failed to load BatteryInfo:", comp.errorString())
+            return
+        }
+
+        const win = comp.createObject(root, {
+            udid: root.v("UniqueDeviceID", ""),
+            device: root.device,
+            info: Qt.binding(function() { return root.info })
+        })
+
+        if (!win) {
+            console.error("Failed to create BatteryInfo:", comp.errorString())
+            return
+        }
+
+        batteryInfoWindow = win
+        win.closing.connect(function(closeEvent) {
+            if (!closeEvent.accepted)
+                return
+
+            if (root.batteryInfoWindow === win)
+                root.batteryInfoWindow = null
+            win.destroy(0)
+        })
+        win.show()
+        win.raise()
+        win.requestActivate()
     }
 
     Timer {
@@ -164,6 +198,7 @@ Item {
                         }
 
                         CopyableText {
+                            visible: info.DIAG_INFO.adapter_watts > 0
                             text: {
                                 const watts = info.DIAG_INFO.adapter_watts
                                 let text = ""
@@ -177,6 +212,11 @@ Item {
                                 return text
                             }
                             color: palette.text
+                        }
+
+                        Label {
+                            text: qsTr("Wireless")
+                            visible: info.DIAG_INFO.adapter_watts !== 0 && info.is_wireless
                         }
                     }
                 }
@@ -234,7 +274,7 @@ Item {
                         Label { text: qsTr("Battery Health:"); font.bold: true }
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: 4
+                            spacing: 10
 
                             CopyableText {
                                 text: root.info.DIAG_INFO.battery_health
@@ -243,7 +283,14 @@ Item {
 
                             Button {
                                 text: qsTr("More")
-                                onClicked: batteryInfoDialog.open()
+                                font.pixelSize: 11
+                                leftPadding: 8
+                                rightPadding: 8
+                                topPadding: 3
+                                bottomPadding: 3
+                                implicitHeight: 26
+                                implicitWidth: contentItem.implicitWidth + leftPadding + rightPadding
+                                onClicked: root.openBatteryInfo()
                             }
                         }
 

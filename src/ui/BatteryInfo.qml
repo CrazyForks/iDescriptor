@@ -3,10 +3,9 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "./base"
 
-AnimatedDialog {
+ToolWindow {
     id: root
 
-    required property var device
     required property var info
     property var batteryInfo: ({
     })
@@ -69,14 +68,16 @@ AnimatedDialog {
         root.device.service_manager.get_battery_info(root.rawProductType);
     }
 
-    modal: true
-    focus: true
-    standardButtons: Dialog.NoButton
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-    anchors.centerIn: parent
-    width: Math.min(parent ? parent.width - 32 : 720, 720)
-    height: Math.min(parent ? parent.height - 32 : 620, 620)
-    onOpened: root.requestBatteryInfo()
+    title: qsTr("Battery - iDescriptor")
+    width: 720
+    height: 620
+    minimumWidth: 620
+    minimumHeight: 520
+
+    onVisibleChanged: {
+        if (visible)
+            root.requestBatteryInfo()
+    }
 
     Connections {
         function onBatteryInfoUpdated(updatedInfo) {
@@ -101,14 +102,7 @@ AnimatedDialog {
         target: root.device.service_manager
     }
 
-    background: Rectangle {
-        radius: 16
-        color: Theme.controlFill
-        border.color: Theme.controlStroke
-        border.width: 1
-    }
-
-    contentItem: ColumnLayout {
+    ColumnLayout {
         anchors.fill: parent
         anchors.margins: 20
         spacing: 14
