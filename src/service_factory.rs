@@ -29,7 +29,7 @@ pub struct ServiceFactory {
     create_hause_arrest_afc_client:
         qt_method!(fn(&self, udid: QString, bundle_id: QString) -> QJSValue),
     create_service_manager: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
-    create_sqlite_query_backend: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
+    create_query_backend: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
     create_springboard_services_client: qt_method!(fn(&self, udid: QString) -> QJSValue),
     create_transfer_speed_tester: qt_method!(fn(&self, udid: QString) -> QJSValue),
 }
@@ -147,7 +147,7 @@ impl ServiceFactory {
         }
     }
 
-    fn create_sqlite_query_backend(&self, udid: QString, ios_version: u32) -> QJSValue {
+    fn create_query_backend(&self, udid: QString, ios_version: u32) -> QJSValue {
         let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
         if engine_ptr.is_null() {
             eprintln!("ServiceFactory: engine_ptr is null");
