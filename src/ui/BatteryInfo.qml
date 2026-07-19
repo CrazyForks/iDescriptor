@@ -226,6 +226,8 @@ AnimatedDialog {
                                         anchors.right: parent.right
                                         anchors.bottom: parent.bottom
                                         height: parent.height * root.normalizedBatteryLevel
+                                        //FIXME: can we do better?
+                                        radius: 15
                                         color: Theme.systemGreen
 
                                         Behavior on height {
