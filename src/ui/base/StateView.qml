@@ -14,13 +14,17 @@ Item {
 
     property int    viewState:      StateView.State.Loading
     property int requestedViewState: StateView.State.Loading
-    property string errorText:      "Something went wrong."
+    property string errorText:      qsTr("Something went wrong.")
     property bool   retryable:      true
+    property bool cancelable: false
+    property string retryText: qsTr("Retry")
+    property string cancelText: qsTr("Cancel")
     property bool  autoSwitchContent: true
     property int  autoSwitchDelay: 500
     property alias  contentItem:    contentSlot.data
     
     signal retryRequested()
+    signal cancelRequested()
 
 
     Timer {
@@ -69,11 +73,22 @@ Item {
                     font.pixelSize: 14
                 }
 
-                Button {
+                RowLayout {
                     Layout.alignment: Qt.AlignHCenter
-                    visible: root.retryable 
-                    text: "Retry"
-                    onClicked: root.retryRequested()
+                    visible: root.retryable || root.cancelable
+                    spacing: 8
+
+                    Button {
+                        visible: root.cancelable
+                        text: root.cancelText
+                        onClicked: root.cancelRequested()
+                    }
+
+                    Button {
+                        visible: root.retryable
+                        text: root.retryText
+                        onClicked: root.retryRequested()
+                    }
                 }
             }
         }

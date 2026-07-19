@@ -5,9 +5,11 @@ import QtMultimedia
 import "./base"
 import "." as App
 
-Dialog {
+AnimatedDialog {
     id: root
 
+    required property var device
+    property int iosVersion: root.device.info.ios_version_major
     modal: true
     focus: true
     closePolicy: Popup.NoAutoClose
@@ -16,8 +18,6 @@ Dialog {
     height: root.contentIndex === 1 ? 500 : 220
     title: root.iosVersion >= 17 ? qsTr("Developer Mode - iDescriptor") : qsTr("Developer Disk Image - iDescriptor")
 
-    required property var device
-    required property int iosVersion
     property string version: ""
     property string statusText: qsTr("Please wait...")
     property string developerModeError: ""
@@ -118,7 +118,7 @@ Dialog {
     }
 
     function prepareCompatibleImage() {
-        const info = DevImgsManager.get_best_compatible_version(root.iosVersion)
+        const info = DevImgsManager.get_best_compatible_version(root.iosVersion, settingsManager.dev_disk_img_path())
         root.version = info.version || ""
 
         if (!info.found || root.version.length === 0) {
@@ -136,7 +136,7 @@ Dialog {
 
         //FIXME: if downloadedVersion !== root.version
         //this will hang forever
-        App.Helpers.connectOnce(DevImgsManager.image_download_finished, function(downloadedVersion, index, success, error) {
+        App.Helpers.connectOnce(DevImgsManager.imageDownloadFinished, function(downloadedVersion, index, success, error) {
             DevImgsManager.handle_download_finished(downloadedVersion)
 
             if (downloadedVersion !== root.version)
@@ -150,7 +150,7 @@ Dialog {
             mountVersion(root.version)
         })
 
-        if (!DevImgsManager.download_image(root.version, 0))
+        if (!DevImgsManager.download_image(root.version, 0, settingsManager.dev_disk_img_path()))
             showError(qsTr("Failed to start developer disk image download."))
     }
 
@@ -158,7 +158,7 @@ Dialog {
     function mountVersion(version) {
         statusText = qsTr("Mounting...")
 
-        const locations = DevImgsManager.get_locations_for_version(version)
+        const locations = DevImgsManager.get_locations_for_version(version, settingsManager.dev_disk_img_path())
         if (!locations.exists || !locations.dmg || !locations.sig) {
             showError(qsTr("The developer disk image is missing. Please download it first."))
             return
@@ -197,10 +197,15 @@ Dialog {
         }, wait ? 3000 : 250)
     }
 
-    onRejected: {
-        if (!didHandle)
-            handled(false, false)
+    function finishWithFailure() {
+        if (root.didHandle)
+            return
+
+        root.didHandle = true
+        root.handled(false, false)
     }
+
+    onRejected: root.finishWithFailure()
 
     Behavior on height {
         NumberAnimation {
@@ -220,8 +225,10 @@ Dialog {
         id: stateView
         autoSwitchContent: false
         retryable: root.iosVersion < 17
+        cancelable: true
         errorText: qsTr("Failed to prepare Developer Mode.")
         onRetryRequested: root.retry()
+        onCancelRequested: root.reject()
 
         contentItem: StackLayout {
             anchors.fill: parent
