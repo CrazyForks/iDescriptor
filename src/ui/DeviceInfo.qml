@@ -7,7 +7,7 @@ Item {
     id : root
     required property var info
     required property var device
-    readonly property int contentMargin: 20
+    readonly property int contentMargin: 10
     readonly property int contentMaxWidth: 1040
     readonly property real diskUsageWidthRatio: 0.8
 
@@ -24,6 +24,42 @@ Item {
         if (state === "FactoryActivated")
             return Theme.systemOrange
         return Theme.systemRed
+    }
+
+    function refreshBatteryInfo() {
+        const rawProductType = v("ProductType", "")
+        if (rawProductType.length > 0)
+            root.device.service_manager.get_battery_info(rawProductType)
+    }
+
+    function updateBatteryInfo(updatedInfo) {
+        if (!updatedInfo || !updatedInfo.DIAG_INFO)
+            return
+
+        const nextInfo = Object.assign({}, root.info)
+        nextInfo.DIAG_INFO = updatedInfo.DIAG_INFO
+        root.info = nextInfo
+    }
+
+    BatteryInfo {
+        id: batteryInfoDialog
+        device: root.device
+        info: root.info
+    }
+
+    Timer {
+        interval: 30000
+        repeat: true
+        running: true
+        onTriggered: root.refreshBatteryInfo()
+    }
+
+    Connections {
+        target: root.device.service_manager
+
+        function onBatteryInfoUpdated(updatedInfo) {
+            root.updateBatteryInfo(updatedInfo)
+        }
     }
 
     ColumnLayout {
@@ -107,7 +143,7 @@ Item {
                                 }
                             }
 
-                            color: palette.window
+                            color: Theme.textSelected
                         }
 
                         Item { Layout.fillWidth: true }
@@ -128,8 +164,18 @@ Item {
                         }
 
                         CopyableText {
-                            // FIXME: hardcoded
-                            text: "5W/USB"
+                            text: {
+                                const watts = info.DIAG_INFO.adapter_watts
+                                let text = ""
+                                switch (info.DIAG_INFO.usb_connection_type) {
+                                    case "usb type-c":
+                                        text = watts + "W/USB-C"
+                                        break
+                                    default:
+                                        text = watts + "W/USB"
+                                }
+                                return text
+                            }
                             color: palette.text
                         }
                     }
@@ -153,57 +199,39 @@ Item {
                         anchors.fill: parent
                         anchors.margins: 10
 
-                        // Row 0
-                        Label { text: "iOS Version:"; font.bold: true }
+                        // Left: iOS Version; Right: Hardware Model
+                        Label { text: qsTr("iOS Version:"); font.bold: true }
                         CopyableText { text: v("ProductVersion", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: "Device Name:"; font.bold: true }
-                        CopyableText { text: v("DeviceName", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: qsTr("Hardware Model:"); font.bold: true }
+                        CopyableText { text: v("HardwareModel", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
-                        // Row 1
-                        Label { text: "Activation State:"; font.bold: true }
+                        // Left: Device Name; Right: Region
+                        Label { text: qsTr("Device Name:"); font.bold: true }
+                        CopyableText { text: v("DeviceName", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: qsTr("Region:"); font.bold: true }
+                        CopyableText { text: v("region", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+
+                        // Left: Activation State; Right: Hardware Platform
+                        Label { text: qsTr("Activation State:"); font.bold: true }
                         CopyableText {
                             text: v("ActivationState", qsTr("Unknown"))
                             color: root.activationStateColor(text)
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
-                        Label { text: "Device Class:"; font.bold: true }
-                        CopyableText { text: v("DeviceClass", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-
-                        // Row 2
-                        Label { text: "Jailbroken:"; font.bold: true }
-                        CopyableText { text: v("Jailbroken", false) ? qsTr("Yes") : qsTr("No"); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: "Model Number:"; font.bold: true }
-                        CopyableText { text: v("ModelNumber", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-
-                        // Row 3
-                        Label { text: "CPU Architecture:"; font.bold: true }
-                        CopyableText { text: v("CPUArchitecture", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: "Build Version:"; font.bold: true }
-                        CopyableText { text: v("BuildVersion", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-
-                        // Row 4
-                        Label { text: "Hardware Model:"; font.bold: true }
-                        CopyableText { text: v("HardwareModel", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: "Region:"; font.bold: true }
-                        CopyableText { text: v("region", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-
-                        // Row 5
-                        Label { text: "Hardware Platform:"; font.bold: true }
+                        Label { text: qsTr("Hardware Platform:"); font.bold: true }
                         CopyableText { text: v("HardwarePlatform", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: "Firmware Version:"; font.bold: true }
+
+                        // Left: Device Class; Right: Firmware Version
+                        Label { text: qsTr("Device Class:"); font.bold: true }
+                        CopyableText { text: v("DeviceClass", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: qsTr("Firmware Version:"); font.bold: true }
                         CopyableText { text: v("FirmwareVersion", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
-                        // Row 6
-                        Label { text: "Bluetooth Address:"; font.bold: true }
-                        PrivateText { text: v("BluetoothAddress", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: "Wi‑Fi Address:"; font.bold: true }
-                        PrivateText { text: v("WiFiAddress", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-
-                        // Row 7
-                        Label { text: "Ethernet Address:"; font.bold: true }
-                        PrivateText { text: v("EthernetAddress", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: "Battery Health:"; font.bold: true }
+                        // Left: Jailbroken; Right: Battery Health
+                        Label { text: qsTr("Jailbroken:"); font.bold: true }
+                        CopyableText { text: v("Jailbroken", false) ? qsTr("Yes") : qsTr("No"); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: qsTr("Battery Health:"); font.bold: true }
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 4
@@ -215,31 +243,53 @@ Item {
 
                             Button {
                                 text: qsTr("More")
-                                onClicked: {
-                                    // TODO: Implement the battery health details UI.
-                                }
+                                onClicked: batteryInfoDialog.open()
                             }
                         }
 
-                        // Row 8
-                        Label { text: "Production Device:"; font.bold: true }
+                        // Left: Model Number; Right: Production Device
+                        Label { text: qsTr("Model Number:"); font.bold: true }
+                        CopyableText { text: v("ModelNumber", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: qsTr("Production Device:"); font.bold: true }
                         CopyableText { text: v("ProductionDevice", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: "Serial Number:"; font.bold: true }
+
+                        // Left: CPU Architecture; Right: Serial Number
+                        Label { text: qsTr("CPU Architecture:"); font.bold: true }
+                        CopyableText { text: v("CPUArchitecture", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: qsTr("Serial Number:"); font.bold: true }
                         PrivateText { text: v("SerialNumber", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
-                        // Row 9
-                        Label { text: "IMEI:"; font.bold: true }
+                        // Left: Build Version; Right: IMEI
+                        Label { text: qsTr("Build Version:"); font.bold: true }
+                        CopyableText { text: v("BuildVersion", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+                        Label { text: qsTr("IMEI:"); font.bold: true }
                         PrivateText { text: v("InternationalMobileEquipmentIdentity", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: "UDID:"; font.bold: true }
-                        PrivateText { text: v("UniqueDeviceID", qsTr("Unknown")); Layout.fillWidth: true }
                     }
                 }
 
-                DiskUsage {
-                    Layout.preferredWidth: detailsColumn.width * root.diskUsageWidthRatio
-                    Layout.alignment: Qt.AlignHCenter
-                    device : root.device
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: -detailsColumn.spacing + 2
+                    Layout.leftMargin: 10
+                    spacing: 0
+
+                    Label {
+                        text: qsTr("UDID:")
+                        font.pixelSize: 10
+                        color: Theme.textMuted
+                    }
+
+                    PrivateText {
+                        text: v("UniqueDeviceID", qsTr("Unknown"))
+                        color: Theme.textMuted
+                    }
                 }
+
+                    DiskUsage {
+                        Layout.fillWidth: true
+                        device: root.device
+                    }
             }
         }
 
