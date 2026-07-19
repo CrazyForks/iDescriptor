@@ -2,8 +2,6 @@ use cpp::cpp;
 use log::debug;
 use qmetaobject::{QJSValue, prelude::*};
 
-
-
 // Why do we need this?
 /*
   We need an event filter to detect clicks outside the status window
@@ -167,7 +165,7 @@ pub struct StatusWindowController {
             opener_x: f64,
             opener_y: f64,
             opener_width: f64,
-            opener_height: f64
+            opener_height: f64,
         )
     ),
     uninstall: qt_method!(fn(&mut self)),

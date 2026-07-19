@@ -137,7 +137,11 @@ impl QmlUtils {
     }
 
     fn get_lockdown_path(&self) -> QString {
-        QString::from(crate::utils::get_lockdown_path().to_string_lossy().to_string())
+        QString::from(
+            crate::utils::get_lockdown_path()
+                .to_string_lossy()
+                .to_string(),
+        )
     }
 
     fn set_language(&self, lang_id: QString) -> bool {
