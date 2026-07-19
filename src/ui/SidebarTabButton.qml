@@ -18,7 +18,7 @@ Item {
 
     signal sectionChanged(int sectionIndex)
 
-    implicitWidth: 200
+    implicitWidth: 175
     implicitHeight: card.implicitHeight
 
     Behavior on animationProgress {
@@ -37,8 +37,7 @@ Item {
     }
 
     function selectDevice() {
-        App.DeviceContext.currentDeviceUdid = root.udid
-        App.DeviceContext.currentRecoveryDeviceId = ""
+        App.DeviceContext.selectConnectedDevice(root.udid)
     }
 
     Menu {
@@ -216,11 +215,16 @@ Item {
                             required property int sectionIndex
 
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 28
+                            Layout.preferredHeight: 25
+                            Layout.maximumHeight: 25
                             text: name
-                            checkable: true
+                            checkable: false
                             checked: root.currentSection === sectionIndex
                             hoverEnabled: true
+                            leftPadding: 8
+                            rightPadding: 8
+                            topPadding: 4
+                            bottomPadding: 4
                             onClicked: {
                                 root.selectDevice()
                                 root.sectionChanged(sectionIndex)
@@ -228,13 +232,18 @@ Item {
 
                             background: Rectangle {
                                 radius: 6
-                                color: navButton.checked ? App.Theme.selection
-                                      : navButton.down ? App.Theme.pressed
-                                      : navButton.hovered ? App.Theme.hover
-                                                          : App.Theme.controlFill
-                                border.color: navButton.checked ? App.Theme.selection
-                                            : navButton.hovered ? App.Theme.focus
-                                                                : App.Theme.controlStroke
+                                color: navButton.checked
+                                     ? (navButton.hovered || navButton.down
+                                        ? App.Theme.accentHover
+                                        : App.Theme.accent)
+                                     : (navButton.hovered || navButton.down
+                                        ? Qt.rgba(1, 1, 1, 180 / 255)
+                                        : Qt.rgba(1, 1, 1, 120 / 255))
+                                border.color: navButton.checked
+                                            ? App.Theme.accent
+                                            : navButton.hovered
+                                              ? App.Theme.systemBlue
+                                              : Qt.rgba(1, 1, 1, 200 / 255)
                                 border.width: 1
 
                                 Behavior on color {
@@ -250,7 +259,7 @@ Item {
                                 text: navButton.text
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
-                                color: navButton.checked ? App.Theme.textSelected : App.Theme.text
+                                color: navButton.checked ? App.Theme.textSelected : "#212529"
                                 font.pixelSize: 11
                                 elide: Text.ElideRight
                             }

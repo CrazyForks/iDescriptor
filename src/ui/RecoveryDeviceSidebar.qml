@@ -17,8 +17,7 @@ Item {
 
     // TODO: maybe we can do better here
     function selectDevice() {
-        App.DeviceContext.currentDeviceUdid = ""
-        App.DeviceContext.currentRecoveryDeviceId = root.deviceId
+        App.DeviceContext.selectRecoveryDevice(root.deviceId)
     }
 
     Rectangle {

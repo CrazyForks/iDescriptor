@@ -8,8 +8,10 @@ QtObject {
     id: root
     property ListModel devices: ListModel {}
     property ListModel recoveryDevices: ListModel {}
+    property ListModel pendingDevices: ListModel {}
     property string currentDeviceUdid : ""
     property string currentRecoveryDeviceId : ""
+    property string currentPendingDeviceUdid: ""
     property int currentTab: 0
     property bool showWelcomePage : true
     //Record<mac,pairing_file_path>
@@ -20,6 +22,7 @@ QtObject {
     signal deviceAlreadyExistsMAC(string mac)
     signal initStarted(string mac)
     signal noPairingFileForWirelessDevice(string mac)
+    signal pairingFailed(string udid)
 
     function init() {
         /* core is a global obj set from rust side*/
@@ -40,14 +43,99 @@ QtObject {
         return devices.count + recoveryDevices.count
     }
 
-    function getRecoveryDevice(udid) {
+    function getVisibleDeviceCount() {
+        return devices.count + recoveryDevices.count + pendingDevices.count
+    }
+
+    function selectConnectedDevice(udid) {
+        root.currentDeviceUdid = udid
+        root.currentRecoveryDeviceId = ""
+        root.currentPendingDeviceUdid = ""
+        root.showWelcomePage = false
+    }
+
+    function selectRecoveryDevice(id) {
+        root.currentDeviceUdid = ""
+        root.currentRecoveryDeviceId = id
+        root.currentPendingDeviceUdid = ""
+        root.showWelcomePage = false
+    }
+
+    function selectPendingDevice(udid) {
+        root.currentDeviceUdid = ""
+        root.currentRecoveryDeviceId = ""
+        root.currentPendingDeviceUdid = udid
+        root.showWelcomePage = false
+    }
+
+    function selectWelcomePage() {
+        root.currentDeviceUdid = ""
+        root.currentRecoveryDeviceId = ""
+        root.currentPendingDeviceUdid = ""
+        root.showWelcomePage = true
+    }
+
+    function getRecoveryDevice(id) {
         for (let i = 0; i < recoveryDevices.count; i++) {
             const device = recoveryDevices.get(i)
-            if (device.udid === udid) {
+            if (device.id === id) {
                 return device
             }
         }
         return null
+    }
+
+    function getPendingDevice(udid) {
+        for (let i = 0; i < pendingDevices.count; i++) {
+            const device = pendingDevices.get(i)
+            if (device.udid === udid)
+                return device
+        }
+        return null
+    }
+
+    function removePendingDevice(udid, updateSelection) {
+        for (let i = 0; i < pendingDevices.count; i++) {
+            if (pendingDevices.get(i).udid === udid) {
+                pendingDevices.remove(i)
+                break
+            }
+        }
+
+        if (root.currentPendingDeviceUdid === udid)
+            root.currentPendingDeviceUdid = ""
+
+        if (updateSelection !== false)
+            root.selectFallbackDevice()
+        else
+            root.showWelcomePage = root.getVisibleDeviceCount() === 0
+    }
+
+    function selectFallbackDevice() {
+        if (root.currentDeviceUdid && root.getDevice(root.currentDeviceUdid)) {
+            root.selectConnectedDevice(root.currentDeviceUdid)
+            return
+        }
+
+        if (root.currentRecoveryDeviceId && root.getRecoveryDevice(root.currentRecoveryDeviceId)) {
+            root.selectRecoveryDevice(root.currentRecoveryDeviceId)
+            return
+        }
+
+        if (root.currentPendingDeviceUdid && root.getPendingDevice(root.currentPendingDeviceUdid)) {
+            root.selectPendingDevice(root.currentPendingDeviceUdid)
+            return
+        }
+
+        if (devices.count > 0) {
+            root.selectConnectedDevice(devices.get(0).udid)
+        } else if (recoveryDevices.count > 0) {
+            root.selectRecoveryDevice(recoveryDevices.get(0).id)
+        } else if (pendingDevices.count > 0) {
+            root.selectPendingDevice(pendingDevices.get(0).udid)
+        } else {
+            root.selectWelcomePage()
+        }
     }
 
     function getDeviceByMacAddress(mac) {
@@ -87,8 +175,7 @@ QtObject {
             root.deviceAlreadyExistsMAC(mac);
             if (set_as_selection_if_exists) {
                 console.log("Setting existing device as current selection");
-                root.currentDeviceUdid = existingDevice.udid;
-                root.showWelcomePage = false;
+                root.selectConnectedDevice(existingDevice.udid);
             }
             return;
         }
@@ -134,6 +221,7 @@ QtObject {
 
             switch (eventType) {
                 case 1:
+                    root.removePendingDevice(udid, false)
                     const service_manager = serviceFactory.create_service_manager(udid, info.ios_version_major)
                     const sb_client = serviceFactory.create_springboard_services_client(udid)
                     const text = `${info.marketing_name} / ${udid.slice(0,10)}...`
@@ -145,9 +233,7 @@ QtObject {
                     // default to info section
                     currentSection : 0 })
                     root.deviceAdded(udid, mac)
-                    root.showWelcomePage = false
-                    root.currentDeviceUdid = udid
-                    root.currentRecoveryDeviceId = ""
+                    root.selectConnectedDevice(udid)
                     break;
                 case 2:
                     // FIXME: find an O(1) solution
@@ -158,14 +244,32 @@ QtObject {
                             break
                         }
                     }
-                    root.showWelcomePage = root.getDeviceCount() === 0
                     if (root.currentDeviceUdid === udid)
                         root.currentDeviceUdid = ""
+                    root.removePendingDevice(udid, false)
                     root.deviceRemoved(udid)
+                    root.selectFallbackDevice()
                     break;
                 case 3:
+                    if (root.getDevice(udid) || root.getPendingDevice(udid))
+                        break
+
+                    pendingDevices.append({
+                        udid: udid,
+                        text: qsTr("Pairing…")
+                    })
+                    root.showWelcomePage = false
+                    if (!root.currentDeviceUdid
+                            && !root.currentRecoveryDeviceId
+                            && !root.currentPendingDeviceUdid) {
+                        root.selectPendingDevice(udid)
+                    }
                     break;
                 case 4:
+                    if (root.getPendingDevice(udid)) {
+                        root.removePendingDevice(udid, true)
+                        root.pairingFailed(udid)
+                    }
                     break;
                 default:
 
@@ -187,8 +291,10 @@ QtObject {
                     recoveryDevices.append(entry)
        
                     root.showWelcomePage = false
-                    if (!root.currentDeviceUdid && !root.currentRecoveryDeviceId)
-                        root.currentRecoveryDeviceId = id
+                    if (!root.currentDeviceUdid
+                            && !root.currentRecoveryDeviceId
+                            && !root.currentPendingDeviceUdid)
+                        root.selectRecoveryDevice(id)
                     break;
                 case 2:
                     for (let i = 0; i < recoveryDevices.count; i++) {
@@ -200,7 +306,7 @@ QtObject {
                     }
                     if (root.currentRecoveryDeviceId === id)
                         root.currentRecoveryDeviceId = ""
-                    root.showWelcomePage = root.getDeviceCount() === 0
+                    root.selectFallbackDevice()
                     break;
             }
         }
