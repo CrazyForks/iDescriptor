@@ -6,12 +6,28 @@ import FluentUI
 
 FluWindow {
     id: root
-    property bool auto_close: true
-    property string _effect: "acrylic"
     launchMode: FluWindowType.Standard 
-    backgroundColor: "transparent"
+    property bool is_complete: false
+    property string _effect: ""
+
+    function applyEffect(effect) {
+        if (!root.is_complete) {
+            console.warn("Window is not complete yet. Cannot apply effect.")
+            return
+        }
+
+        if (effect === "acrylic") {
+            root.backgroundColor = "transparent"
+            root.effect = "acrylic"
+        } else {
+            root.backgroundColor = FluTheme.windowBackgroundColor
+            root.effect = "normal"
+        }
+    }
+
     Component.onCompleted : {
-        // directly setting the effect property doesn't work
-        root.effect = root._effect
+        root.is_complete = true
+        const effect = root._effect.length > 0 ? root._effect : settingsManager.window_effect()
+        root.applyEffect(effect)
     }
 }
