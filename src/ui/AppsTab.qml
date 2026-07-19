@@ -11,6 +11,7 @@ Item {
     clip:true
 
     readonly property string sponsorsUrl: "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/main/sponsors.json"
+    readonly property bool isMacOS: Qt.platform.os === "osx" || Qt.platform.os === "darwin"
 
     property bool loading: true
     property string error: ""
@@ -49,11 +50,23 @@ Item {
         anchors.centerIn: parent
     }
 
-    KeychainDialog {
-        id: keychainDialog
-        anchors.centerIn: parent
-        onContinueRequested: apps.init(true)
-        onSkipRequested: apps.init(false)
+    Loader {
+        id: keychainDialogLoader
+        anchors.fill: parent
+        active: root.isMacOS
+        source: active ? "KeychainDialog.qml" : ""
+    }
+
+    Connections {
+        target: keychainDialogLoader.item
+
+        function onContinueRequested() {
+            apps.init(true)
+        }
+
+        function onSkipRequested() {
+            apps.init(false)
+        }
     }
 
     function openInstallPopup(bundleId, appName) {
@@ -151,9 +164,8 @@ Item {
     }
 
     Component.onCompleted: {
-        const isMacOS = Qt.platform.os === "osx" || Qt.platform.os === "darwin"
-        if (isMacOS && settingsManager.show_keychain_dialog()) {
-            keychainDialog.open()
+        if (root.isMacOS && settingsManager.show_keychain_dialog()) {
+            keychainDialogLoader.item.open()
             return
         }
 
