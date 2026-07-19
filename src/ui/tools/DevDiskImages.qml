@@ -10,6 +10,7 @@ ToolWindow {
     height: 600
     title: qsTr("Developer Disk Images - iDescriptor")
     property string currentDeviceUdid: ""
+    property bool mountedImageChecked: false
     readonly property bool hasDevice: App.DeviceContext.devices && App.DeviceContext.devices.count > 0
 
     function selectedImageItem() {
@@ -21,6 +22,49 @@ ToolWindow {
             return null;
 
         return item;
+    }
+
+    function deviceIndexForUdid(udid) {
+        if (!udid)
+            return -1;
+
+        for (let index = 0; index < App.DeviceContext.devices.count; ++index) {
+            if (App.DeviceContext.devices.get(index).udid === udid)
+                return index;
+        }
+        return -1;
+    }
+
+    function applyDeviceAt(index, fetchList) {
+        let selectedUdid = "";
+        if (root.hasDevice && index >= 0 && index < App.DeviceContext.devices.count)
+            selectedUdid = App.DeviceContext.devices.get(index).udid;
+
+        root.currentDeviceUdid = selectedUdid;
+        root.mountedImageChecked = false;
+        imageListView.currentIndex = -1;
+
+        if (fetchList)
+            DevImgsManager.fetch_image_list(selectedUdid, settingsManager.dev_disk_img_path());
+    }
+
+    function syncDeviceSelection(fetchList) {
+        if (!root.hasDevice) {
+            deviceComboBox.currentIndex = 0;
+            root.applyDeviceAt(-1, fetchList);
+            return;
+        }
+
+        let index = root.deviceIndexForUdid(root.currentDeviceUdid);
+        if (index < 0)
+            index = root.deviceIndexForUdid(root.udid);
+        if (index < 0)
+            index = root.deviceIndexForUdid(App.DeviceContext.currentDeviceUdid);
+        if (index < 0)
+            index = 0;
+
+        deviceComboBox.currentIndex = index;
+        root.applyDeviceAt(index, fetchList);
     }
 
     function compatibilityColor(compatibility, mounted) {
@@ -61,18 +105,63 @@ ToolWindow {
     //TODO: listen for mount/unmount events and update the model accordingly
     Connections {
         target: DevImgsManager
-        //image_download_finished
-        onImage_download_finished: (version, index, success, error) => {
-            if (error && error.length > 0) {
-                console.error("Download failed for version", version, ":", error);
-                // FIXME: show error message in UI
-            }
+
+        function onImageDownloadFinished(version, index, success, error) {
             DevImgsManager.handle_download_finished(version);
-            DevImgsManager.fetch_image_list(root.currentDeviceUdid);
+            if (success) {
+                App.Helpers.showInfo(root, qsTr("Developer disk image %1 was downloaded successfully.").arg(version));
+            } else {
+                const detail = error && error.length > 0 ? error : qsTr("Unknown download error.");
+                App.Helpers.showError(root, qsTr("Could not download developer disk image %1: %2").arg(version).arg(detail));
+            }
+            DevImgsManager.fetch_image_list(root.currentDeviceUdid, settingsManager.dev_disk_img_path());
+        }
+
+        function onImageDownloadCancelled(version) {
+            App.Helpers.showInfo(root, qsTr("Download for developer disk image %1 was cancelled.").arg(version));
+        }
+
+        function onImageListRefreshFinished(udid, refreshed, success, error) {
+            if (udid !== root.currentDeviceUdid)
+                return;
+
+            if (!success) {
+                const detail = error && error.length > 0 ? error : qsTr("Unknown refresh error.");
+                App.Helpers.showError(root, qsTr("Could not refresh the developer disk image list: %1").arg(detail));
+            } else if (refreshed) {
+                App.Helpers.showInfo(root, qsTr("The developer disk image list was refreshed."));
+            }
+        }
+
+        function onMountedImageCheckFinished(udid, success, isMounted, isLocked, error) {
+            if (udid !== root.currentDeviceUdid)
+                return;
+
+            root.mountedImageChecked = success;
+            if (!success) {
+                const detail = error && error.length > 0 ? error : qsTr("Unknown device error.");
+                App.Helpers.showError(root, qsTr("Could not check the mounted developer disk image: %1").arg(detail));
+            } else if (isLocked) {
+                App.Helpers.showWarning(root, qsTr("The device is locked. Unlock it and check again."));
+            } else if (isMounted) {
+                App.Helpers.showInfo(root, qsTr("A developer disk image is mounted on the selected device."));
+            } else {
+                App.Helpers.showInfo(root, qsTr("No developer disk image is mounted on the selected device."));
+            }
         }
     }
 
-    color: App.Theme.windowBackground
+    Connections {
+        target: App.DeviceContext
+
+        function onDeviceAdded(udid, mac) {
+            root.syncDeviceSelection(true);
+        }
+
+        function onDeviceRemoved(udid) {
+            root.syncDeviceSelection(true);
+        }
+    }
 
     StateView {
         anchors.fill: parent
@@ -120,7 +209,7 @@ ToolWindow {
 
                             Label {
                                 Layout.fillWidth: true
-                                text : "Developer images allow you to use additional services on your iDevice, in order to mount one you must have your device screen lock unlocked"
+                                text: qsTr("Developer images allow you to use additional services on your iDevice. To mount one, the device must be unlocked.")
                                 color : App.Theme.textMuted
                                 wrapMode: Text.WordWrap
                                 font.pixelSize: 10
@@ -156,7 +245,11 @@ ToolWindow {
                                 rightPadding: 16
                                 topPadding: 8
                                 bottomPadding: 8
-                                enabled: imageListView.currentIndex >= 0 && root.hasDevice
+                                enabled: {
+                                    const item = root.selectedImageItem();
+                                    return root.hasDevice && item && item.is_downloaded
+                                        && (item.compatibility === "Compatible" || item.compatibility === "MaybeCompatible");
+                                }
                                 font.pixelSize: 13
                                 font.weight: Font.Medium
                                 palette.buttonText: mountButton.enabled ? App.Theme.textSelected : App.Theme.textMuted
@@ -175,29 +268,29 @@ ToolWindow {
                                 onClicked: {
                                     const item = root.selectedImageItem();
                                     if (!item) {
-                                        console.error("No developer disk image is selected.");
+                                        App.Helpers.showWarning(root, qsTr("Select a developer disk image first."));
                                         return;
                                     }
 
                                     console.log("Mount button clicked for item:", item);
                                     const version = item.version;
-                                    const info = DevImgsManager.get_locations_for_version(version);
+                                    const info = DevImgsManager.get_locations_for_version(version, settingsManager.dev_disk_img_path());
                                     const exists = info["exists"];
                                     if (!exists) {
-                                        console.error("Required files for version", version, "do not exist. Cannot mount.");
+                                        App.Helpers.showError(root, qsTr("The required files for developer disk image %1 are missing.").arg(version));
                                         return;
                                     }
 
                                     const dmg_path = info["dmg"];
                                     const sig_path = info["sig"];
                                     if (!dmg_path || !sig_path) {
-                                        console.error("Invalid paths for version", version, ":", dmg_path, sig_path);
+                                        App.Helpers.showError(root, qsTr("The paths for developer disk image %1 are invalid.").arg(version));
                                         return;
                                     }
 
                                     const device = App.DeviceContext.getDevice(root.currentDeviceUdid);
                                     if (!device) {
-                                        console.error("No device found for UDID:", root.currentDeviceUdid);
+                                        App.Helpers.showError(root, qsTr("The selected device is no longer available."));
                                         return;
                                     }
 
@@ -205,12 +298,13 @@ ToolWindow {
                                         console.log("devImageMounted signal received for version:", version, "success:", success, "is_locked:", is_locked);
                                         if (success) {
                                             console.log("Developer disk image mounted successfully for version:", version);
-                                            DevImgsManager.fetch_image_list(root.currentDeviceUdid);
+                                            App.Helpers.showInfo(root, qsTr("Developer disk image %1 was mounted successfully.").arg(version));
+                                            DevImgsManager.fetch_image_list(root.currentDeviceUdid, settingsManager.dev_disk_img_path());
                                         } else {
                                             if (is_locked) {
-                                                console.error("Failed to mount developer disk image for version", version, ": device is locked");
+                                                App.Helpers.showWarning(root, qsTr("Could not mount developer disk image %1 because the device is locked.").arg(version));
                                             } else {
-                                                console.error("Failed to mount developer disk image for version", version);
+                                                App.Helpers.showError(root, qsTr("Could not mount developer disk image %1.").arg(version));
                                             }
                                         }
                                     });
@@ -246,7 +340,38 @@ ToolWindow {
                                         }
                                     }
                                 }
-                                onClicked: DevImgsManager.check_mounted_image()
+                                onClicked: DevImgsManager.check_mounted_image(root.currentDeviceUdid)
+                            }
+
+                            Button {
+                                id: refreshButton
+                                text: qsTr("Refresh")
+                                icon.source: "qrc:/resources/icons/ic_outline-refresh.svg"
+                                icon.width: 16
+                                icon.height: 16
+                                icon.color: enabled ? App.Theme.icon : App.Theme.textMuted
+                                leftPadding: 14
+                                rightPadding: 16
+                                topPadding: 8
+                                bottomPadding: 8
+                                font.pixelSize: 13
+                                font.weight: Font.Medium
+                                palette.buttonText: refreshButton.enabled ? App.Theme.text : App.Theme.textMuted
+                                background: Rectangle {
+                                    radius: 8
+                                    color: refreshButton.down ? App.Theme.pressed : refreshButton.hovered ? App.Theme.hover : App.Theme.elevatedSurface
+                                    border.color: App.Theme.separator
+                                    border.width: 1
+                                    Behavior on color {
+                                        ColorAnimation {
+                                            duration: 220
+                                            easing.type: Easing.InOutQuad
+                                        }
+                                    }
+                                }
+                                onClicked: {
+                                    DevImgsManager.refresh_image_list(root.currentDeviceUdid, settingsManager.dev_disk_img_path());
+                                }
                             }
                         }
                     }
@@ -271,17 +396,8 @@ ToolWindow {
                             leftPadding: 12
                             rightPadding: 32
                             font.pixelSize: 13
-                            onModelChanged: {
-                                if (root.hasDevice) {
-                                    root.currentDeviceUdid = deviceComboBox.currentValue;
-                                    DevImgsManager.fetch_image_list(root.currentDeviceUdid);
-                                }
-                            }
-                            onCurrentIndexChanged: {
-                                console.log("Device selection changed to:", deviceComboBox.currentValue);
-                                root.currentDeviceUdid = deviceComboBox.currentValue;
-                                //refresh
-                                DevImgsManager.fetch_image_list(root.currentDeviceUdid);
+                            onActivated: function(index) {
+                                root.applyDeviceAt(index, true);
                             }
                         }
 
@@ -300,14 +416,14 @@ ToolWindow {
                                 color: {
                                     if (!root.hasDevice)
                                         return App.Theme.systemRed;
-                                    if (DevImgsManager.mounted_image_info && DevImgsManager.mounted_image_info.success)
+                                    if (root.mountedImageChecked && DevImgsManager.mounted_image_info.is_mounted)
                                         return App.Theme.systemBlue;
                                     return App.Theme.systemOrange;
                                 }
 
                                 Label {
                                     anchors.centerIn: parent
-                                    text: root.hasDevice && DevImgsManager.mounted_image_info && DevImgsManager.mounted_image_info.success ? "✓" : "!"
+                                    text: root.hasDevice && root.mountedImageChecked && DevImgsManager.mounted_image_info.is_mounted ? "✓" : "!"
                                     color: App.Theme.textSelected
                                     font.pixelSize: 12
                                     font.weight: Font.DemiBold
@@ -328,8 +444,16 @@ ToolWindow {
                             Label {
                                 Layout.fillWidth: true
                                 visible: root.hasDevice
-                                color: DevImgsManager.mounted_image_info && DevImgsManager.mounted_image_info.success ? App.Theme.text : App.Theme.textMuted
-                                text: DevImgsManager.mounted_image_info && DevImgsManager.mounted_image_info.success ? qsTr("Selected device already has a developer disk image mounted.") : qsTr("Could not check for a mounted image. Make sure the device is unlocked.")
+                                color: root.mountedImageChecked && DevImgsManager.mounted_image_info.is_mounted ? App.Theme.text : App.Theme.textMuted
+                                text: {
+                                    if (!root.mountedImageChecked)
+                                        return qsTr("Use Check Mounted to inspect the selected device.");
+                                    if (DevImgsManager.mounted_image_info.is_locked)
+                                        return qsTr("The selected device is locked.");
+                                    if (DevImgsManager.mounted_image_info.is_mounted)
+                                        return qsTr("Selected device already has a developer disk image mounted.");
+                                    return qsTr("No developer disk image is mounted on the selected device.");
+                                }
                                 wrapMode: Text.WordWrap
                                 font.pixelSize: 13
                                 lineHeight: 1.28
@@ -386,7 +510,6 @@ ToolWindow {
                         propagateComposedEvents: true
                         onClicked: function (mouse) {
                             imageListView.currentIndex = index;
-                            mountButton.enabled = true;
                             // don't consume
                             mouse.accepted = false;
                         }
@@ -514,18 +637,14 @@ ToolWindow {
                             onClicked: {
                                 if (model.is_downloading) {
                                     console.log("Cancel download for version:", version);
-                                    DevImgsManager.cancel_download(version);
-                                    // refresh
-                                    DevImgsManager.fetch_image_list(root.currentDeviceUdid);
+                                    if (!DevImgsManager.cancel_download(version))
+                                        App.Helpers.showError(root, qsTr("Could not cancel the download for developer disk image %1.").arg(version));
                                     return;
                                 }
-                                downloadButton.text = qsTr("Cancel");
-                                model.is_downloading = true;
-                                model.progress = 0;
-                                const started_to_download = DevImgsManager.download_image(version, index);
-                                // FIXME: show error message
+                                const started_to_download = DevImgsManager.download_image(version, index, settingsManager.dev_disk_img_path());
                                 if (!started_to_download) {
                                     console.error("Failed to start download for version:", version);
+                                    App.Helpers.showError(root, qsTr("Could not start the download for developer disk image %1.").arg(version));
                                 }
                             }
                         }
@@ -537,8 +656,8 @@ ToolWindow {
 
     // fetch the image list when the component is created.
     Component.onCompleted: {
-        root.currentDeviceUdid = deviceComboBox.currentValue;
-        DevImgsManager.fetch_image_list(root.currentDeviceUdid);
+        root.syncDeviceSelection(true);
+        console.log("DevDiskImages.qml: Component completed, fetching image list for device:", root.currentDeviceUdid, "in directory:", settingsManager.dev_disk_img_path());
         console.log("DevDiskImages.qml: Component completed, fetching image list.");
     }
 }
