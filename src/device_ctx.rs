@@ -7,8 +7,61 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+use tracing::field::debug;
 
 use crate::image_cache;
+
+#[derive(Clone)]
+#[allow(non_camel_case_types)]
+pub struct iOSVersion {
+    pub major: u32,
+    pub minor: u32,
+    pub patch: u32,
+    pub raw_version_str: String,
+}
+
+impl iOSVersion {
+    pub fn new(major: u32, minor: u32, patch: u32, raw_version_str: String) -> Self {
+        Self {
+            major,
+            minor,
+            patch,
+            raw_version_str,
+        }
+    }
+
+    pub fn from_str_opt(version_str: &str) -> Option<Self> {
+        let parts: Vec<&str> = version_str.split('.').collect();
+        if parts.len() != 3 {
+            return None;
+        }
+
+        let major = parts[0].parse::<u32>().ok()?;
+        let minor = parts[1].parse::<u32>().ok()?;
+        let patch = parts[2].parse::<u32>().ok()?;
+
+        Some(Self::new(major, minor, patch, version_str.to_string()))
+    }
+
+    pub fn from_str(version_str: &str) -> Self {
+        let parts: Vec<&str> = version_str.split('.').collect();
+
+        let major = parts
+            .get(0)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        let minor = parts
+            .get(1)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        let patch = parts
+            .get(2)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+
+        Self::new(major, minor, patch, version_str.to_string())
+    }
+}
 
 #[derive(Clone)]
 pub struct DeviceServices {
@@ -19,7 +72,7 @@ pub struct DeviceServices {
     pub video_streams: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
     pub provider: Arc<Mutex<Box<dyn idevice::provider::IdeviceProvider>>>,
     pub lockdown: Arc<Mutex<LockdownClient>>,
-    pub ios_version: String,
+    pub ios_version: iOSVersion,
 }
 
 static APP_DEVICE_STATE: Lazy<Mutex<HashMap<String, DeviceServices>>> =
@@ -68,7 +121,7 @@ pub async fn insert_device(udid: impl Into<String>, services: DeviceServices) ->
         if let Some(task) = old.heartbeat_task.take() {
             eprintln!("device became wired - UDID {}", udid);
             task.abort();
-            return true
+            return true;
         }
     }
     false

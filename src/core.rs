@@ -28,7 +28,9 @@ use tokio::task::JoinHandle;
 
 use core::pin::Pin;
 
-use crate::device_ctx::{DeviceServices,clean_device_from_app_state, insert_device, insert_heartbeat_task};
+use crate::device_ctx::{
+    DeviceServices, clean_device_from_app_state, iOSVersion, insert_device, insert_heartbeat_task,
+};
 use crate::{
     APP_LABEL, EV_CONNECTED, EV_DISCONNECTED, EV_FAIL, EV_PAIRING_PENDING, POSSIBLE_ROOT, RUNTIME,
     qt_threading::{QtThread, QtThreading},
@@ -590,7 +592,6 @@ fn parse_recovery_ecid(ecid: &str) -> Option<u64> {
         .or_else(|| trimmed.parse::<u64>().ok())
 }
 
-
 fn is_pairing_related_error(e: &IdeviceError) -> bool {
     matches!(
         e,
@@ -846,7 +847,7 @@ async fn init_idescriptor_device<
         video_streams: Arc::new(Mutex::new(HashMap::new())),
         provider: Arc::new(Mutex::new(Box::new(provider))),
         lockdown: Arc::new(Mutex::new(lc)),
-        ios_version,
+        ios_version: iOSVersion::from_str(&ios_version),
     };
 
     let udid_for_signal = udid.clone();
@@ -960,6 +961,11 @@ async fn collect_info(
     info.insert(
         QString::from("icon_path"),
         QVariant::from(&QString::from(utils::device_icon_path(product_type))),
+    );
+
+    info.insert(
+        QString::from("placeholder_path"),
+        QVariant::from(&QString::from(utils::device_placeholder_path(product_type))),
     );
 
     // region
@@ -1098,7 +1104,7 @@ async fn collect_info(
     Ok(info)
 }
 
-async fn insert_battery_info(
+pub async fn insert_battery_info(
     diag_relay: &mut DiagnosticsRelayClient,
     info: &mut QVariantMap,
     raw_product_type: String,
