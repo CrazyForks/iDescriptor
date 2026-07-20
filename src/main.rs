@@ -60,7 +60,7 @@ pub mod springboard_services;
 pub mod status_window_controller;
 pub mod transfer_speed_tester;
 pub mod ui_qrc;
-// pub mod updater;
+pub mod updater;
 pub mod qml_image;
 pub mod utils;
 pub mod web_wireless_gallery_import;
@@ -269,8 +269,8 @@ fn main() {
     let settings_manager = QObjectBox::new(settings_manager_impl);
     engine.set_object_property("settingsManager".into(), settings_manager.pinned());
 
-    // let updater = QObjectBox::new(updater::Updater::new_with_state());
-    // engine.set_object_property("UpdaterImp".into(), updater.pinned());
+    let updater = QObjectBox::new(updater::Updater::new_with_state());
+    engine.set_object_property("UpdaterImp".into(), updater.pinned());
 
     let core_obj = QObjectBox::new(core::Core::default());
     engine.set_object_property("core".into(), core_obj.pinned());

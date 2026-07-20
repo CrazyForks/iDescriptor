@@ -5,3 +5,4 @@ singleton StatusWindow 1.0 StatusWindow.qml
 singleton Helpers 1.0 Helpers.qml
 singleton Toolbox 1.0 Toolbox.qml
 singleton ClosingHandler 1.0 ClosingHandler.qml
+singleton Updater 1.0 Updater.qml
