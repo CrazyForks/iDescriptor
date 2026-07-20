@@ -7,4 +7,5 @@ Window {
     property bool showMinimize: false     
     property bool showClose: false 
     property bool auto_close: true
+    property bool autoDestroy: true
 }
