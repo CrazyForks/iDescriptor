@@ -13,7 +13,7 @@ use std::{io, io::SeekFrom, ops::RangeInclusive, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt},
     net::TcpListener,
-    sync::{Mutex, mpsc, oneshot},
+    sync::{Mutex, mpsc},
     task::JoinHandle,
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -22,11 +22,18 @@ use crate::RUNTIME;
 
 const STREAM_CHUNK_SIZE: usize = 256 * 1024;
 const STREAM_CHANNEL_CAPACITY: usize = 2;
+// FFmpeg may keep an open-ended request alive while issuing a second range
+// request (for example, to find a MOV moov atom near the end of the file).
+// AFC operations on a client are serialized, so letting the first request own
+// the client until EOF can deadlock the second request. Keep open-ended ranges
+// finite, as the original media server did, so FFmpeg can advance in chunks.
+const MAX_OPEN_ENDED_RANGE_BYTES: u64 = 1024 * 1024;
 
 #[derive(Clone)]
 struct MediaStreamState {
     afc: Arc<Mutex<AfcClient>>,
     path: Arc<str>,
+    file_size: u64,
     mime_type: &'static str,
     cancellation: CancellationToken,
     producers: TaskTracker,
@@ -42,12 +49,17 @@ pub struct MediaStreamSession {
 
 impl MediaStreamSession {
     pub async fn start(afc: Arc<Mutex<AfcClient>>, path: String) -> anyhow::Result<(String, Self)> {
+        let file_size = {
+            let mut afc = afc.lock().await;
+            afc.get_file_info(path.clone()).await?.size as u64
+        };
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let local_addr = listener.local_addr()?;
         let cancellation = CancellationToken::new();
         let producers = TaskTracker::new();
         let state = Arc::new(MediaStreamState {
             afc,
+            file_size,
             mime_type: mime_type_for_path(&path),
             path: Arc::from(path),
             cancellation: cancellation.clone(),
@@ -117,6 +129,13 @@ fn resolve_range(value: Option<&HeaderValue>, file_size: u64) -> Result<RangeDec
     }
 
     let value = value.to_str().map_err(|_| ())?;
+    let is_open_ended = value.split_once('=').is_some_and(|(unit, range)| {
+        unit.eq_ignore_ascii_case("bytes")
+            && !range.contains(',')
+            && range
+                .split_once('-')
+                .is_some_and(|(_, end)| end.trim().is_empty())
+    });
     let ranges = parse_range_header(value)
         .map_err(|_| ())?
         .validate(file_size)
@@ -128,7 +147,17 @@ fn resolve_range(value: Option<&HeaderValue>, file_size: u64) -> Result<RangeDec
         return Ok(RangeDecision::Full);
     }
 
-    Ok(RangeDecision::Partial(ranges[0].clone()))
+    let range = ranges[0].clone();
+    let range_length = range.end().saturating_sub(*range.start()).saturating_add(1);
+    if is_open_ended && range_length > MAX_OPEN_ENDED_RANGE_BYTES {
+        let end = range
+            .start()
+            .saturating_add(MAX_OPEN_ENDED_RANGE_BYTES - 1)
+            .min(*range.end());
+        return Ok(RangeDecision::Partial(*range.start()..=end));
+    }
+
+    Ok(RangeDecision::Partial(range))
 }
 
 async fn handle_media_request(
@@ -146,16 +175,7 @@ async fn handle_media_request(
         return empty_response(StatusCode::SERVICE_UNAVAILABLE, None);
     }
 
-    let file_size = {
-        let mut afc = state.afc.lock().await;
-        match afc.get_file_info(state.path.to_string()).await {
-            Ok(info) => info.size as u64,
-            Err(err) => {
-                warn!("Media file info failed for {}: {err}", state.path);
-                return empty_response(StatusCode::NOT_FOUND, None);
-            }
-        }
-    };
+    let file_size = state.file_size;
 
     let range = match resolve_range(headers.get(header::RANGE), file_size) {
         Ok(range) => range,
@@ -172,13 +192,7 @@ async fn handle_media_request(
     let body = if method == Method::HEAD || content_length == 0 {
         Body::empty()
     } else {
-        match start_body_producer(state.clone(), start, content_length).await {
-            Ok(body) => body,
-            Err(err) => {
-                warn!("Media file open/seek failed for {}: {err}", state.path);
-                return empty_response(StatusCode::NOT_FOUND, None);
-            }
-        }
+        start_body_producer(state.clone(), start, content_length)
     };
 
     let mut response = Response::builder()
@@ -186,6 +200,7 @@ async fn handle_media_request(
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::CONTENT_TYPE, state.mime_type)
         .header(header::CONTENT_LENGTH, content_length.to_string())
+        .header(header::CONNECTION, "close")
         .header(header::CACHE_CONTROL, "no-cache")
         .body(body)
         .expect("static media response headers must be valid");
@@ -200,29 +215,18 @@ async fn handle_media_request(
     response
 }
 
-async fn start_body_producer(
-    state: Arc<MediaStreamState>,
-    start: u64,
-    content_length: u64,
-) -> Result<Body, String> {
+fn start_body_producer(state: Arc<MediaStreamState>, start: u64, content_length: u64) -> Body {
     let (body_tx, body_rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
-    let (ready_tx, ready_rx) = oneshot::channel();
     let producer_state = state.clone();
 
     state.producers.spawn(async move {
-        produce_range(producer_state, start, content_length, body_tx, ready_tx).await;
+        produce_range(producer_state, start, content_length, body_tx).await;
     });
 
-    match ready_rx.await {
-        Ok(Ok(())) => {
-            let body_stream = stream::unfold(body_rx, |mut receiver| async move {
-                receiver.recv().await.map(|item| (item, receiver))
-            });
-            Ok(Body::from_stream(body_stream))
-        }
-        Ok(Err(err)) => Err(err),
-        Err(_) => Err("media producer stopped before opening the file".to_string()),
-    }
+    let body_stream = stream::unfold(body_rx, |mut receiver| async move {
+        receiver.recv().await.map(|item| (item, receiver))
+    });
+    Body::from_stream(body_stream)
 }
 
 async fn produce_range(
@@ -230,11 +234,9 @@ async fn produce_range(
     start: u64,
     content_length: u64,
     body_tx: mpsc::Sender<Result<Bytes, io::Error>>,
-    ready_tx: oneshot::Sender<Result<(), String>>,
 ) {
     let mut afc = tokio::select! {
         _ = state.cancellation.cancelled() => {
-            let _ = ready_tx.send(Err("media session was cancelled".to_string()));
             return;
         }
         afc = state.afc.clone().lock_owned() => afc,
@@ -245,14 +247,21 @@ async fn produce_range(
     let mut fd = match afc.open(state.path.to_string(), AfcFopenMode::RdOnly).await {
         Ok(fd) => fd,
         Err(err) => {
-            let _ = ready_tx.send(Err(format!("open failed: {err}")));
+            let message = format!("Media file open failed for {}: {err}", state.path);
+            warn!("{message}");
+            let _ = body_tx.try_send(Err(io::Error::other(message)));
             return;
         }
     };
 
     if start > 0 {
         if let Err(err) = fd.seek(SeekFrom::Start(start)).await {
-            let _ = ready_tx.send(Err(format!("seek failed: {err}")));
+            let message = format!(
+                "Media file seek failed for {} at {start}: {err}",
+                state.path
+            );
+            warn!("{message}");
+            let _ = body_tx.try_send(Err(io::Error::other(message)));
             if let Err(close_err) = fd.close().await {
                 warn!("Failed to close AFC descriptor after seek error: {close_err}");
             }
@@ -261,16 +270,8 @@ async fn produce_range(
     }
 
     if state.cancellation.is_cancelled() {
-        let _ = ready_tx.send(Err("media session was cancelled".to_string()));
         if let Err(err) = fd.close().await {
             warn!("Failed to close cancelled AFC descriptor: {err}");
-        }
-        return;
-    }
-
-    if ready_tx.send(Ok(())).is_err() {
-        if let Err(err) = fd.close().await {
-            warn!("Failed to close abandoned AFC descriptor: {err}");
         }
         return;
     }
@@ -380,6 +381,24 @@ mod tests {
         assert_eq!(
             resolve_range(Some(&header("bytes=90-")), 100),
             Ok(RangeDecision::Partial(90..=99))
+        );
+    }
+
+    #[test]
+    fn caps_large_open_ended_range() {
+        assert_eq!(
+            resolve_range(Some(&header("bytes=1024-")), 10 * 1024 * 1024),
+            Ok(RangeDecision::Partial(
+                1024..=(1024 + MAX_OPEN_ENDED_RANGE_BYTES - 1)
+            ))
+        );
+    }
+
+    #[test]
+    fn preserves_explicit_bounded_range() {
+        assert_eq!(
+            resolve_range(Some(&header("bytes=0-2097151")), 10 * 1024 * 1024),
+            Ok(RangeDecision::Partial(0..=2_097_151))
         );
     }
 
