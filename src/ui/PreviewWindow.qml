@@ -4,8 +4,9 @@ import QtQuick.Layouts
 import QtMultimedia
 import QtQuick.Window
 import "." as App
+import "./base"
 
-Window {
+DefaultWindow {
     required property string filePath
     property int thumbVersion: 0
     required property string udid
@@ -16,16 +17,18 @@ Window {
     property bool streamReleased: true
     readonly property bool isVideo: App.Helpers.is_video_file(filePath)
     id: root
-    visible: true   
+    visible: true
     width: Screen.width
     height: Screen.height
     visibility: Window.FullScreen
-    
+
     color: "black"
 
     function startVideoStream() {
         if (!isVideo)
             return
+
+        console.log("prew", filePath, typeof afcClient.start_video_stream);
 
         if (!afcClient || typeof afcClient.start_video_stream !== "function") {
             errorMessage = qsTr("AFC client is not available.")
@@ -62,7 +65,7 @@ Window {
     onClosing: cleanupVideoStream()
 
     Connections {
-        target: imageLoader 
+        target: imageLoader
 
         function onThumbnailReady(path,rowHint) {
             if (path == root.filePath && rowHint == root.row) {
@@ -82,6 +85,7 @@ Window {
 
     MediaPlayer {
         id: player
+        loops: MediaPlayer.Infinite
         audioOutput: AudioOutput {}
         videoOutput: videoOutput
         onErrorOccurred: function(error, message) {

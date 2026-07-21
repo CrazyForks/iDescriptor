@@ -5,7 +5,10 @@ edition = "2024"
 
 [dependencies]
 tokio = { version = "1.50.0", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 futures = "0.3"
+axum = "0.8"
+http-range-header = "0.4"
 #idevice = { path = "lib/idevice-rs/idevice", features = ["full", "aws-lc"], default-features = false }
 idevice = { path = "lib/idevice-rs/idevice", features = ["full", "openssl"], default-features = false }
 uuid = { version = "1.22.0", features = ["v4"] }
@@ -37,7 +40,7 @@ ssh2 = "0.9"
 hex = "0.4.3"
 irecovery = { version = "0.2.1", features = ["tokio"] }
 lru = "0.18.0"
-#z_updater = { path= "/home/uncore/Desktop/proj/z-updater"}
+zupdater = { path= "lib/zupdater"}
 
 [target.'cfg(target_os = "windows")'.dependencies]
 compress-tools = { version = "0.16", features = ["tokio_support"] }

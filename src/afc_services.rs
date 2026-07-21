@@ -1,18 +1,14 @@
 use crate::device_ctx;
+use crate::media_streamer::MediaStreamSession;
 use crate::qt_threading::QtThreading;
 use crate::{RUNTIME, run_sync};
-use idevice::afc::{AfcClient, opcode::AfcFopenMode};
-use log::debug;
+use idevice::afc::AfcClient;
+use log::{debug, error, info, warn};
 use macros::QtThreading;
 use qmetaobject::prelude::*;
 use qttypes::{QStringList, QVariantMap};
-use std::cmp::min;
-use std::io::SeekFrom;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufWriter};
-use tokio::net::TcpListener;
 use tokio::sync::Mutex;
-use tokio::sync::oneshot;
 #[derive(QObject, QtThreading)]
 pub struct AfcServices {
     base: qt_base_class!(trait QObject),
@@ -276,115 +272,32 @@ impl AfcServices {
 
     fn start_video_stream(&self, file_path: QString) -> QString {
         let path_str = file_path.to_string();
-        let cloned_path = path_str.clone();
         let afc = self.afc.clone();
         let udid = self.udid.clone();
+        let stream_udid = udid.clone();
 
-        eprintln!(
-            "start_video_stream: request udid={} path={}",
-            &udid, cloned_path
-        );
-
-        // bind ephemeral port on localhost
-        let listener = match std::net::TcpListener::bind("127.0.0.1:0") {
-            Ok(l) => l,
-            Err(e) => {
-                eprintln!("start_video_stream: bind failed: {e}");
-                return QString::default();
-            }
-        };
-        let local_addr = match listener.local_addr() {
-            Ok(a) => a,
-            Err(e) => {
-                eprintln!("start_video_stream: local_addr failed: {e}");
-                return QString::default();
-            }
-        };
-        listener.set_nonblocking(true).ok();
-
-        // create Tokio TcpListener inside runtime
-        let std_listener = {
-            let _guard = RUNTIME.handle().enter();
-            match TcpListener::from_std(listener) {
-                Ok(l) => l,
-                Err(e) => {
-                    eprintln!("start_video_stream: from_std failed: {e}");
-                    return QString::default();
-                }
-            }
-        };
-
-        let port = local_addr.port();
-
-        let encoded = urlencoding::encode(&cloned_path);
-        let url = format!("http://127.0.0.1:{}/{}", port, encoded);
-        let url_clone = url.clone();
-        let url_clone_for_log = url.clone();
-        let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
-        let url_for_insert = url.clone();
-        let udid_for_insert = udid.clone();
-
-        let inserted = run_sync(async move {
-            let maybe_device = device_ctx::get_device_opt(udid_for_insert).await;
-            let device = match maybe_device {
-                Some(d) => d,
-                None => return false,
-            };
-
-            let mut video_streams = device.video_streams.lock().await;
-            video_streams.insert(url_for_insert, shutdown_tx);
-            true
+        info!("Starting media stream for udid={udid} path={path_str}");
+        let result: anyhow::Result<String> = run_sync(async move {
+            let device = device_ctx::get_device(&stream_udid).await?;
+            let (url, session) = MediaStreamSession::start(afc, path_str).await?;
+            device
+                .video_streams
+                .lock()
+                .await
+                .insert(url.clone(), session);
+            Ok(url)
         });
-        if !inserted {
-            eprintln!(
-                "start_video_stream: failed to insert video stream for udid={} path={}",
-                &udid, cloned_path
-            );
-            return QString::default();
+
+        match result {
+            Ok(url) => {
+                info!("Serving media stream at {url} for udid={udid}");
+                QString::from(url)
+            }
+            Err(err) => {
+                error!("Failed to start media stream for udid={udid}: {err}");
+                QString::default()
+            }
         }
-
-        eprintln!(
-            "start_video_stream: serving {} for udid={} path={}",
-            url_clone, udid, cloned_path
-        );
-        let cleanup_url = url_clone.clone();
-        let cleanup_udid = udid.clone();
-        // accept-loop task
-        RUNTIME.spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = &mut shutdown_rx => {
-                        // shutdown requested
-                        eprintln!("start_video_stream: shutdown requested for {}", url_clone);
-                        break;
-                    }
-                    accept_res = std_listener.accept() => {
-                        let (socket, peer) = match accept_res {
-                            Ok(s) => s,
-                            Err(e) => {
-                                eprintln!("start_video_stream: accept error: {e} on {}", url_clone);
-                                break;
-                            }
-                        };
-                        eprintln!("start_video_stream: accepted connection from {} on {}", peer, url_clone);
-
-                        let path_clone = path_str.clone();
-                        let afc_clone = afc.clone();
-
-                        tokio::spawn(async move {
-                            Self::handle_http_connection(afc_clone, path_clone, socket).await;
-                        });
-                    }
-                }
-            }
-            if let Some(device) = device_ctx::get_device_opt(&cleanup_udid).await {
-                let mut video_streams = device.video_streams.lock().await;
-                video_streams.remove(&cleanup_url);
-            }
-            eprintln!("start_video_stream: accept-loop exiting for udid : {} with url :{}", udid, url_clone);
-        });
-
-        QString::from(url_clone_for_log)
     }
 
     fn release_video_stream(&self, url: QString) {
@@ -401,16 +314,16 @@ impl AfcServices {
                 return;
             };
 
-            let maybe_shutdown = {
+            let session = {
                 let mut video_streams = device.video_streams.lock().await;
                 video_streams.remove(&url_str)
             };
 
-            if let Some(shutdown) = maybe_shutdown {
-                eprintln!("release_video_stream: sending shutdown for {}", url_str);
-                let _ = shutdown.send(());
+            if let Some(mut session) = session {
+                info!("Shutting down media stream {url_str}");
+                session.shutdown().await;
             } else {
-                eprintln!("release_video_stream: no active stream for {}", url_str);
+                warn!("No active media stream for {url_str}");
             }
         });
     }
@@ -430,278 +343,6 @@ impl AfcServices {
                 }
             }
         })
-    }
-
-    async fn handle_http_connection(
-        afc: Arc<Mutex<AfcClient>>,
-        path: String,
-        mut socket: tokio::net::TcpStream,
-    ) {
-        let mut buf = vec![0u8; 4096];
-        let n = match socket.read(&mut buf).await {
-            Ok(n) if n > 0 => n,
-            _ => {
-                eprintln!(
-                    "handle_http_connection: failed to read initial request for {}",
-                    path
-                );
-                return;
-            }
-        };
-
-        let req_str = String::from_utf8_lossy(&buf[..n]).to_string();
-        eprintln!(
-            "handle_http_connection: received request head for {}: {}",
-            path,
-            req_str.lines().take(10).collect::<Vec<_>>().join("\\n")
-        );
-        let lines: Vec<&str> = req_str.split("\r\n").collect();
-        if lines.is_empty() {
-            eprintln!("handle_http_connection: empty request lines for {}", path);
-            let _ = socket.shutdown().await;
-            return;
-        }
-
-        // request line: "GET /... HTTP/1.1"
-        let mut method = "GET".to_string();
-        if let Some(first) = lines.first() {
-            let parts: Vec<&str> = first.split_whitespace().collect();
-            if parts.len() >= 1 {
-                method = parts[0].to_string();
-            }
-        }
-        eprintln!("handle_http_connection: method={} for {}", method, path);
-
-        if method != "GET" && method != "HEAD" {
-            eprintln!(
-                "handle_http_connection: unsupported method {} for {}",
-                method, path
-            );
-            //FIXME:FLUSH?
-            let _ = socket
-                .write_all(
-                    b"HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-                )
-                .await;
-            let _ = socket.shutdown().await;
-            return;
-        }
-
-        // parse Range header
-        let mut has_range = false;
-        let mut range_start: i64 = 0;
-        let mut range_end: i64 = -1;
-        for line in &lines[1..] {
-            if line.is_empty() {
-                break;
-            }
-            if let Some(rest) = line
-                .strip_prefix("Range: bytes=")
-                .or_else(|| line.strip_prefix("range: bytes="))
-            {
-                let parts: Vec<&str> = rest.trim().split('-').collect();
-                if parts.len() == 2 {
-                    has_range = true;
-                    if let Ok(s) = parts[0].trim().parse::<i64>() {
-                        range_start = s;
-                    }
-                    if !parts[1].trim().is_empty() {
-                        if let Ok(e) = parts[1].trim().parse::<i64>() {
-                            range_end = e;
-                        }
-                    }
-                }
-            }
-        }
-        eprintln!(
-            "handle_http_connection: range parsed has_range={} start={} end={} for {}",
-            has_range, range_start, range_end, path
-        );
-
-        let mut afc = afc.lock().await;
-        let file_size = {
-            let info = match afc.get_file_info(path.clone()).await {
-                Ok(i) => i,
-                Err(e) => {
-                    eprintln!(
-                        "handle_http_connection: get_file_info({}) failed: {}",
-                        path, e
-                    );
-                    let _ = socket
-                        .write_all(
-                            b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-                        )
-                        .await;
-                    let _ = socket.shutdown().await;
-                    return;
-                }
-            };
-            info.size as i64
-        };
-
-        eprintln!(
-            "handle_http_connection: file_size={} for {}",
-            file_size, path
-        );
-        if file_size <= 0 {
-            eprintln!("handle_http_connection: invalid file_size for {}", path);
-            let _ = socket
-                .write_all(
-                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-                )
-                .await;
-            let _ = socket.shutdown().await;
-            return;
-        }
-
-        let mut start = 0_i64;
-        let mut end = file_size - 1;
-
-        if has_range {
-            if range_start >= 0 {
-                start = range_start;
-            }
-            if range_end >= 0 && range_end < file_size {
-                end = range_end;
-            } else if range_end < 0 {
-                const MAX_OPEN_ENDED_RANGE_BYTES: i64 = 1024 * 1024;
-                end = min(file_size - 1, start + MAX_OPEN_ENDED_RANGE_BYTES - 1);
-            }
-            if start < 0 || start >= file_size || start > end {
-                eprintln!(
-                    "handle_http_connection: range not satisfiable for {} (start={}, end={}, file_size={})",
-                    path, start, end, file_size
-                );
-                let _ = socket
-                    .write_all(
-                        b"HTTP/1.1 416 Range Not Satisfiable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-                    )
-                    .await;
-                let _ = socket.shutdown().await;
-                return;
-            }
-        }
-
-        let content_len = (end - start + 1).max(0) as u64;
-        let path_lower = path.to_lowercase();
-        let mime_type = if path_lower.ends_with(".mp4") || path_lower.ends_with(".m4v") {
-            "video/mp4"
-        } else if path_lower.ends_with(".mov") {
-            "video/quicktime"
-        } else if path_lower.ends_with(".avi") {
-            "video/x-msvideo"
-        } else if path_lower.ends_with(".mkv") {
-            "video/x-matroska"
-        } else {
-            "application/octet-stream"
-        };
-
-        let mut headers = String::new();
-        if has_range {
-            headers.push_str("HTTP/1.1 206 Partial Content\r\n");
-            headers.push_str(&format!(
-                "Content-Range: bytes {}-{}/{}\r\n",
-                start, end, file_size
-            ));
-        } else {
-            headers.push_str("HTTP/1.1 200 OK\r\n");
-        }
-
-        headers.push_str(&format!("Content-Length: {}\r\n", content_len));
-        headers.push_str("Accept-Ranges: bytes\r\n");
-        headers.push_str(&format!("Content-Type: {}\r\n", mime_type));
-        headers.push_str("Connection: close\r\n");
-        headers.push_str("Cache-Control: no-cache\r\n\r\n");
-
-        eprintln!(
-            "handle_http_connection: sending headers for {}: {}",
-            path,
-            headers.lines().next().unwrap_or_default()
-        );
-        if socket.write_all(headers.as_bytes()).await.is_err() {
-            eprintln!("handle_http_connection: write headers failed for {}", path);
-            let _ = socket.shutdown().await;
-            return;
-        }
-        if socket.flush().await.is_err() {
-            eprintln!(
-                "handle_http_connection: flush failed after headers for {}",
-                path
-            );
-            let _ = socket.shutdown().await;
-            return;
-        }
-
-        if method == "HEAD" {
-            eprintln!(
-                "handle_http_connection: HEAD request completed for {}",
-                path
-            );
-            let _ = socket.shutdown().await;
-            return;
-        }
-
-        let mut fd = match afc.open(path.clone(), AfcFopenMode::RdOnly).await {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("handle_http_connection: open({}) failed: {}", path, e);
-                let _ = socket.shutdown().await;
-                return;
-            }
-        };
-
-        if start > 0 {
-            if let Err(e) = fd.seek(SeekFrom::Start(start as u64)).await {
-                eprintln!(
-                    "handle_http_connection: seek({}, {}) failed: {}",
-                    path, start, e
-                );
-                let _ = fd.close().await;
-                let _ = socket.shutdown().await;
-                return;
-            }
-        }
-
-        eprintln!(
-            "handle_http_connection: streaming {} bytes ({}-{}) for {}",
-            content_len, start, end, path
-        );
-
-        let mut remaining = content_len;
-        // let mut chunk = vec![0u8; 64 * 1024];
-        let mut writer = BufWriter::with_capacity(256 * 1024, &mut socket);
-        let mut chunk = vec![0u8; 256 * 1024];
-
-        while remaining > 0 {
-            let to_read = min(chunk.len() as u64, remaining) as usize;
-            let n = match fd.read(&mut chunk[..to_read]).await {
-                Ok(n) => n,
-                Err(e) => {
-                    eprintln!("handle_http_connection: read({}) failed: {}", path, e);
-                    break;
-                }
-            };
-            if n == 0 {
-                eprintln!("handle_http_connection: EOF while streaming {}", path);
-                break;
-            }
-            if let Err(e) = writer.write_all(&chunk[..n]).await {
-                eprintln!("handle_http_connection: write({}) failed: {}", path, e);
-                break;
-            }
-            remaining -= n as u64;
-        }
-
-        writer.flush().await.ok();
-        //drop(writer) is explicit so the borrow is released before we touch socket again.
-        drop(writer);
-
-        let _ = fd.close().await;
-        let _ = socket.shutdown().await;
-        eprintln!(
-            "handle_http_connection: finished/closed connection for {}",
-            path
-        );
     }
 }
 

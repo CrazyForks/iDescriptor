@@ -5,11 +5,10 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tracing::field::debug;
 
-use crate::image_cache;
+use crate::{image_cache, media_streamer::MediaStreamSession};
 
 #[derive(Clone)]
 #[allow(non_camel_case_types)]
@@ -69,7 +68,7 @@ pub struct DeviceServices {
     pub afc2: Option<Arc<Mutex<AfcClient>>>,
     pub diag: Arc<Mutex<DiagnosticsRelayClient>>,
     pub heartbeat_task: Option<Arc<JoinHandle<()>>>,
-    pub video_streams: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+    pub video_streams: Arc<Mutex<HashMap<String, MediaStreamSession>>>,
     pub provider: Arc<Mutex<Box<dyn idevice::provider::IdeviceProvider>>>,
     pub lockdown: Arc<Mutex<LockdownClient>>,
     pub ios_version: iOSVersion,
@@ -94,15 +93,21 @@ pub async fn get_device_opt(udid: impl Into<String>) -> Option<DeviceServices> {
 }
 
 pub async fn clean_device_from_app_state(udid: &str) {
-    let mut state = APP_DEVICE_STATE.lock().await;
-    if let Some(svc) = state.remove(udid) {
+    let svc = APP_DEVICE_STATE.lock().await.remove(udid);
+    if let Some(svc) = svc {
         if let Some(t) = &svc.heartbeat_task {
             t.abort();
         }
 
-        let mut streams = svc.video_streams.lock().await;
-        for (_url, tx) in streams.drain() {
-            let _ = tx.send(());
+        let sessions = {
+            let mut streams = svc.video_streams.lock().await;
+            streams
+                .drain()
+                .map(|(_, session)| session)
+                .collect::<Vec<_>>()
+        };
+        for mut session in sessions {
+            session.shutdown().await;
         }
 
         image_cache::clear_for_udid(udid);

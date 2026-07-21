@@ -47,7 +47,9 @@ pub mod image_provider;
 pub mod io_manager;
 pub mod jailbroken;
 pub mod list_model;
+pub mod media_streamer;
 pub mod platform;
+pub mod qml_image;
 pub mod qml_utils;
 pub mod qquickimageprovider_imp;
 pub mod qrc;
@@ -61,7 +63,6 @@ pub mod status_window_controller;
 pub mod transfer_speed_tester;
 pub mod ui_qrc;
 pub mod updater;
-pub mod qml_image;
 pub mod utils;
 pub mod web_wireless_gallery_import;
 
