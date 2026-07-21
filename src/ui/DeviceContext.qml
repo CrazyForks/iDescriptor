@@ -229,15 +229,15 @@ QtObject {
                     root.pairing_files[mac] = QmlUtils.get_lockdown_dir() + `/${udid}.plist`;
                     console.log(JSON.stringify(root.pairing_files));
                     devices.append(
-                        { 
+                        {
                             udid: udid,
-                            info: info, 
+                            info: info,
                             text,
                             service_manager,
                             sb_client,
                             // default to info section
                             currentSection: 0,
-                            afcClient: serviceFactory.create_afc_client(root.udid, false)
+                            afcClient: serviceFactory.create_afc_client(udid, false)
                         }
                     )
                     root.deviceAdded(udid, mac)
@@ -293,11 +293,11 @@ QtObject {
 
             switch (eventType) {
                 case 1:
-                    
+
                     const name = info.marketing_name;
                     const entry = { id, info: info, text: name }
                     recoveryDevices.append(entry)
-       
+
                     root.showWelcomePage = false
                     if (!root.currentDeviceUdid
                             && !root.currentRecoveryDeviceId
