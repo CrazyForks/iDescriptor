@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "iDescriptor Sponsors",
+  "description": "Versioned sponsor listings grouped into the fixed platinum, gold, silver, and bronze rankings.",
+  "type": "object",
+  "minProperties": 1,
+  "patternProperties": {
+    "^(?:>=?|<=?|=)?[0-9]+\\.[0-9]+\\.[0-9]+$": {
+      "$ref": "#/$defs/versionedSponsors"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "versionedSponsors": {
+      "type": "object",
+      "required": [
+        "sponsors"
+      ],
+      "properties": {
+        "sponsors": {
+          "$ref": "#/$defs/sponsorRankings"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sponsorRankings": {
+      "type": "object",
+      "required": [
+        "platinum",
+        "gold",
+        "silver",
+        "bronze"
+      ],
+      "properties": {
+        "platinum": {
+          "$ref": "#/$defs/sponsorRanking"
+        },
+        "gold": {
+          "$ref": "#/$defs/sponsorRanking"
+        },
+        "silver": {
+          "$ref": "#/$defs/sponsorRanking"
+        },
+        "bronze": {
+          "$ref": "#/$defs/sponsorRanking"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sponsorRanking": {
+      "type": "object",
+      "required": [
+        "members"
+      ],
+      "properties": {
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sponsorMember"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "sponsorMember": {
+      "type": "object",
+      "required": [
+        "name",
+        "logo",
+        "website",
+        "description"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logo": {
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
+        },
+        "website": {
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bundleId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "useBundleIdForIcon": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
