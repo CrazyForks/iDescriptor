@@ -145,7 +145,6 @@ Item {
                 console.log("DEVICE DISAPPERED")
                 return
             }
-         
             if (wirelessNotAllowed && device.info.is_wireless) {
                 showError(qsTr("This tool is not available for wireless devices. Please connect your device via USB."))
                 return
@@ -360,6 +359,14 @@ Item {
             visible: true
         },
         {
+            toolId: 14,
+            title: qsTr("Backups"),
+            description: qsTr("Back up and restore this device"),
+            requiresDevice: false,
+            iconSource: "qrc:/resources/icons/tabler_database-export.svg",
+            visible: true
+        },
+        {
             toolId: 15,
             title: qsTr("Transfer Speed Test"),
             description: qsTr("Measure upload and download speed to this device"),
@@ -370,14 +377,6 @@ Item {
     ])
 
     readonly property var moreToolsModel: ([
-        {
-            toolId: 14,
-            title: qsTr("Backups"),
-            description: qsTr("Back up and restore this device"),
-            requiresDevice: false,
-            iconSource: "qrc:/resources/icons/tabler_database-export.svg",
-            visible: true
-        },
         {
             toolId: 9,
             title: qsTr("Mount Dev Image"),
@@ -486,6 +485,7 @@ Item {
 
                 GridLayout {
                     id: mainGrid
+                    Layout.margins: 10
                     Layout.fillWidth: true
                     columns: 3
                     columnSpacing: 10
@@ -524,6 +524,7 @@ Item {
                 GridLayout {
                     id: moreGrid
                     Layout.fillWidth: true
+                    Layout.margins: 10
                     columns: 3
                     columnSpacing: 10
                     rowSpacing: 10
