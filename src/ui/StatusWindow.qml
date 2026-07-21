@@ -15,6 +15,8 @@ DefaultWindow {
     width: 300
     height: 300
     visible: false
+    property var statusBarParentWindow: null
+    property var statusBarOpener: null
 
     flags: Qt.ToolTip
          | Qt.FramelessWindowHint
@@ -160,25 +162,73 @@ DefaultWindow {
         visible: !processesList.count
     }
 
+    function registerStatusBarOpener(parentWindow, opener) {
+        statusBarParentWindow = parentWindow
+        statusBarOpener = opener
+    }
+
+    function unregisterStatusBarOpener(opener) {
+        if (statusBarOpener === opener) {
+            statusBarParentWindow = null
+            statusBarOpener = null
+        }
+    }
+
+    function positionForOpener(parentWindow, globalPos, openerWidth, openerHeight) {
+        var targetX = globalPos.x + (openerWidth - window.width) / 2
+        var targetY = globalPos.y - window.height
+        var available = parentWindow && parentWindow.screen
+                ? parentWindow.screen.availableGeometry
+                : null
+
+        if (available) {
+            targetX = Math.max(available.x,
+                               Math.min(targetX, available.x + available.width - window.width))
+
+            // The status bar normally has space above it. If the main window is
+            // near the top of a screen, place the process window below instead.
+            if (targetY < available.y)
+                targetY = globalPos.y + openerHeight
+
+            targetY = Math.max(available.y,
+                               Math.min(targetY, available.y + available.height - window.height))
+        }
+
+        window.x = targetX
+        window.y = targetY
+    }
+
+    function openForOpener(parentWindow, globalPos, openerWidth, openerHeight) {
+        transientParent = parentWindow
+        positionForOpener(parentWindow, globalPos, openerWidth, openerHeight)
+        window.show()
+        window.raise()
+        StatusWindowController.install(window, globalPos.x, globalPos.y, openerWidth, openerHeight)
+    }
+
+    function openAtStatusBar() {
+        if (!statusBarParentWindow || !statusBarOpener) {
+            // This can only happen while the main UI is still being created.
+            // Keep the process window usable until StatusBar registers its opener.
+            window.show()
+            window.raise()
+            StatusWindowController.install(window, 0, 0, 0, 0)
+            return false
+        }
+
+        var globalPos = statusBarOpener.mapToGlobal(0, 0)
+        openForOpener(statusBarParentWindow, globalPos,
+                      statusBarOpener.width, statusBarOpener.height)
+        return true
+    }
+
     function toggle(parentWindow, globalPos, openerWidth, openerHeight) {
         if (window.visible) {
             window.hide()
             return
         }
 
-        var targetX = globalPos.x - (window.width / 2)
-        var targetY = globalPos.y - window.height
-
-
-        transientParent = parentWindow
-
-        window.show() 
-        
-        window.x = targetX
-        window.y = targetY
-
-        window.raise()
-        StatusWindowController.install(window, globalPos.x, globalPos.y, openerWidth, openerHeight)
+        openForOpener(parentWindow, globalPos, openerWidth, openerHeight)
     }
 
     function findProcessIndex(processId) {
@@ -209,9 +259,7 @@ DefaultWindow {
             "destinationPath": destinationPath,
             "onComplete": null
         })
-        window.show()
-        window.raise()
-        StatusWindowController.install(window, 0, 0, 0, 0)
+        openAtStatusBar()
     }
 
     function removeProcess(processId) {

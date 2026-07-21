@@ -47,4 +47,7 @@ Item {
         }
         
     }
+
+    Component.onCompleted: StatusWindow.registerStatusBarOpener(Window.window, myButton)
+    Component.onDestruction: StatusWindow.unregisterStatusBarOpener(myButton)
 }
