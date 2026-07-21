@@ -162,6 +162,7 @@ Item {
 
             handle: Rectangle {
                 implicitWidth: 7
+                radius:10
                 color: SplitHandle.pressed
                     ? App.Theme.focus
                     : SplitHandle.hovered ? App.Theme.selectionStroke : App.Theme.sidebarDivider
@@ -174,13 +175,13 @@ Item {
                 }
             }
 
-            Rectangle {
+            Item {
                 id: sidebar
                 SplitView.preferredWidth: 230
                 SplitView.minimumWidth: 160
                 SplitView.maximumWidth: 320
                 SplitView.fillHeight: true
-                color: App.Theme.sidebarBackground
+                //color: App.Theme.sidebarBackground
 
                 ScrollView {
                     anchors.fill: parent

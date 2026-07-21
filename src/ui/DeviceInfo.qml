@@ -216,7 +216,7 @@ Item {
 
                         Label {
                             text: qsTr("Wireless")
-                            visible: info.DIAG_INFO.adapter_watts !== 0 && info.is_wireless
+                            visible: info.DIAG_INFO.adapter_watts < 1 && info.is_wireless
                         }
                     }
                 }
