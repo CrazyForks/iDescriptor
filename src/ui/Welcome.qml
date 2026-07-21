@@ -31,6 +31,17 @@ Item {
             color: palette.text
         }
 
+        Image {
+            id: welcomeLogo
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: 34
+            Layout.preferredHeight: 34
+            source: "qrc:/resources/icons/plain-icon.png"
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            mipmap: true
+        }
+
         Item { Layout.preferredHeight: 6 }
 
         Text {
@@ -71,7 +82,8 @@ Item {
                 Image {
                     id: connectImage
                     anchors.fill: parent
-                    source: "qrc:/resources/connect.png"
+                    //source: "qrc:/resources/connect.png"
+                    source: "qrc:/resources/welcome-connect.png"
                     fillMode: Image.PreserveAspectFit
                     mipmap: true
                     smooth: true
