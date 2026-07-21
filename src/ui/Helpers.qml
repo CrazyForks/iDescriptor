@@ -14,6 +14,14 @@ QtObject {
         });
     }
 
+    function fetch_app_name(bundleId,cb) {
+        if (!bundleId) { cb(""); return; }
+        fetch_app(bundleId, function(app, error) {
+            if (error || !app) { cb(""); return; }
+            cb(app.trackName || "");
+        });
+    }
+
     function fetch_app(bundleId, cb) {
         if (!bundleId) {
             cb(null, "Missing bundle id");
@@ -82,7 +90,7 @@ QtObject {
     function connectOnce(signal, handler) {
         var wrapper = function() {
             handler.apply(this, arguments)
-            signal.disconnect(wrapper)  
+            signal.disconnect(wrapper)
         }
         signal.connect(wrapper)
     }
@@ -94,7 +102,7 @@ QtObject {
             root,
             "dynamicTimer"
         );
-        
+
         timer.triggered.connect(function() {
             callback();
             timer.destroy(); // Clean up memory after execution

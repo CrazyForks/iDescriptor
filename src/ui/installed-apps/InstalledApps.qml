@@ -209,18 +209,33 @@ Item {
         retryable: true
         onRetryRequested: root.refresh()
 
-        contentItem: RowLayout {
+        //TODO: move to a seperate comp
+        contentItem: SplitView {
+            orientation: Qt.Horizontal
             anchors.fill: parent
             spacing: 0
 
+            handle: Rectangle {
+                implicitWidth: 7
+                radius: 10
+                color: SplitHandle.pressed
+                    ? Theme.focus
+                    : SplitHandle.hovered ? Theme.selectionStroke : Theme.sidebarDivider
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 1
+                    height: parent.height
+                    color: Theme.sidebarDivider
+                }
+            }
+
             Rectangle {
-                Layout.preferredWidth: 275
-                Layout.minimumWidth: 100
-                Layout.maximumWidth: 500
-                Layout.fillHeight: true
+                SplitView.preferredWidth: 275
+                SplitView.minimumWidth: 100
+                SplitView.maximumWidth: 300
+                SplitView.fillHeight: true
                 color: "transparent"
-                border.width: 1
-                border.color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.12)
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -301,8 +316,8 @@ Item {
             }
 
             Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                SplitView.fillWidth: true
+                SplitView.fillHeight: true
 
                 FileExplorer {
                     id: explorer

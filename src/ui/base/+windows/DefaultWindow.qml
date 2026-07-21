@@ -6,9 +6,11 @@ import FluentUI
 
 FluWindow {
     id: root
-    launchMode: FluWindowType.Standard 
+    launchMode: FluWindowType.Standard
     property bool is_complete: false
     property string _effect: ""
+    property bool setupMacOSWindow: false
+
 
     function applyEffect(effect) {
         if (!root.is_complete) {

@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
-import "../" as App
+import "../"
 import "../base"
 
 AnimatedDialog {
@@ -23,19 +23,37 @@ AnimatedDialog {
     width: 500
     title: qsTr("Install IPA")
     standardButtons: Dialog.NoButton
-    closePolicy: Popup.NoAutoClose
+    closePolicy: root.installing ? Popup.NoAutoClose : Popup.CloseOnPressOutside
 
-    readonly property bool hasDevice: App.DeviceContext.devices.count > 0
+    readonly property bool hasDevice: DeviceContext.devices.count > 0
     property int selectedDeviceIndex: hasDevice ? 0 : -1
     readonly property var selectedDevice:
-        selectedDeviceIndex >= 0 && selectedDeviceIndex < App.DeviceContext.devices.count
-        ? App.DeviceContext.devices.get(selectedDeviceIndex)
+        selectedDeviceIndex >= 0 && selectedDeviceIndex < DeviceContext.devices.count
+        ? DeviceContext.devices.get(selectedDeviceIndex)
         : null
     property string taskId: ""
     property bool installing: false
     property real progress: 0
     property string stateText: ""
     property string errorText: ""
+    property string resolvedAppName: ""
+    readonly property string effectiveAppName: root.appName.length > 0
+                                                ? root.appName
+                                                : root.resolvedAppName
+
+    function resolveAppName() {
+        root.resolvedAppName = ""
+
+        if (root.appName.length > 0 || root.bundleId.length === 0)
+            return
+
+        const requestedBundleId = root.bundleId
+        Helpers.fetch_app_name(requestedBundleId, function(name) {
+            // Ignore a response for an app that is no longer displayed.
+            if (root.bundleId === requestedBundleId && root.appName.length === 0)
+                root.resolvedAppName = name
+        })
+    }
 
     function resetState() {
         taskId = ""
@@ -74,7 +92,10 @@ AnimatedDialog {
         installing = true
     }
 
-    onOpened: resetState()
+    onOpened: {
+        resetState()
+        resolveAppName()
+    }
     onClosed: {
         if (taskId.length)
             apps.cancel_task(taskId)
@@ -89,11 +110,6 @@ AnimatedDialog {
 
     Overlay.modal: Rectangle {
         color: Qt.rgba(0, 0, 0, 0.35)
-
-        MouseArea {
-            anchors.fill: parent
-            onClicked: root.requestClose()
-        }
     }
 
     MessageDialog {
@@ -140,90 +156,98 @@ AnimatedDialog {
         }
     }
 
-    contentItem: ColumnLayout {
-        spacing: 14
+    contentItem: StateView {
+        viewState: root.effectiveAppName.length ? StateView.State.Content : StateView.State.Loading
+        autoSwitchContent: false
+        implicitHeight: installContent.implicitHeight
 
-        Label {
-            Layout.fillWidth: true
-            text: root.appName
-            font.pixelSize: 18
-            font.bold: true
-            elide: Text.ElideRight
-        }
+        contentItem: ColumnLayout {
+            id: installContent
+            anchors.fill: parent
+            spacing: 14
 
-        Label {
-            Layout.fillWidth: true
-            text: root.bundleId
-            color: "#6e6e73"
-            elide: Text.ElideMiddle
-        }
-
-        Label {
-            Layout.fillWidth: true
-            text: qsTr("Select a connected device")
-            font.bold: true
-        }
-
-        ComboBox {
-            id: deviceCombo
-            Layout.minimumWidth: 220
-            Layout.preferredWidth: 220
-            enabled: root.hasDevice && !root.installing
-            model: App.DeviceContext.devices
-            textRole: "text"
-            valueRole: "udid"
-            currentIndex: root.selectedDeviceIndex
-
-            onActivated: function(index) {
-                root.selectedDeviceIndex = index
+            Label {
+                Layout.fillWidth: true
+                text: root.effectiveAppName
+                font.pixelSize: 18
+                font.bold: true
+                elide: Text.ElideRight
             }
 
-            onCountChanged: {
-                if (count === 0)
-                    root.selectedDeviceIndex = -1
-                else if (root.selectedDeviceIndex < 0 || root.selectedDeviceIndex >= count)
-                    root.selectedDeviceIndex = 0
-            }
-        }
-
-        Label {
-            Layout.fillWidth: true
-            visible: !root.hasDevice
-            text: qsTr("No device connected.")
-            color: "#6e6e73"
-            wrapMode: Text.WordWrap
-        }
-
-        ProgressBar {
-            Layout.fillWidth: true
-            visible: root.installing || root.progress > 0
-            indeterminate: root.installing && root.progress < 0
-            from: 0
-            to: 1
-            value: Math.max(0, root.progress)
-        }
-
-        Label {
-            Layout.fillWidth: true
-            text: root.errorText.length ? root.errorText : root.stateText
-            color: root.errorText.length ? "#c00" : "#6e6e73"
-            wrapMode: Text.WordWrap
-            visible: text.length > 0
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            Item { Layout.fillWidth: true }
-
-            Button {
-                text: root.installing ? qsTr("Cancel") : qsTr("Close")
-                onClicked: root.requestClose()
+            Label {
+                Layout.fillWidth: true
+                text: root.bundleId
+                color: "#6e6e73"
+                elide: Text.ElideMiddle
             }
 
-            Button {
-                text: qsTr("Install")
-                enabled: !root.installing && root.bundleId.length > 0 && root.selectedDevice
-                onClicked: root.startInstall()
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("Select a connected device")
+                font.bold: true
+            }
+
+            ComboBox {
+                id: deviceCombo
+                Layout.minimumWidth: 220
+                Layout.preferredWidth: 220
+                enabled: root.hasDevice && !root.installing
+                model: DeviceContext.devices
+                textRole: "text"
+                valueRole: "udid"
+                currentIndex: root.selectedDeviceIndex
+
+                onActivated: function(index) {
+                    root.selectedDeviceIndex = index
+                }
+
+                onCountChanged: {
+                    if (count === 0)
+                        root.selectedDeviceIndex = -1
+                    else if (root.selectedDeviceIndex < 0 || root.selectedDeviceIndex >= count)
+                        root.selectedDeviceIndex = 0
+                }
+            }
+
+            Label {
+                Layout.fillWidth: true
+                visible: !root.hasDevice
+                text: qsTr("No device connected.")
+                color: "#6e6e73"
+                wrapMode: Text.WordWrap
+            }
+
+            ProgressBar {
+                Layout.fillWidth: true
+                visible: root.installing || root.progress > 0
+                indeterminate: root.installing && root.progress < 0
+                from: 0
+                to: 1
+                value: Math.max(0, root.progress)
+            }
+
+            Label {
+                Layout.fillWidth: true
+                text: root.errorText.length ? root.errorText : root.stateText
+                color: root.errorText.length ? "#c00" : "#6e6e73"
+                wrapMode: Text.WordWrap
+                visible: text.length > 0
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+
+                Button {
+                    text: root.installing ? qsTr("Cancel") : qsTr("Close")
+                    onClicked: root.requestClose()
+                }
+
+                Button {
+                    text: qsTr("Install")
+                    enabled: !root.installing && root.bundleId.length > 0 && root.selectedDevice
+                    onClicked: root.startInstall()
+                }
             }
         }
     }

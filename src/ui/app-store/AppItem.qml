@@ -1,27 +1,19 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Qt5Compat.GraphicalEffects
-import QtQuick.Controls.impl
 import ".."
-import "../../"
 
 Rectangle {
-    required property var name;
-    required property var bundleId;
-    required property var description;
-    required property var logoUrl;
-    required property var websiteUrl;
-    required property var useBundleIdForIcon;
-    required property var sponsorLabel;
-    required property var sponsorColor;
+    required property var name
+    required property var bundleId
+    required property var description
 
     signal installRequested(string bundleId, string appName)
     signal getIpaRequested(string bundleId, string appName)
 
     id: root
-    width: parent ? parent.width : 260
-    height: parent ? parent.height : 120
+    implicitWidth: 260
+    implicitHeight: 128
     radius: 8
     color: "transparent"
 
@@ -30,12 +22,7 @@ Rectangle {
 
 
     Component.onCompleted: {
-        console.log("Name:", root.name)
-        if (root.logoUrl && !root.useBundleIdForIcon) {
-            iconSource = root.logoUrl;
-        } else if (root.bundleId) {
-            Helpers.fetchAppIconFromApple(root.bundleId, function(url) { iconSource = url; });
-        }
+        Helpers.fetchAppIconFromApple(root.bundleId, function(url) { iconSource = url; });
     }
 
     MouseArea {
@@ -49,9 +36,7 @@ Rectangle {
             description: root.description,
             logoUrl: root.logoUrl,
             websiteUrl: root.websiteUrl,
-            useBundleIdForIcon: root.useBundleIdForIcon,
-            sponsorLabel: root.sponsorLabel,
-            sponsorColor: root.sponsorColor
+            useBundleIdForIcon: root.useBundleIdForIcon
         })
     }
 
@@ -77,33 +62,13 @@ Rectangle {
                     Layout.minimumWidth: 0
                     spacing: 6
 
-                    RowLayout {
+                    Label {
+                        text: root.name
+                        font.pixelSize: 16
+                        wrapMode: Text.NoWrap
+                        elide: Text.ElideRight
                         Layout.fillWidth: true
-                        spacing: 8
-
-                        Label {
-                            text: root.name
-                            font.pixelSize: 16
-                            wrapMode: Text.NoWrap
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                            Layout.minimumWidth: 0
-                        }
-
-                        Rectangle {
-                            visible: root.sponsorLabel && root.sponsorLabel.length > 0
-                            color: root.sponsorColor
-                            radius: 4
-                            height: 16
-
-                            Label {
-                                anchors.centerIn: parent
-                                text: root.sponsorLabel
-                                font.pixelSize: 10
-                                color: "#333"
-                                padding: 4
-                            }
-                        }
+                        Layout.minimumWidth: 0
                     }
 
                     Label {
@@ -128,7 +93,7 @@ Rectangle {
                         Layout.alignment: Qt.AlignCenter
                         id : installButton
                         contentItem: Text {
-                            text: "Install"
+                            text: qsTr("Install")
                             color: Theme.textSelected
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -150,7 +115,7 @@ Rectangle {
 
                     Button {
                         // FIXME: move this logic to another qml file
-                        text: (root.websiteUrl && root.websiteUrl.length) ? "Website" : "Get IPA"
+                        text: (root.websiteUrl && root.websiteUrl.length) ? qsTr("Website") : qsTr("Get IPA")
                         font.pixelSize: 12
                         font.bold: true
                         onClicked: {
@@ -166,7 +131,7 @@ Rectangle {
             }
 
             Rectangle {
-                height: 1
+                Layout.preferredHeight: 1
                 color: Theme.separator
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0

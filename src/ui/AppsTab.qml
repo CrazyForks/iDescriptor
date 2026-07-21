@@ -10,7 +10,10 @@ Item {
     anchors.fill: parent
     clip:true
 
-    readonly property string sponsorsUrl: "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/main/sponsors.json"
+    //FIXME: change when merged into main
+    readonly property string sponsorsUrl: "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/dev/main/sponsors.json"
+    readonly property string githubSponsorsUrl: "https://github.com/sponsors/iDescriptor"
+    readonly property string openCollectiveUrl: "https://opencollective.com/idescriptor"
     readonly property bool isMacOS: Qt.platform.os === "osx" || Qt.platform.os === "darwin"
 
     property bool loading: true
@@ -29,7 +32,15 @@ Item {
 
 
     ListModel { id: searchResultsModel }
+    ListModel { id: sponsorModel }
     ListModel { id: appModel }
+
+    SponsorUsDialog {
+        id: sponsorUsDialog
+        anchors.centerIn: parent
+        githubSponsorsUrl: root.githubSponsorsUrl
+        openCollectiveUrl: root.openCollectiveUrl
+    }
 
     InstallAppPopup {
         id: installPopup
@@ -72,18 +83,27 @@ Item {
     function openInstallPopup(bundleId, appName) {
         root.bundleId = bundleId
         root.appName = appName
-        installPopup.open()
+        Qt.callLater(() => {
+          installPopup.open()
+        })
     }
 
     function openGetIpaPopup(bundleId, appName) {
         root.bundleId = bundleId
         root.appName = appName
-        getIpaPopup.open()
+        Qt.callLater(() => {
+          getIpaPopup.open()
+        })
     }
 
-    function clearApps() { appModel.clear() }
+    function clearCatalog() {
+        sponsorModel.clear()
+        appModel.clear()
+    }
 
     function addApp(obj) { appModel.append(obj) }
+
+    function addSponsor(obj) { sponsorModel.append(obj) }
 
     function pickLastVersionKey(obj) {
         var keys = Object.keys(obj || {})
@@ -97,40 +117,40 @@ Item {
         if (!tierObj || !tierObj.members) return
         for (var i = 0; i < tierObj.members.length; ++i) {
             var m = tierObj.members[i]
-            addApp({
+            addSponsor({
                 name: m.name || "",
-                bundleId: m.bundleId || "",
-                description: m.description || "",
-                logoUrl: m.logo || "",
-                websiteUrl: m.url || "",
-                useBundleIdForIcon: m.useBundleIdForIcon !== false,
-                sponsorLabel: label,
-                sponsorColor: color
+                logo: m.logo,
+                website: m.website || "",
+                tierLabel: label,
+                tierColor: color,
+                bundleId: m.bundleId,
+                description: m.description,
+                useBundleIdForIcon: m.useBundleIdForIcon || false
             })
         }
     }
 
     function addDefaultApps() {
-        addApp({ name: "Instagram", bundleId: "com.burbn.instagram", description: "Photo & Video sharing social network", logoUrl: "", websiteUrl: "", useBundleIdForIcon: true, sponsorLabel: "", sponsorColor: "" })
-        addApp({ name: "Spotify", bundleId: "com.spotify.client", description: "Music streaming and podcast platform", logoUrl: "", websiteUrl: "", useBundleIdForIcon: true, sponsorLabel: "", sponsorColor: "" })
-        addApp({ name: "YouTube", bundleId: "com.google.ios.youtube", description: "Video sharing and streaming platform", logoUrl: "", websiteUrl: "", useBundleIdForIcon: true, sponsorLabel: "", sponsorColor: "" })
-        addApp({ name: "X", bundleId: "com.atebits.Tweetie2", description: "Social media and microblogging", logoUrl: "", websiteUrl: "", useBundleIdForIcon: true, sponsorLabel: "", sponsorColor: "" })
-        addApp({ name: "TikTok", bundleId: "com.zhiliaoapp.musically", description: "Short-form video hosting service", logoUrl: "", websiteUrl: "", useBundleIdForIcon: true, sponsorLabel: "", sponsorColor: "" })
-        addApp({ name: "Twitch", bundleId: "tv.twitch", description: "Live streaming platform", logoUrl: "", websiteUrl: "", useBundleIdForIcon: true, sponsorLabel: "", sponsorColor: "" })
-        addApp({ name: "Telegram", bundleId: "ph.telegra.Telegraph", description: "Cloud-based instant messaging", logoUrl: "", websiteUrl: "", useBundleIdForIcon: true, sponsorLabel: "", sponsorColor: "" })
-        addApp({ name: "Reddit", bundleId: "com.reddit.Reddit", description: "Social news aggregation platform", logoUrl: "", websiteUrl: "", useBundleIdForIcon: true, sponsorLabel: "", sponsorColor: "" })
+        addApp({ name: "Instagram", bundleId: "com.burbn.instagram", description: qsTr("Photo & Video sharing social network"), logoUrl: "" })
+        addApp({ name: "Spotify", bundleId: "com.spotify.client", description: qsTr("Music streaming and podcast platform"), logoUrl: "" })
+        addApp({ name: "YouTube", bundleId: "com.google.ios.youtube", description: qsTr("Video sharing and streaming platform"), logoUrl: "" })
+        addApp({ name: "X", bundleId: "com.atebits.Tweetie2", description: qsTr("Social media and microblogging"), logoUrl: "" })
+        addApp({ name: "TikTok", bundleId: "com.zhiliaoapp.musically", description: qsTr("Short-form video hosting service"), logoUrl: "" })
+        addApp({ name: "Twitch", bundleId: "tv.twitch", description: qsTr("Live streaming platform"), logoUrl: "" })
+        addApp({ name: "Telegram", bundleId: "ph.telegra.Telegraph", description: qsTr("Cloud-based instant messaging"), logoUrl: "" })
+        addApp({ name: "Reddit", bundleId: "com.reddit.Reddit", description: qsTr("Social news aggregation platform"), logoUrl: "" })
     }
 
     function fetchSponsors() {
         loading = true
         error = ""
-        clearApps()
+        clearCatalog()
 
         var xhr = new XMLHttpRequest()
         xhr.open("GET", sponsorsUrl)
         xhr.onreadystatechange = function() {
             if (xhr.readyState !== XMLHttpRequest.DONE) return
-
+            console.log(xhr.status, xhr.responseText)
             if (xhr.status === 200) {
                 try {
                     var rootObj = JSON.parse(xhr.responseText)
@@ -140,16 +160,16 @@ Item {
                     var sponsors = versioned && versioned.sponsors ? versioned.sponsors : null
 
                     if (sponsors) {
-                        addSponsors(sponsors.platinum, "Platinum", "#E5E4E2")
-                        addSponsors(sponsors.gold, "Gold", "#D4AF37")
-                        addSponsors(sponsors.silver, "Silver", "#C0C0C0")
-                        addSponsors(sponsors.bronze, "Bronze", "#CD7F32")
+                        addSponsors(sponsors.platinum, qsTr("Platinum"), "#E5E4E2")
+                        addSponsors(sponsors.gold, qsTr("Gold"), "#D4AF37")
+                        addSponsors(sponsors.silver, qsTr("Silver"), "#C0C0C0")
+                        addSponsors(sponsors.bronze, qsTr("Bronze"), "#CD7F32")
                     }
                 } catch (e) {
-                    error = "Failed to parse sponsors JSON."
+                    error = qsTr("Failed to parse sponsors JSON.")
                 }
             } else {
-                error = "Failed to fetch sponsors."
+                error = qsTr("Failed to fetch sponsors.")
             }
 
             addDefaultApps()
@@ -169,7 +189,7 @@ Item {
             return
         }
 
-        apps.init(true)
+        apps.init(false)
     }
 
     Connections {
@@ -219,11 +239,6 @@ Item {
                         name: item.name || "",
                         price: item.price || 0,
                         description: item.bundle_id || "",
-                        logoUrl: "",
-                        websiteUrl: "",
-                        useBundleIdForIcon: true,
-                        sponsorLabel: "",
-                        sponsorColor: ""
                     })
                 }
             } catch (e) {
@@ -349,57 +364,65 @@ Item {
     Component {
         id: catalogPageComponent
 
-        StateView {
-            objectName: "catalogPage"
-            autoSwitchContent: false
-            retryable: false
-            viewState: root.loading ? StateView.State.Loading : StateView.State.Content
-            errorText: root.error
+        ScrollView {
+            id: catalogScroll
+            anchors.margins: 10
+            anchors.fill: parent
+            clip: true
 
-            contentItem: Item {
-                anchors.fill: parent
+            Flow {
+                id: catalogGrid
+                width: catalogScroll.availableWidth
+                spacing: 5
 
-                ScrollView {
-                    anchors.fill: parent
-                    clip: true
+                readonly property real itemWidth: Math.max(
+                    270,
+                    (width - (2 * spacing)) / 3
+                )
+                readonly property real itemHeight: 110
 
-                    GridView {
-                        id: catalogGrid
-                        anchors.fill: parent
-                        anchors.margins: 18
-                        cellWidth: Math.max(270, width / 3)
-                        cellHeight: 140
-                        model: appModel
+                SponsorUs {
+                  width: catalogGrid.itemWidth
+                  height: catalogGrid.itemHeight
+                  visible: sponsorModel.count === 0 && root.error.length === 0 && !root.loading
+                  onSponsorshipRequested: sponsorUsDialog.open()
+                }
 
-                        delegate: Item {
-                            width: catalogGrid.cellWidth - 12
-                            height: catalogGrid.cellHeight - 12
-
-                            AppItem {
-                                anchors.fill: parent
-                                name: model.name
-                                bundleId: model.bundleId
-                                description: model.description
-                                logoUrl: model.logoUrl
-                                websiteUrl: model.websiteUrl
-                                useBundleIdForIcon: model.useBundleIdForIcon
-                                sponsorLabel: model.sponsorLabel
-                                sponsorColor: model.sponsorColor
-                                onSelected: function(app) { root.openDetails(app) }
-                                onInstallRequested: function(bundleId, appName) { root.openInstallPopup(bundleId, appName) }
-                                onGetIpaRequested: function(bundleId, appName) { root.openGetIpaPopup(bundleId, appName) }
-                            }
+                Repeater {
+                    model: sponsorModel
+                    delegate: Item {
+                        width: catalogGrid.itemWidth
+                        height: catalogGrid.itemHeight
+                        SponsorItem {
+                            anchors.fill: parent
+                            name: model.name
+                            bundleId: model.bundleId
+                            logo: model.logo
+                            website:model.website
+                            tierLabel: model.tierLabel
+                            tierColor: model.tierColor
+                            description: model.description
+                            useBundleIdForIcon: model.useBundleIdForIcon
+                            onInstallRequested: function(bundleId, appName) { root.openInstallPopup(bundleId, appName) }
                         }
                     }
                 }
 
-                Label {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 12
-                    text: root.error
-                    color: "#c00"
-                    visible: root.error.length > 0 && !root.loading
+                Repeater {
+                    model: appModel
+                    delegate: Item {
+                        width: catalogGrid.itemWidth
+                        height: catalogGrid.itemHeight
+                        AppItem {
+                            anchors.fill: parent
+                            name: model.name
+                            bundleId: model.bundleId
+                            description: model.description
+                            onSelected: function(app) { root.openDetails(app) }
+                            onInstallRequested: function(bundleId, appName) { root.openInstallPopup(bundleId, appName) }
+                            onGetIpaRequested: function(bundleId, appName) { root.openGetIpaPopup(bundleId, appName) }
+                        }
+                    }
                 }
             }
         }
@@ -439,11 +462,6 @@ Item {
                                 name: model.name
                                 bundleId: model.bundleId
                                 description: model.description
-                                logoUrl: model.logoUrl
-                                websiteUrl: model.websiteUrl
-                                useBundleIdForIcon: model.useBundleIdForIcon
-                                sponsorLabel: model.sponsorLabel
-                                sponsorColor: model.sponsorColor
                                 onSelected: function(app) { root.openDetails(app) }
                             }
                         }

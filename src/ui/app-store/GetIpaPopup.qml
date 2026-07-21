@@ -23,7 +23,7 @@ AnimatedDialog {
     width: 440
     title: qsTr("Get IPA")
     standardButtons: Dialog.NoButton
-    closePolicy: Popup.NoAutoClose
+    closePolicy: root.downloading ? Popup.NoAutoClose : Popup.CloseOnPressOutside
 
     property string taskId: ""
     property bool downloading: false
@@ -84,11 +84,6 @@ AnimatedDialog {
 
     Overlay.modal: Rectangle {
         color: Qt.rgba(0, 0, 0, 0.35)
-
-        MouseArea {
-            anchors.fill: parent
-            onClicked: root.requestClose()
-        }
     }
 
     FolderDialog {
