@@ -5,8 +5,10 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
+import "." as App
+import "./base"
 
-Window {
+DefaultWindow {
     id: root
     width: 620
     height: 560
@@ -15,12 +17,21 @@ Window {
     title: qsTr("Updater - iDescriptor")
     visible: false
     modality: Qt.ApplicationModal
+    color: App.Theme.windowBackground
+    setupMacOSWindowStyle: Qt.platform.os === "osx"
 
-    readonly property var backend: typeof UpdaterImp !== "undefined" ? UpdaterImp : null
+
+    enum ViewState {
+        Checking,
+        UpdateAvailable,
+        Downloading,
+        Downloaded,
+        Error
+    }
+
+    readonly property var backend: UpdaterImp
     property var profile: ({})
-    property bool checking: false
-    property bool downloading: false
-    property bool downloaded: false
+    property int viewState: Updater.UpdateAvailable
     property string errorText: ""
     property string downloadedPath: ""
     property real progress: 0
@@ -29,6 +40,42 @@ Window {
     readonly property bool canDownload: !root.packageManagerManaged && !!root.profile.browser_download_url
     readonly property bool shouldOpenDownloadedFile: !!root.profile.update_procedure_open_file
     readonly property bool shouldRevealDownloadedFile: !!root.profile.update_procedure_open_file_dir
+
+    function componentForState(state) {
+        switch (state) {
+        case Updater.Checking:
+            return checkingPageComponent
+        case Updater.Downloading:
+            return downloadingPageComponent
+        case Updater.Downloaded:
+            return downloadedPageComponent
+        case Updater.Error:
+            return errorPageComponent
+        default:
+            return updateAvailablePageComponent
+        }
+    }
+
+    function showView(state) {
+        root.viewState = state
+        var component = root.componentForState(state)
+
+        if (!nav.currentItem) {
+            nav.push(component)
+            return
+        }
+
+        if (nav.currentItem.pageState === state)
+            return
+
+        nav.replace(component)
+    }
+
+    function showWindow() {
+        root.visible = true
+        root.raise()
+        root.requestActivate()
+    }
 
     function checkForUpdates(manual) {
         root.manualCheck = manual
@@ -41,10 +88,8 @@ Window {
     }
 
     function checkAutomatically() {
-        if (typeof settingsManager !== "undefined"
-                && settingsManager
-                && typeof settingsManager.auto_check_updates === "function"
-                && !settingsManager.auto_check_updates()) {
+        if (!settingsManager.auto_check_updates()) {
+            console.log("auto_check_updates is false skipping...")
             return
         }
 
@@ -52,43 +97,48 @@ Window {
     }
 
     function openChecking() {
-        root.checking = true
-        root.downloading = false
-        root.downloaded = false
-        root.visible = true
-        root.raise()
-        root.requestActivate()
+        root.showView(Updater.Checking)
+        root.showWindow()
     }
 
     function openUpdate(profileData) {
         root.profile = profileData || {}
-        root.checking = false
-        root.downloading = false
-        root.downloaded = false
         root.errorText = ""
         root.progress = 0
-        root.visible = true
-        root.raise()
-        root.requestActivate()
+        root.showView(Updater.UpdateAvailable)
+        root.showWindow()
     }
 
     function showError(message) {
-        root.checking = false
-        root.downloading = false
-        root.downloaded = false
         root.errorText = message || qsTr("The update check failed.")
-        root.visible = true
-        root.raise()
-        root.requestActivate()
+        root.showView(Updater.Error)
+        root.showWindow()
     }
 
     function showNoUpdate() {
-        root.checking = false
-        root.downloading = false
-        root.downloaded = false
         root.errorText = ""
         root.hide()
         noUpdateDialog.open()
+    }
+
+    function startDownload() {
+        root.showView(Updater.Downloading)
+        if (root.backend && typeof root.backend.download_update === "function")
+            root.backend.download_update()
+    }
+
+    function closeOrOpenDownloadedUpdate() {
+        if (root.shouldOpenDownloadedFile && root.backend
+                && typeof root.backend.open_downloaded_update === "function") {
+            root.backend.open_downloaded_update()
+        } else {
+            root.hide()
+        }
+    }
+
+    function revealDownloadedUpdate() {
+        if (root.backend && typeof root.backend.reveal_downloaded_update === "function")
+            root.backend.reveal_downloaded_update()
     }
 
     function formatBytes(bytes) {
@@ -125,7 +175,7 @@ Window {
             return root.packageManagerText()
         if (!root.canDownload)
             return qsTr("A newer version is available, but no matching download was found for this system.")
-        return qsTr("Would you like to download the update now?")
+        return qsTr("Download and install when you are ready. Your current settings and connected devices will not be changed.")
     }
 
     Connections {
@@ -146,18 +196,14 @@ Window {
         }
 
         function onDownload_progress(downloadedBytes, totalBytes, progressValue) {
-            root.checking = false
-            root.downloading = true
-            root.downloaded = false
             root.progress = progressValue
+            root.showView(Updater.Downloading)
         }
 
         function onDownload_finished(path) {
-            root.checking = false
-            root.downloading = false
-            root.downloaded = true
             root.downloadedPath = path
             root.progress = 1
+            root.showView(Updater.Downloaded)
         }
 
         function onDownload_failed(message) {
@@ -171,175 +217,494 @@ Window {
         text: qsTr("You are using the latest version of iDescriptor.")
     }
 
-    Rectangle {
-        anchors.fill: parent
-        color: palette.window
+    component PrimaryButton: Button {
+        id: control
+        font.bold: true
+        padding: 14
+        contentItem: Text {
+            text: control.text
+            color: App.Theme.textSelected
+            font: control.font
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+        background: Rectangle {
+            radius: 10
+            color: !control.enabled ? Qt.rgba(App.Theme.accent.r, App.Theme.accent.g, App.Theme.accent.b, 0.45)
+                  : control.down ? App.Theme.accentPressed
+                  : control.hovered ? App.Theme.accentHover
+                  : App.Theme.accent
+        }
     }
 
-    ColumnLayout {
+    component SecondaryButton: Button {
+        id: control
+        padding: 14
+        contentItem: Text {
+            text: control.text
+            color: App.Theme.text
+            font: control.font
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+        background: Rectangle {
+            radius: 10
+            color: control.down ? App.Theme.pressed : control.hovered ? App.Theme.hover : App.Theme.controlFill
+            border.color: App.Theme.controlStroke
+            border.width: 1
+        }
+    }
+
+    component StatusBadge: Rectangle {
+        property string symbol: ""
+        property color symbolColor: App.Theme.accent
+        Layout.preferredWidth: 58
+        Layout.preferredHeight: 58
+        radius: 18
+        color: Qt.rgba(symbolColor.r, symbolColor.g, symbolColor.b, App.Theme.darkMode ? 0.18 : 0.12)
+
+        Text {
+            anchors.centerIn: parent
+            text: parent.symbol
+            color: parent.symbolColor
+            font.pixelSize: 30
+            font.weight: Font.DemiBold
+        }
+    }
+
+    component Card: Rectangle {
+        radius: 14
+        color: App.Theme.groupedBackground
+        border.color: App.Theme.softBgBorder
+        border.width: 1
+    }
+
+    Rectangle {
         anchors.fill: parent
-        anchors.margins: 18
-        spacing: 14
+        color: App.Theme.windowBackground
+    }
 
-        Label {
-            Layout.fillWidth: true
-            text: {
-                if (root.errorText.length > 0)
-                    return qsTr("Update Check Failed")
-                if (root.downloaded)
-                    return qsTr("Update Downloaded")
-                if (root.downloading)
-                    return qsTr("Downloading Update")
-                if (root.checking)
-                    return qsTr("Checking for Updates")
-                return qsTr("Version %1 of %2 has been released!")
-                        .arg(root.profile.tag_name || root.profile.version || "")
-                        .arg(root.profile.application_name || "iDescriptor")
-            }
-            wrapMode: Text.WordWrap
-            font.pixelSize: 18
-            font.bold: true
-            color: palette.text
+    StackView {
+        id: nav
+        anchors.fill: parent
+        initialItem: updateAvailablePageComponent
+        clip: true
+
+        pushEnter: Transition {
+            PropertyAnimation { property: "x"; from: root.width; to: 0; duration: 320; easing.type: Easing.OutCubic }
+            PropertyAnimation { property: "opacity"; from: 0.55; to: 1; duration: 320; easing.type: Easing.OutCubic }
         }
-
-        Label {
-            Layout.fillWidth: true
-            visible: !root.checking && !root.downloading && !root.downloaded && root.errorText.length === 0
-            text: root.updatePromptText()
-            wrapMode: Text.WordWrap
-            color: palette.text
+        pushExit: Transition {
+            PropertyAnimation { property: "x"; from: 0; to: -root.width; duration: 320; easing.type: Easing.OutCubic }
+            PropertyAnimation { property: "opacity"; from: 1; to: 0.55; duration: 320; easing.type: Easing.OutCubic }
         }
-
-        Label {
-            Layout.fillWidth: true
-            visible: root.errorText.length > 0
-            text: root.errorText
-            wrapMode: Text.WordWrap
-            color: palette.text
+        popEnter: Transition {
+            PropertyAnimation { property: "x"; from: -root.width; to: 0; duration: 280; easing.type: Easing.OutCubic }
+            PropertyAnimation { property: "opacity"; from: 0.55; to: 1; duration: 280; easing.type: Easing.OutCubic }
         }
-
-        Label {
-            Layout.fillWidth: true
-            visible: root.downloaded
-            text: root.procedureText() + "\n\n" + root.procedureInformativeText() + "\n\n" + qsTr("Downloaded to %1.").arg(root.downloadedPath)
-            wrapMode: Text.WrapAnywhere
-            color: palette.text
+        popExit: Transition {
+            PropertyAnimation { property: "x"; from: 0; to: nav.width; duration: 280; easing.type: Easing.OutCubic }
+            PropertyAnimation { property: "opacity"; from: 1; to: 0.55; duration: 280; easing.type: Easing.OutCubic }
         }
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            visible: root.checking || root.downloading
-            spacing: 8
-
-            ProgressBar {
-                Layout.fillWidth: true
-                indeterminate: root.checking || root.progress <= 0
-                from: 0
-                to: 1
-                value: root.progress
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: root.checking ? qsTr("Looking for a newer release...") : qsTr("%1% downloaded").arg(Math.round(root.progress * 100))
-                horizontalAlignment: Text.AlignHCenter
-                color: palette.text
-            }
+        replaceEnter: Transition {
+            PropertyAnimation { property: "x"; from: root.width * 0.16; to: 0; duration: 260; easing.type: Easing.OutCubic }
+            PropertyAnimation { property: "opacity"; from: 0; to: 1; duration: 240; easing.type: Easing.OutCubic }
         }
+        replaceExit: Transition {
+            PropertyAnimation { property: "x"; from: 0; to: -root.width * 0.10; duration: 200; easing.type: Easing.OutCubic }
+            PropertyAnimation { property: "opacity"; from: 1; to: 0; duration: 180; easing.type: Easing.OutCubic }
+        }
+    }
 
-        GroupBox {
-            Layout.fillWidth: true
-            visible: !root.checking && !root.downloading && !root.downloaded && root.errorText.length === 0
-            title: qsTr("Change log")
+    Component {
+        id: updateAvailablePageComponent
 
-            ScrollView {
-                width: parent.width
-                height: Math.max(180, root.height - 260)
-                clip: true
+        Item {
+            readonly property int pageState: Updater.UpdateAvailable
 
-                TextArea {
-                    width: parent.width
-                    text: root.profile.body || root.profile.changelog || qsTr("No change log was provided for this release.")
-                    textFormat: Text.MarkdownText
-                    readOnly: true
-                    selectByMouse: true
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 30
+                spacing: 18
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 16
+
+                    StatusBadge {
+                        symbol: "↑"
+                        symbolColor: App.Theme.accent
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 3
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("A new version is available")
+                            color: App.Theme.text
+                            font.pixelSize: 22
+                            font.weight: Font.DemiBold
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Version %1").arg(root.profile.tag_name || root.profile.version || "")
+                            color: App.Theme.textMuted
+                            font.pixelSize: 13
+                        }
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: root.updatePromptText()
+                    color: App.Theme.textMuted
+                    font.pixelSize: 14
                     wrapMode: Text.WordWrap
-                    color: palette.text
-                    background: Rectangle {
-                        color: "transparent"
+                }
+
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 46
+                    visible: !root.packageManagerManaged && !!root.profile.file_name
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        spacing: 10
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: root.profile.file_name || ""
+                            color: App.Theme.text
+                            elide: Text.ElideMiddle
+                        }
+
+                        Label {
+                            text: root.formatBytes(root.profile.asset_size || -1)
+                            color: App.Theme.textMuted
+                            font.pixelSize: 12
+                        }
+                    }
+                }
+
+                Card {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 150
+                    visible: !root.packageManagerManaged
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        spacing: 8
+
+                        Label {
+                            text: qsTr("What’s new")
+                            color: App.Theme.text
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                        }
+
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+
+                            TextArea {
+                                width: parent.width
+                                text: root.profile.body || root.profile.changelog
+                                      || qsTr("No change log was provided for this release.")
+                                textFormat: Text.MarkdownText
+                                readOnly: true
+                                selectByMouse: true
+                                wrapMode: Text.WordWrap
+                                color: App.Theme.text
+                                background: Rectangle { color: "transparent" }
+                            }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    SecondaryButton {
+                        Layout.fillWidth: true
+                        text: root.packageManagerManaged || !root.canDownload ? qsTr("Close") : qsTr("Not now")
+                        onClicked: root.hide()
+                    }
+
+                    PrimaryButton {
+                        Layout.fillWidth: true
+                        visible: root.canDownload
+                        text: qsTr("Download Update")
+                        onClicked: root.startDownload()
                     }
                 }
             }
         }
+    }
 
-        Item { Layout.fillHeight: true }
+    Component {
+        id: checkingPageComponent
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 10
+        Item {
+            readonly property int pageState: Updater.Checking
 
-            Label {
-                Layout.fillWidth: true
-                visible: !root.checking && !root.downloading && !root.downloaded && root.errorText.length === 0
-                text: root.packageManagerManaged
-                        ? ""
-                        : root.profile.file_name
-                        ? qsTr("%1, %2").arg(root.profile.file_name).arg(root.formatBytes(root.profile.asset_size || -1))
-                        : ""
-                elide: Text.ElideMiddle
-                color: palette.text
-            }
+            ColumnLayout {
+                anchors.centerIn: parent
+                width: Math.min(parent.width - 60, 360)
+                spacing: 16
 
-            Item {
-                Layout.fillWidth: true
-                visible: root.checking || root.downloading || root.downloaded || root.errorText.length > 0
-            }
-
-            Button {
-                text: {
-                    if (root.downloaded && root.shouldRevealDownloadedFile)
-                        return qsTr("Reveal")
-                    return qsTr("No")
+                BusyIndicator {
+                    Layout.alignment: Qt.AlignHCenter
+                    running: true
+                    implicitWidth: 42
+                    implicitHeight: 42
                 }
-                enabled: !root.checking && !root.downloading
-                visible: root.errorText.length === 0 && !root.packageManagerManaged && root.canDownload && (!root.downloaded || root.shouldRevealDownloadedFile)
-                onClicked: {
-                    if (root.downloaded && root.shouldRevealDownloadedFile) {
-                        if (root.backend && typeof root.backend.reveal_downloaded_update === "function")
-                            root.backend.reveal_downloaded_update()
-                    } else {
-                        root.hide()
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Checking for updates")
+                    color: App.Theme.text
+                    font.pixelSize: 21
+                    font.weight: Font.DemiBold
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Looking for a newer release of iDescriptor…")
+                    color: App.Theme.textMuted
+                    font.pixelSize: 14
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                }
+            }
+        }
+    }
+
+    Component {
+        id: downloadingPageComponent
+
+        Item {
+            readonly property int pageState: Updater.Downloading
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                width: Math.min(parent.width - 60, 400)
+                spacing: 16
+
+                StatusBadge {
+                    Layout.alignment: Qt.AlignHCenter
+                    symbol: "↓"
+                    symbolColor: App.Theme.accent
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Downloading update")
+                    color: App.Theme.text
+                    font.pixelSize: 21
+                    font.weight: Font.DemiBold
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Please keep iDescriptor open while the update downloads.")
+                    color: App.Theme.textMuted
+                    font.pixelSize: 14
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                }
+
+                ProgressBar {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 8
+                    indeterminate: root.progress <= 0
+                    from: 0
+                    to: 1
+                    value: root.progress
+                    background: Rectangle {
+                        implicitHeight: 8
+                        radius: height / 2
+                        color: App.Theme.softBg
+                    }
+                    contentItem: Item {
+                        implicitHeight: 8
+                        Rectangle {
+                            width: parent.width * (root.progress <= 0 ? 0.18 : root.progress)
+                            height: parent.height
+                            radius: height / 2
+                            color: App.Theme.accent
+                        }
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("%1% downloaded").arg(Math.round(root.progress * 100))
+                    color: App.Theme.textMuted
+                    font.pixelSize: 13
+                    horizontalAlignment: Text.AlignHCenter
+                }
+            }
+        }
+    }
+
+    Component {
+        id: downloadedPageComponent
+
+        Item {
+            readonly property int pageState: Updater.Downloaded
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 30
+                spacing: 18
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 16
+
+                    StatusBadge {
+                        symbol: "✓"
+                        symbolColor: App.Theme.systemGreen
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 3
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Update downloaded")
+                            color: App.Theme.text
+                            font.pixelSize: 22
+                            font.weight: Font.DemiBold
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Version %1 is ready.").arg(root.profile.tag_name || root.profile.version || "")
+                            color: App.Theme.textMuted
+                            font.pixelSize: 13
+                        }
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: root.procedureText()
+                    color: App.Theme.text
+                    font.pixelSize: 15
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: root.procedureInformativeText().length > 0
+                    text: root.procedureInformativeText()
+                    color: App.Theme.textMuted
+                    font.pixelSize: 14
+                    wrapMode: Text.WordWrap
+                }
+
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.max(58, downloadedPathLabel.implicitHeight + 28)
+
+                    Label {
+                        id: downloadedPathLabel
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        text: qsTr("Downloaded to %1").arg(root.downloadedPath)
+                        color: App.Theme.textMuted
+                        font.pixelSize: 12
+                        wrapMode: Text.WrapAnywhere
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+
+                Item { Layout.fillHeight: true }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    SecondaryButton {
+                        Layout.fillWidth: true
+                        visible: root.shouldRevealDownloadedFile
+                        text: qsTr("Reveal Download")
+                        onClicked: root.revealDownloadedUpdate()
+                    }
+
+                    SecondaryButton {
+                        Layout.fillWidth: true
+                        visible: !root.shouldRevealDownloadedFile
+                        text: qsTr("Close")
+                        onClicked: root.hide()
+                    }
+
+                    PrimaryButton {
+                        Layout.fillWidth: true
+                        text: root.shouldOpenDownloadedFile ? qsTr("Open Update") : qsTr("Close")
+                        onClicked: root.closeOrOpenDownloadedUpdate()
                     }
                 }
             }
+        }
+    }
 
-            Button {
-                text: {
-                    if (root.errorText.length > 0)
-                        return qsTr("Close")
-                    if (root.downloaded)
-                        return root.shouldOpenDownloadedFile ? qsTr("Open") : qsTr("Close")
-                    if (root.downloading)
-                        return qsTr("Downloading")
-                    if (!root.canDownload)
-                        return qsTr("Close")
-                    return qsTr("Yes")
+    Component {
+        id: errorPageComponent
+
+        Item {
+            readonly property int pageState: Updater.Error
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                width: Math.min(parent.width - 60, 400)
+                spacing: 16
+
+                StatusBadge {
+                    Layout.alignment: Qt.AlignHCenter
+                    symbol: "!"
+                    symbolColor: App.Theme.systemRed
                 }
-                enabled: !root.checking && !root.downloading
-                onClicked: {
-                    if (root.errorText.length > 0) {
-                        root.hide()
-                    } else if (root.downloaded) {
-                        if (root.shouldOpenDownloadedFile && root.backend && typeof root.backend.open_downloaded_update === "function")
-                            root.backend.open_downloaded_update()
-                        else
-                            root.hide()
-                    } else if (!root.canDownload) {
-                        root.hide()
-                    } else if (root.backend && typeof root.backend.download_update === "function") {
-                        root.downloading = true
-                        root.backend.download_update()
-                    }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Update check failed")
+                    color: App.Theme.text
+                    font.pixelSize: 21
+                    font.weight: Font.DemiBold
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: root.errorText
+                    color: App.Theme.textMuted
+                    font.pixelSize: 14
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                }
+
+                PrimaryButton {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 8
+                    text: qsTr("Close")
+                    onClicked: root.hide()
                 }
             }
         }
