@@ -498,7 +498,7 @@ impl SettingsManager {
     }
 
     fn wireless_file_server_port(&self) -> i32 {
-        read_i32("wirelessFileServerPort", 8080)
+        wireless_file_server_port() as i32
     }
 
     fn set_wireless_file_server_port(&self, port: i32) {
@@ -731,6 +731,10 @@ pub fn airplay_uxplay_args() -> Vec<String> {
     }
 
     args
+}
+
+pub(crate) fn wireless_file_server_port() -> u16 {
+    read_i32("wirelessFileServerPort", 8080).clamp(1, u16::MAX as i32) as u16
 }
 
 fn write_bool(key: &str, value: bool) {
