@@ -11,7 +11,7 @@ Item {
     clip:true
 
     //FIXME: change when merged into main
-    readonly property string sponsorsUrl: "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/dev/main/sponsors.json"
+    readonly property string sponsorsUrl: "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/dev/sponsors.json"
     readonly property string githubSponsorsUrl: "https://github.com/sponsors/iDescriptor"
     readonly property string openCollectiveUrl: "https://opencollective.com/idescriptor"
     readonly property bool isMacOS: Qt.platform.os === "osx" || Qt.platform.os === "darwin"
