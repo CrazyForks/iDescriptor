@@ -8,7 +8,7 @@ use idevice::{
     afc::AfcClient, diagnostics_relay::DiagnosticsRelayClient, lockdown::LockdownClient,
 };
 use qmetaobject::*;
-use simplelog::{ColorChoice, ConfigBuilder, LevelFilter, TermLogger, TerminalMode};
+use tracing_subscriber::{EnvFilter, filter::LevelFilter, prelude::*};
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -116,13 +116,16 @@ where
 }
 
 fn main() {
-    TermLogger::init(
-        LevelFilter::Debug,
-        ConfigBuilder::new().build(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )
-    .expect("Failed to initialize logger");
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::DEBUG.into())
+        .from_env_lossy()
+        // Keep idevice warnings and errors visible, but suppress its very noisy
+        // debug and trace events even while the application is running at debug.
+        .add_directive("idevice=warn".parse().expect("valid idevice log filter"));
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().compact())
+        .with(filter)
+        .init();
 
     let ui_live_reload = utils::env_flag("IDESCRIPTOR_UI_LIVE_RELOAD");
     let qml_from_fs = ui_live_reload || utils::env_flag("IDESCRIPTOR_QML_FROM_FS");
