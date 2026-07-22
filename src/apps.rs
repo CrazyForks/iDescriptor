@@ -432,7 +432,7 @@ impl Apps {
                             bundle_id,
                             output_path: Some(task_dir.path.to_string_lossy().into_owned()),
                             external_version_id: None,
-                            acquire_license: false,
+                            acquire_license: true,
                         },
                         move |downloaded, total| {
                             let progress = total
