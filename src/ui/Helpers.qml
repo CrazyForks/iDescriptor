@@ -109,7 +109,7 @@ QtObject {
         });
     }
 
-    function messageBox(parent, title, message) {
+    function messageBox(parent, title, message, buttons, onButtonClicked) {
         var dialog = Qt.createQmlObject(
             "import QtQuick; import QtQuick.Dialogs; MessageDialog { buttons: MessageDialog.Ok }",
             parent || root,
@@ -118,7 +118,11 @@ QtObject {
 
         dialog.title = title;
         dialog.text = message;
-        dialog.buttonClicked.connect(function() {
+        if (buttons !== undefined)
+            dialog.buttons = buttons;
+        dialog.buttonClicked.connect(function(button, role) {
+            if (onButtonClicked)
+                onButtonClicked(button, role);
             dialog.destroy();
         });
         dialog.open();

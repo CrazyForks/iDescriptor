@@ -215,7 +215,8 @@ Item {
                 const row = albumModel.get(index)
                 return {
                     albumId: row.albumId,
-                    fileName: row.fileName
+                    fileName: row.fileName,
+                    itemCount: row.itemCount,
                 }
             }
 
@@ -265,7 +266,21 @@ Item {
                         text: qsTr("Export All")
                         enabled: albumModel.count > 0
                         // TODO: Ask the community whether Export All should include duplicate assets from overlapping albums such as Recents/Favorites. For now we export every album folder as-is without duplicate checks.
-                        onClicked: root.chooseAlbumExportDestination(albumListPage.allAlbums())
+                        onClicked: {
+                            const all = albumListPage.allAlbums()
+                            const totalItems = all.reduce((sum, album) => sum + album.itemCount, 0)
+                            App.Helpers.messageBox(
+                                root,
+                                qsTr("Export All"),
+                                qsTr("Are you sure you want to export all %1 items from %2 albums?").arg(totalItems).arg(all.length),
+                                MessageDialog.Yes | MessageDialog.No,
+                                function(button) {
+                                    if (button === MessageDialog.Yes) {
+                                        root.chooseAlbumExportDestination(all)
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -305,7 +320,6 @@ Item {
                             MouseArea {
                                 anchors.fill: parent
                                 onDoubleClicked: {
-                                    console.log("delegate double-click", index, albumId)
                                     root.openAlbum(albumId)
                                 }
                             }
