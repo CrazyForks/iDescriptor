@@ -100,8 +100,10 @@ DefaultWindow {
     Rectangle {
         anchors.fill: parent
         radius: 10
-        color: Qt.platform.os !== "windows" ? "#222" : "transparent"
-
+        color: Qt.platform.os !== "windows" ? palette.window : "transparent"
+        border.color: Qt.platform.os !== "windows" ? Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.12) : "transparent"
+        border.width: Qt.platform.os !== "windows" ? 1 : 0
+    
         ColumnLayout {
             anchors.fill: parent
 
