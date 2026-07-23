@@ -5,7 +5,7 @@ use macros::QtThreading;
 use qmetaobject::prelude::*;
 use qttypes::{QString, QVariantMap};
 use std::path::{Path, PathBuf};
-use zupdater::{DownloadedUpdate, Platform, Update, UpdateProcedure};
+use zupdater::{DownloadedUpdate, Platform, Release, Update, UpdateProcedure};
 
 cpp! {{
     #include <QCoreApplication>
@@ -27,7 +27,10 @@ pub struct Updater {
     download_progress: qt_signal!(downloaded_bytes: i64, total_bytes: i64, progress: f64),
     download_finished: qt_signal!(path: QString),
     download_failed: qt_signal!(error: QString),
+    currentReleaseReady: qt_signal!(profile: QVariantMap),
+    currentReleaseFailed: qt_signal!(error: QString),
     check_for_updates: qt_method!(fn(&mut self, manual: bool)),
+    fetch_current_release: qt_method!(fn(&mut self)),
     download_update: qt_method!(fn(&mut self)),
     open_downloaded_update: qt_method!(fn(&self)),
     reveal_downloaded_update: qt_method!(fn(&self)),
@@ -119,6 +122,44 @@ impl Updater {
                             t.check_failed(QString::from(message));
                         }
                     }
+                }
+            });
+        });
+    }
+
+    fn fetch_current_release(&mut self) {
+        let updater = match Self::build_updater() {
+            Ok(updater) => updater,
+            Err(err) => {
+                let message = format!("Failed to initialize release notes lookup: {err}");
+                warn!("{message}");
+                self.currentReleaseFailed(QString::from(message));
+                return;
+            }
+        };
+
+        let q_thread = self.qt_thread();
+        RUNTIME.spawn(async move {
+            debug!("Fetching release notes for the current version");
+            let result = updater.current_release().await;
+
+            q_thread.queue(move |t| match result {
+                Ok(Some(release)) => {
+                    info!("Loaded release notes for {}", release.tag_name);
+                    t.currentReleaseReady(release_to_profile(&release));
+                }
+                Ok(None) => {
+                    let message = format!(
+                        "No GitHub release matches the current version {}",
+                        env!("CARGO_PKG_VERSION")
+                    );
+                    warn!("{message}");
+                    t.currentReleaseFailed(QString::from(message));
+                }
+                Err(err) => {
+                    let message = format!("Failed to load release notes: {err}");
+                    warn!("{message}");
+                    t.currentReleaseFailed(QString::from(message));
                 }
             });
         });
@@ -381,6 +422,29 @@ fn update_to_profile(update: &Update) -> QVariantMap {
             .unwrap_or(-1)
     );
 
+    profile
+}
+
+fn release_to_profile(release: &Release) -> QVariantMap {
+    let mut profile = QVariantMap::default();
+    qvariantmap_insert!(profile, "tag_name", QString::from(release.tag_name.clone()));
+    qvariantmap_insert!(
+        profile,
+        "release_name",
+        QString::from(release.release_name.clone().unwrap_or_default())
+    );
+    qvariantmap_insert!(profile, "body", QString::from(release.changelog.clone()));
+    qvariantmap_insert!(
+        profile,
+        "release_url",
+        QString::from(release.release_url.clone())
+    );
+    qvariantmap_insert!(profile, "prerelease", release.prerelease);
+    qvariantmap_insert!(
+        profile,
+        "published_at",
+        QString::from(release.published_at.clone().unwrap_or_default())
+    );
     profile
 }
 

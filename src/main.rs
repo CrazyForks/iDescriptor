@@ -41,6 +41,8 @@ pub mod gallery_fs_provider;
 pub mod gallery_sqlite_provider;
 #[cfg(not(target_os = "macos"))]
 pub mod ifuse;
+#[cfg(target_os = "linux")]
+pub mod ifuse_manager;
 pub mod image_cache;
 pub mod image_loader;
 pub mod image_provider;
@@ -308,6 +310,10 @@ fn main() {
     let ifuse = QObjectBox::new(ifuse::IFuse::new_with_state());
     #[cfg(not(target_os = "macos"))]
     engine.set_object_property("iFuse".into(), ifuse.pinned());
+    #[cfg(target_os = "linux")]
+    let ifuse_manager = QObjectBox::new(ifuse_manager::IFuseManager::default());
+    #[cfg(target_os = "linux")]
+    engine.set_object_property("IFuseManager".into(), ifuse_manager.pinned());
     #[cfg(not(target_os = "macos"))]
     let diagnose = QObjectBox::new(diagnose::Diagnose::new_with_state());
     #[cfg(not(target_os = "macos"))]
