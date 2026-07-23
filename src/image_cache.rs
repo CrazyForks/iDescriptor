@@ -11,15 +11,17 @@ const IMAGE_CACHE_CAPACITY: usize = 512;
 struct CacheKey {
     udid: String,
     path: String,
+    afc2: bool,
     width: u32,
     height: u32,
 }
 
 impl CacheKey {
-    fn new(udid: &str, path: &str, width: u32, height: u32) -> Self {
+    fn new(udid: &str, path: &str, afc2: bool, width: u32, height: u32) -> Self {
         Self {
             udid: udid.to_string(),
             path: path.to_string(),
+            afc2,
             width,
             height,
         }
@@ -32,17 +34,17 @@ static CACHE: Lazy<Mutex<LruCache<CacheKey, QImage>>> = Lazy::new(|| {
     Mutex::new(LruCache::new(capacity))
 });
 
-pub fn get(udid: &str, path: &str, width: u32, height: u32) -> Option<QImage> {
+pub fn get(udid: &str, path: &str, afc2: bool, width: u32, height: u32) -> Option<QImage> {
     CACHE
         .lock()
         .ok()?
-        .get(&CacheKey::new(udid, path, width, height))
+        .get(&CacheKey::new(udid, path, afc2, width, height))
         .cloned()
 }
 
-pub fn insert(udid: &str, path: &str, width: u32, height: u32, img: QImage) {
+pub fn insert(udid: &str, path: &str, afc2: bool, width: u32, height: u32, img: QImage) {
     if let Ok(mut guard) = CACHE.lock() {
-        guard.put(CacheKey::new(udid, path, width, height), img);
+        guard.put(CacheKey::new(udid, path, afc2, width, height), img);
     }
 }
 

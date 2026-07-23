@@ -27,7 +27,7 @@ use tokio::{
 pub struct ImageLoader {
     base: qt_base_class!(trait QObject),
 
-    thumbnailReady: qt_signal!(file_path: QString, row: u32),
+    thumbnailReady: qt_signal!(file_path: QString, row: u32, afc2: bool),
 }
 
 static POOL_SEM: Lazy<Arc<Semaphore>> = Lazy::new(|| Arc::new(Semaphore::new(10)));
@@ -39,6 +39,7 @@ static NEXT_SEQ: AtomicU64 = AtomicU64::new(0);
 struct JobKey {
     udid: String,
     path: String,
+    afc2: bool,
     width: u32,
     height: u32,
 }
@@ -121,7 +122,14 @@ fn ensure_worker_started() {
                     let _permit = permit;
 
                     let res: anyhow::Result<()> = async {
-                        let afc_arc = device_ctx::get_device(key.udid.as_str()).await?.afc;
+                        let device = device_ctx::get_device(key.udid.as_str()).await?;
+                        let afc_arc = if key.afc2 {
+                            device.afc2.ok_or_else(|| {
+                                anyhow::anyhow!("AFC2 is unavailable for device {}", key.udid)
+                            })?
+                        } else {
+                            device.afc
+                        };
 
                         let img = match media_file_type(&key.path) {
                             MediaFileType::Video => {
@@ -165,15 +173,16 @@ fn ensure_worker_started() {
                         };
 
                         crate::image_cache::insert(
-                            &key.udid, &key.path, key.width, key.height, img,
+                            &key.udid, &key.path, key.afc2, key.width, key.height, img,
                         );
 
                         let row = payload.row;
                         let path_for_qt = payload.path_for_qt;
                         let qt_thread = payload.qt_thread;
+                        let afc2 = key.afc2;
 
                         qt_thread.queue(move |backend_qobj| {
-                            backend_qobj.thumbnailReady(path_for_qt, row);
+                            backend_qobj.thumbnailReady(path_for_qt, row, afc2);
                         });
 
                         Ok(())
@@ -256,25 +265,19 @@ impl ImageLoader {
         &self,
         udid: QString,
         file_path: QString,
+        afc2: bool,
         row: u32,
         width: u32,
         height: u32,
     ) {
         ensure_worker_started();
-        println!(
-            "ImageLoader: request_thumbnail for udid: {}, file_path: {}, row: {}, width: {}, height: {}",
-            udid.to_string(),
-            file_path.to_string(),
-            row,
-            width,
-            height
-        );
         let udid_string = udid.to_string();
         let path_string = file_path.to_string();
 
         let key = JobKey {
             udid: udid_string,
             path: path_string,
+            afc2,
             width,
             height,
         };

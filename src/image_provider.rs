@@ -32,20 +32,23 @@ impl ImageProvider {
     }
 }
 
-fn parse_image_id(id: &str) -> Option<(String, u32, String)> {
+fn parse_image_id(id: &str) -> Option<(String, u32, String, bool)> {
     let (path, query) = id.split_once('?').unwrap_or((id, ""));
     let mut udid = String::new();
     let mut index: u32 = 0;
+    let mut afc2 = false;
 
     for (k, v) in form_urlencoded::parse(query.as_bytes()) {
         match k.as_ref() {
             "udid" => udid = v.into_owned(),
             "index" => index = v.parse().unwrap_or(0),
+            "afc2" => afc2 = v == "true" || v == "1",
             _ => {}
         }
     }
 
-    Some((udid, index, path.to_string()))
+    let path = urlencoding::decode(path).ok()?.into_owned();
+    Some((udid, index, path, afc2))
 }
 
 fn requested_cache_size(requested_size: &QSize) -> (u32, u32) {
@@ -64,7 +67,7 @@ impl QQuickImageProvider for ImageProvider {
             )),
         );
 
-        let (udid, index, path) = match parse_image_id(id) {
+        let (udid, index, path, afc2) = match parse_image_id(id) {
             Some(v) => v,
             None => {
                 println!("Failed to parse image id: {}", id);
@@ -74,7 +77,7 @@ impl QQuickImageProvider for ImageProvider {
 
         let (width, height) = requested_cache_size(requested_size);
 
-        if let Some(img) = crate::image_cache::get(&udid, &path, width, height) {
+        if let Some(img) = crate::image_cache::get(&udid, &path, afc2, width, height) {
             return (
                 QSize {
                     width: 500,
@@ -87,6 +90,7 @@ impl QQuickImageProvider for ImageProvider {
         self.loader.pinned().clone().borrow_mut().request_thumbnail(
             QString::from(udid),
             QString::from(path),
+            afc2,
             index,
             width,
             height,
