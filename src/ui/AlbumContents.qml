@@ -18,31 +18,32 @@ Item {
     property int selectedFileCount: 0
     property var pendingExportPaths: []
     property string pendingExportTitle: ""
+    property string errorMessage: ""
 
     signal goBack()
 
 
-    onAlbumIdChanged: {
+    function loadAlbumContents() {
         console.log("loading album contents")
-        if (albumId === undefined || albumId === null) return
+        if (albumId === undefined || albumId === null)
+            return
+
+        loading = true
+        errorMessage = ""
         albumContentsModel.clear()
         selectedFileCount = 0
         query.query_album(albumId, mediaFilter, mostRecentFirst)
     }
 
-    onMediaFilterChanged: {
-        if (albumId === undefined || albumId === null) return
-        albumContentsModel.clear()
-        selectedFileCount = 0
-        query.query_album(albumId, mediaFilter, mostRecentFirst)
+    function reloadAlbumContents() {
+        loading = true
+        errorMessage = ""
+        query.reload()
     }
 
-    onMostRecentFirstChanged: {
-        if (albumId === undefined || albumId === null) return
-        albumContentsModel.clear()
-        selectedFileCount = 0
-        query.query_album(albumId, mediaFilter, mostRecentFirst)
-    }
+    onAlbumIdChanged: loadAlbumContents()
+    onMediaFilterChanged: loadAlbumContents()
+    onMostRecentFirstChanged: loadAlbumContents()
 
     ListModel {
         id: albumContentsModel
@@ -91,7 +92,7 @@ Item {
         const jobId = QmlUtils.generate_uuid()
         const title = root.pendingExportTitle || qsTr("Exporting Files")
         App.StatusWindow.addProcess(jobId, title, "Export", paths.length, destinationDir)
-        ioManager.start_export(root.udid, jobId, paths, destinationDir)
+        ioManager.start_export(root.udid, jobId, paths, destinationDir, false)
         root.pendingExportPaths = []
         root.pendingExportTitle = ""
     }
@@ -100,8 +101,13 @@ Item {
         target: query
 
         function onReloadFinished(success, revision, error) {
-            if (success)
-                query.query_album(root.albumId, root.mediaFilter, root.mostRecentFirst)
+            if (success) {
+                root.loadAlbumContents()
+                return
+            }
+
+            root.loading = false
+            root.errorMessage = error || qsTr("Failed to reload the gallery.")
         }
 
         function onAlbumQueried(id, mediaFilter, mostRecentFirst, items) {
@@ -118,6 +124,17 @@ Item {
                 })
             }
 
+            root.errorMessage = ""
+            root.loading = false
+        }
+
+        function onAlbumQueryFailed(id, mediaFilter, mostRecentFirst, error) {
+            if (id !== albumId || mediaFilter !== root.mediaFilter || mostRecentFirst !== root.mostRecentFirst)
+                return
+
+            root.loading = false
+            root.errorMessage = error || qsTr("Failed to load the album contents.")
+
         }
     }
 
@@ -133,9 +150,20 @@ Item {
     }
 
     StateView {
+        id: stateView
         anchors.fill: parent
         autoSwitchContent: false
-        viewState: query.albums.length ? StateView.State.Content : StateView.State.Loading
+        viewState: root.loading || query.reloading
+                   ? StateView.State.Loading
+                   : root.errorMessage.length > 0
+                     ? StateView.State.Error
+                     : StateView.State.Content
+        errorText: root.errorMessage
+        retryable: true
+        cancelable: true
+        cancelText: qsTr("Back")
+        onRetryRequested: root.loadAlbumContents()
+        onCancelRequested: root.goBack()
         contentItem : ColumnLayout {
             anchors.fill : parent
 
@@ -151,7 +179,7 @@ Item {
                     text: qsTr("Refresh")
                     icon.source: "qrc:/resources/icons/ic_outline-refresh.svg"
                     enabled: !query.reloading
-                    onClicked: query.reload()
+                    onClicked: root.reloadAlbumContents()
                 }
 
                 Item { Layout.fillWidth: true }
@@ -222,7 +250,7 @@ Item {
                                 const comp = Qt.createComponent("PreviewWindow.qml")
 
                                 if (comp.status === Component.Ready) {
-                                    const win = comp.createObject(null,{
+                                    const win = comp.createObject(root,{
                                         filePath,
                                         udid : root.udid,
                                         afcClient: root.device.afcClient
@@ -249,8 +277,10 @@ Item {
                         Image {
                             cache: false
                             anchors.fill: parent
-                            //FIXME:use encodeuricomp
-                            source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
+                            source: "image://thumb/" + encodeURIComponent(filePath)
+                                    + "?udid=" + encodeURIComponent(root.udid)
+                                    + "&afc2=false&index=" + index
+                                    + "&v=" + thumbVersion
                             fillMode: Image.PreserveAspectFit
                             sourceSize.width: 240 * Screen.devicePixelRatio
                             sourceSize.height: 240 * Screen.devicePixelRatio
