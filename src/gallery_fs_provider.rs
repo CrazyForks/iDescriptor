@@ -91,6 +91,11 @@ impl GalleryProvider for FsGalleryProvider {
             Ok(items.into_iter().map(|(path, _)| path).collect())
         })
     }
+
+    // TODO: can we do something here?
+    fn query_gallery_size(&self) -> GalleryFuture<u64> {
+        Box::pin(async move { Ok(0) })
+    }
 }
 
 async fn read_fs_albums(afc: Arc<Mutex<AfcClient>>) -> anyhow::Result<Vec<GalleryAlbum>> {

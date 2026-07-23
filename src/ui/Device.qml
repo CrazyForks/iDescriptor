@@ -11,6 +11,8 @@ Item {
     property string udid: ""
     required property int currentSection
     required property var device
+    property real galleryUsage: 0
+    property bool galleryUsageResolved: false
 
     StackLayout {
         anchors.fill: parent
@@ -29,6 +31,11 @@ Item {
         /*load gallery as soon as possible*/
         DeviceGallery {
             device: root.device
+            onGallerySizeQueried: function(size) {
+                console.log("Gallery size queried: " + size)
+                root.galleryUsage = Math.max(0, Number(size))
+                root.galleryUsageResolved = true
+            }
         }
 
         Loader {
@@ -44,6 +51,8 @@ Item {
         DeviceInfo {
             info: root.info
             device: root.device
+            galleryUsage: root.galleryUsage
+            galleryUsageResolved: root.galleryUsageResolved
         }
     }
 

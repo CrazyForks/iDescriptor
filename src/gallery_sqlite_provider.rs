@@ -1,9 +1,9 @@
 use crate::constants::{
     ALBUM_CONTENTS_QUERY_TEMPLATE, FAVS_ALBUM_ID, FAVS_ALBUM_QUERY, FAVS_QUERY,
-    IOS_15_ALBUM_QUERY_STATEMENT, IOS_26_ALBUM_QUERY_STATEMENT, PHOTOS_SQLITE_REMOTE_PATH,
-    PHOTOS_SQLITE_SHM_REMOTE_PATH, PHOTOS_SQLITE_WAL_REMOTE_PATH, RECENTLY_DELETED_ALBUM_ID,
-    RECENTLY_DELETED_ALBUM_QUERY, RECENTLY_DELETED_QUERY, RECENTS_ALBUM_ID, RECENTS_ALBUM_QUERY,
-    RECENTS_QUERY, SQLITE_GALLERY_PROVIDER_NAME,
+    GALLERY_TOTAL_SIZE_QUERY, IOS_15_ALBUM_QUERY_STATEMENT, IOS_26_ALBUM_QUERY_STATEMENT,
+    PHOTOS_SQLITE_REMOTE_PATH, PHOTOS_SQLITE_SHM_REMOTE_PATH, PHOTOS_SQLITE_WAL_REMOTE_PATH,
+    RECENTLY_DELETED_ALBUM_ID, RECENTLY_DELETED_ALBUM_QUERY, RECENTLY_DELETED_QUERY,
+    RECENTS_ALBUM_ID, RECENTS_ALBUM_QUERY, RECENTS_QUERY, SQLITE_GALLERY_PROVIDER_NAME,
 };
 use crate::gallery::{
     GalleryAlbum, GalleryFuture, GalleryMediaFilter, GalleryProvider, export_afc_file,
@@ -192,6 +192,19 @@ impl GalleryProvider for SqliteGalleryProvider {
                 }
                 _ => query_sqlite_album(state, id, media_filter, most_recent_first).await,
             }
+        })
+    }
+
+    fn query_gallery_size(&self) -> GalleryFuture<u64> {
+        let state = self.state.clone();
+        Box::pin(async move {
+            let state = state.lock().await;
+            let conn = state
+                .connection
+                .as_ref()
+                .context("SQLite gallery connection is closed")?;
+            let total_size: i64 = conn.query_row(GALLERY_TOTAL_SIZE_QUERY, [], |r| r.get(0))?;
+            u64::try_from(total_size).context("Gallery size cannot be negative")
         })
     }
 }
@@ -779,5 +792,31 @@ mod tests {
         assert!(!query.contains("{album}"));
         assert!(query.contains("Z_33ASSETS.Z_3ASSETS"));
         assert!(query.contains("Z_33ASSETS.Z_33ALBUMS"));
+    }
+
+    #[test]
+    fn built_in_album_content_queries_have_valid_clause_order() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute(
+                "CREATE TABLE ZASSET (
+                    Z_PK INTEGER,
+                    ZFILENAME TEXT,
+                    ZDIRECTORY TEXT,
+                    ZFAVORITE INTEGER,
+                    ZTRASHEDSTATE INTEGER
+                )",
+                [],
+            )
+            .unwrap();
+
+        for query in [RECENTS_QUERY, FAVS_QUERY, RECENTLY_DELETED_QUERY] {
+            connection
+                .prepare(&sqlite_ordered_query(query, true))
+                .unwrap();
+            connection
+                .prepare(&sqlite_ordered_query(query, false))
+                .unwrap();
+        }
     }
 }

@@ -7,6 +7,8 @@ Item {
     id : root
     required property var info
     required property var device
+    required property real galleryUsage
+    required property bool galleryUsageResolved
     readonly property int contentMargin: 10
     readonly property int contentMaxWidth: 1040
     readonly property real diskUsageWidthRatio: 0.8
@@ -336,6 +338,8 @@ Item {
                     DiskUsage {
                         Layout.fillWidth: true
                         device: root.device
+                        galleryUsage: root.galleryUsage
+                        galleryUsageResolved: root.galleryUsageResolved
                     }
             }
         }

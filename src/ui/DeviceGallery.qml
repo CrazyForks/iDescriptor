@@ -20,6 +20,7 @@ Item {
     property var is_init: false
     property var pendingAlbumExportRequests: ({})
 
+    signal gallerySizeQueried(real size)
 
     Component.onCompleted: {
         console.log("DeviceGallery.qml: Component.onCompleted")
@@ -27,6 +28,7 @@ Item {
         if (query) {
             query.init(settingsManager.use_sqlite_gallery_backend());
         } else {
+            root.gallerySizeQueried(0)
             // FIXME:show error
             console.error("Query is null after create_query_backend")
         }
@@ -97,6 +99,10 @@ Item {
     Connections {
         target: query
 
+        function onGallerySizeQueried(size) {
+            root.gallerySizeQueried(size)
+        }
+
         function onStateChanged() {
             if (query.state.init && !root.is_init) {
                 root.is_init = true
@@ -150,7 +156,7 @@ Item {
                 items.length,
                 pending.destinationDir
             )
-            ioManager.start_export(root.udid, requestId, items, pending.destinationDir)
+            ioManager.start_export(root.udid, requestId, items, pending.destinationDir, false)
         }
     }
 
@@ -336,8 +342,10 @@ Item {
                                 Image {
                                     cache: false
                                     anchors.fill: parent
-                                    //FIXME:use encodeuricomp
-                                    source: "image://thumb/" + filePath + "?udid=" + root.udid + "&index=" + index + "&v=" + thumbVersion
+                                    source: "image://thumb/" + encodeURIComponent(filePath)
+                                            + "?udid=" + encodeURIComponent(root.udid)
+                                            + "&afc2=false&index=" + index
+                                            + "&v=" + thumbVersion
                                     fillMode: Image.PreserveAspectCrop
                                     sourceSize.width: 240 * Screen.devicePixelRatio
                                     sourceSize.height: 240 * Screen.devicePixelRatio
