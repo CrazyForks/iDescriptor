@@ -1,6 +1,8 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Controls
+import QtQuick.Controls.impl
+import QtQuick.Dialogs
 import "." as App
 
 Item {
@@ -126,9 +128,10 @@ Item {
                             elide: Text.ElideRight
                         }
 
-                        Image {
+                        IconImage {
                             visible: root.wireless
                             source: "qrc:/resources/icons/qlementine-icons_wireless-1-16.svg"
+                            color: palette.text
                             sourceSize.width: 20
                             sourceSize.height: 20
                             Layout.preferredWidth: 20
