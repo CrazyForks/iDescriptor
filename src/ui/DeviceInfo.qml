@@ -278,7 +278,7 @@ Item {
                         Label { text: qsTr("Battery Health:"); font.bold: true }
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: 10
+                            spacing: 5
 
                             CopyableText {
                                 text: root.info.DIAG_INFO.battery_health
@@ -293,7 +293,7 @@ Item {
                                 topPadding: 3
                                 bottomPadding: 3
                                 implicitHeight: 26
-                                implicitWidth: contentItem.implicitWidth + leftPadding + rightPadding
+                                implicitWidth: contentItem.implicitWidth + leftPadding + rightPadding + 5
                                 onClicked: root.openBatteryInfo()
                             }
                         }
