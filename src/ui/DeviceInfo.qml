@@ -151,7 +151,9 @@ Item {
 
                 SectionBox {
                     Layout.fillWidth: true
-                    padding:6
+                    padding: 6
+                    leftPadding: 10
+                    rightPadding: 10
 
                     RowLayout {
                         spacing: 15
