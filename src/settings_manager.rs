@@ -92,6 +92,8 @@ pub struct SettingsManager {
     set_auto_connect_wireless_devices: qt_method!(fn(&self, enabled: bool)),
     auto_enable_wifi_connections: qt_method!(fn(&self) -> bool),
     set_auto_enable_wifi_connections: qt_method!(fn(&self, enabled: bool)),
+    upgrade_to_wireless_on_disconnect: qt_method!(fn(&self) -> bool),
+    set_upgrade_to_wireless_on_disconnect: qt_method!(fn(&self, enabled: bool)),
     unmount_ifuse_on_exit: qt_method!(fn(&self) -> bool),
     set_unmount_ifuse_on_exit: qt_method!(fn(&self, enabled: bool)),
     use_unsecure_backend: qt_method!(fn(&self) -> bool),
@@ -427,6 +429,14 @@ impl SettingsManager {
         write_bool("autoEnableWifiConnections", enabled);
     }
 
+    fn upgrade_to_wireless_on_disconnect(&self) -> bool {
+        read_bool("upgradeToWirelessOnDisconnect", true)
+    }
+
+    fn set_upgrade_to_wireless_on_disconnect(&self, enabled: bool) {
+        write_bool("upgradeToWirelessOnDisconnect", enabled);
+    }
+
     fn unmount_ifuse_on_exit(&self) -> bool {
         read_bool("unmountiFuseOnExit", false)
     }
@@ -542,6 +552,7 @@ impl SettingsManager {
         self.set_switch_to_new_device(true);
         self.set_auto_connect_wireless_devices(true);
         self.set_auto_enable_wifi_connections(true);
+        self.set_upgrade_to_wireless_on_disconnect(true);
         self.set_unmount_ifuse_on_exit(false);
         self.set_use_unsecure_backend(false);
         self.set_use_sqlite_gallery_backend(true);

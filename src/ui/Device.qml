@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "installed-apps"
+import "." as App
 
 
 Item {
@@ -13,6 +14,19 @@ Item {
     required property var device
     property real galleryUsage: 0
     property bool galleryUsageResolved: false
+
+    function enableWifiForNewWiredDevice() {
+        if (!root.device || !root.info || root.info.is_wireless)
+            return
+        if (!settingsManager.auto_enable_wifi_connections())
+            return
+        if (settingsManager.has_seen_device(root.udid))
+            return
+
+        App.DeviceContext.enableWifiConnections(root.device, root)
+    }
+
+    Component.onCompleted: Qt.callLater(root.enableWifiForNewWiredDevice)
 
     StackLayout {
         anchors.fill: parent

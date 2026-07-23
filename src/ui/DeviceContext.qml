@@ -16,6 +16,9 @@ QtObject {
     property bool showWelcomePage : true
     // Record<normalized MAC, { ip, selectOnSuccess }>
     property var wirelessConnectionAttempts: ({})
+    // Record<UDID, attempt token>
+    property var wifiEnableAttempts: ({})
+    property int wifiEnableAttemptToken: 0
 
     signal deviceRemoved(string udid)
     signal deviceAdded(string udid, string mac)
@@ -155,6 +158,81 @@ QtObject {
         return String(mac || "").replace(/[^0-9a-f]/gi, "").toLowerCase()
     }
 
+    function enableWifiConnections(device, dialogParent) {
+        if (!device || !device.udid || !device.service_manager) {
+            console.log("WTF")
+            return false
+        }
+
+        const udid = String(device.udid)
+        if (root.wifiEnableAttempts[udid])
+            return false
+
+        const serviceManager = device.service_manager
+        const deviceName = device.info && device.info.marketing_name
+                ? device.info.marketing_name : qsTr("this device")
+        const attemptToken = ++root.wifiEnableAttemptToken
+        root.wifiEnableAttempts[udid] = attemptToken
+
+        Helpers.connectOnce(serviceManager.enableWifiConnectionsResult, function(success) {
+            if (root.wifiEnableAttempts[udid] !== attemptToken)
+                return
+
+            delete root.wifiEnableAttempts[udid]
+
+            if (success) {
+                settingsManager.set_has_seen_device(udid, true)
+                Helpers.messageBox(
+                    dialogParent,
+                    qsTr("Wi-Fi Connections Enabled"),
+                    qsTr("Wi-Fi connections are now enabled for %1. You can disconnect the cable and use this device wirelessly.").arg(deviceName)
+                )
+            } else {
+                Helpers.messageBox(
+                    dialogParent,
+                    qsTr("Unable to Enable Wi-Fi Connections"),
+                    qsTr("Wi-Fi connections could not be enabled for %1. Keep the device connected, unlocked, and trusted, then try again.").arg(deviceName)
+                )
+            }
+        })
+
+        serviceManager.enable_wifi_connections()
+        return true
+    }
+
+    function networkDeviceForMac(mac) {
+        const normalizedMac = root.normalizeMacAddress(mac)
+        if (normalizedMac.length !== 12)
+            return null
+
+        const networkDevices = NetworkDeviceProvider.getNetworkDevices()
+        const keys = Object.keys(networkDevices)
+        for (let i = 0; i < keys.length; ++i) {
+            const key = keys[i]
+            const networkDevice = networkDevices[key]
+            const candidateMac = networkDevice.macAddress || networkDevice.mac || key
+            if (root.normalizeMacAddress(candidateMac) === normalizedMac)
+                return networkDevice
+        }
+
+        return null
+    }
+
+    function upgradeWiredDeviceToWireless(mac, selectOnSuccess) {
+        if (!settingsManager.upgrade_to_wireless_on_disconnect())
+            return
+
+        const networkDevice = root.networkDeviceForMac(mac)
+        if (!networkDevice)
+            return
+
+        const ip = networkDevice.address || networkDevice.ip || ""
+        if (!ip)
+            return
+
+        root.tryToConnectToNetworkDevice(mac, ip, selectOnSuccess)
+    }
+
     function finishWirelessConnectionAttempt(mac) {
         const key = root.normalizeMacAddress(mac)
         const attempt = root.wirelessConnectionAttempts[key]
@@ -257,10 +335,17 @@ QtObject {
                     break;
                 /* Device removed */
                 case 2:
+                    delete root.wifiEnableAttempts[udid]
+                    let removedMac = ""
+                    let removedDeviceWasWireless = false
+                    const removedDeviceWasSelected = root.currentDeviceUdid === udid
+
                     // FIXME: find an O(1) solution
                     for (let i = 0; i < devices.count; i++) {
                         const device = devices.get(i)
                         if (device.udid === udid) {
+                            removedMac = device.info["WiFiAddress"] || ""
+                            removedDeviceWasWireless = !!device.info.is_wireless
                             devices.remove(i)
                             break
                         }
@@ -270,6 +355,14 @@ QtObject {
                     root.removePendingDevice(udid, false)
                     root.deviceRemoved(udid)
                     root.selectFallbackDevice()
+                    if (!removedDeviceWasWireless && removedMac) {
+                        Qt.callLater(function() {
+                            root.upgradeWiredDeviceToWireless(
+                                removedMac,
+                                removedDeviceWasSelected
+                            )
+                        })
+                    }
                     break;
                 /* Pending device added */
                 case 3:

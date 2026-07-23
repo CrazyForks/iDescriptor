@@ -41,6 +41,7 @@ DefaultWindow {
     property bool auto_raise_window: true
     property bool switch_to_new_device: true
     property bool auto_connect_wireless_devices: true
+    property bool upgrade_to_wireless_on_disconnect: true
     property int connection_timeout: 30
     property bool use_unsecure_backend: false
     property bool use_sqlite_gallery_backend: true
@@ -104,6 +105,7 @@ DefaultWindow {
         auto_raise_window = backendValue("auto_raise_window", true)
         switch_to_new_device = backendValue("switch_to_new_device", true)
         auto_connect_wireless_devices = backendValue("auto_connect_wireless_devices", true)
+        upgrade_to_wireless_on_disconnect = backendValue("upgrade_to_wireless_on_disconnect", true)
         connection_timeout = backendValue("connection_timeout", 30)
         use_unsecure_backend = backendValue("use_unsecure_backend", false)
         use_sqlite_gallery_backend = backendValue("use_sqlite_gallery_backend", true)
@@ -133,6 +135,7 @@ DefaultWindow {
         callBackend("set_auto_raise_window", auto_raise_window)
         callBackend("set_switch_to_new_device", switch_to_new_device)
         callBackend("set_auto_connect_wireless_devices", auto_connect_wireless_devices)
+        callBackend("set_upgrade_to_wireless_on_disconnect", upgrade_to_wireless_on_disconnect)
         callBackend("set_connection_timeout", connection_timeout)
         callBackend("set_use_unsecure_backend", use_unsecure_backend)
         callBackend("set_use_sqlite_gallery_backend", use_sqlite_gallery_backend)
@@ -485,6 +488,17 @@ DefaultWindow {
                         checked: root.auto_connect_wireless_devices
                         onToggled: {
                             root.auto_connect_wireless_devices = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    CheckBox {
+                        text: qsTr("Upgrade to wireless on disconnect")
+                        checked: root.upgrade_to_wireless_on_disconnect
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("When a USB-connected device disconnects, reconnect to it over Wi-Fi when it is available.")
+                        onToggled: {
+                            root.upgrade_to_wireless_on_disconnect = checked
                             root.markDirty(false)
                         }
                     }

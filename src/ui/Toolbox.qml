@@ -291,6 +291,9 @@ Item {
                     currentDeviceUdid
                 )
                 break;
+            case 13:
+                App.DeviceContext.enableWifiConnections(device, root)
+                break;
             case 14:
                 createSingletonComp("./tools/BackupManager.qml", "backupManagerInstance", true)
                 break;
@@ -481,6 +484,7 @@ Item {
             title: qsTr("Enable Wi-Fi Connections"),
             description: qsTr("Make device connectable via Wi-Fi"),
             requiresDevice: true,
+            wirelessNotAllowed: true,
             iconSource: "qrc:/resources/icons/streamline-freehand_charging-flash-wireless.svg",
             visible: true
         }
