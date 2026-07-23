@@ -164,7 +164,6 @@ void AvahiService::browseCallback(AvahiServiceBrowser *browser,
         break;
 
     case AVAHI_BROWSER_REMOVE:
-        qDebug() << "Apple device removed:" << name;
         emit service->deviceRemoved(macAddress);
 
         // Remove from our list
@@ -209,10 +208,6 @@ void AvahiService::resolveCallback(
             QString::fromUtf8(name), QString::fromUtf8(addr_str),
             deviceName.split('@').first(), QString::fromUtf8(host_name),
             port > 0 ? port : 22);
-
-        qDebug() << "Resolved Apple device:" << device.name << "at"
-                 << device.address << ":" << device.port
-                 << "MAC:" << device.macAddress;
 
         // Add to list if not already present
         {
