@@ -240,7 +240,7 @@ fn ifuse_executable_path() -> Result<PathBuf, String> {
 }
 
 #[cfg(target_os = "linux")]
-async fn unmount_path(mount_path: &str) -> Result<(), String> {
+pub(crate) async fn unmount_path(mount_path: &str) -> Result<(), String> {
     let unmount_bin = find_executable("fusermount")
         .or_else(|| find_executable("fusermount3"))
         .or_else(|| find_executable("umount"))
