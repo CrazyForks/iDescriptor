@@ -156,24 +156,9 @@ Item {
         errorText: qsTr("The file explorer could not be loaded.")
         onRetryRequested: root.loadClients()
 
-        contentItem: SplitView {
+        contentItem: ThemedSplitView {
             anchors.fill: parent
             orientation: Qt.Horizontal
-
-            handle: Rectangle {
-                implicitWidth: 7
-                radius:10
-                color: SplitHandle.pressed
-                    ? App.Theme.focus
-                    : SplitHandle.hovered ? App.Theme.selectionStroke : App.Theme.sidebarDivider
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: 1
-                    height: parent.height
-                    color: App.Theme.sidebarDivider
-                }
-            }
 
             Item {
                 id: sidebar
@@ -282,7 +267,8 @@ Item {
             Rectangle {
                 SplitView.fillWidth: true
                 SplitView.fillHeight: true
-                color: App.Theme.controlFill
+                color: "transparent"
+                // color: App.Theme.controlFill
 
                 StackLayout {
                     anchors.fill: parent
