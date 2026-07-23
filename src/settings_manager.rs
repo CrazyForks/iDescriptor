@@ -138,6 +138,8 @@ pub struct SettingsManager {
     is_sleepy_device_warning_dismissed: qt_method!(fn(&self) -> bool),
     set_is_sleepy_device_warning_dismissed: qt_method!(fn(&self, dismissed: bool)),
     dismiss_sleepy_device_warning: qt_method!(fn(&self)),
+    backup_experimental_warning_acknowledged: qt_method!(fn(&self) -> bool),
+    set_backup_experimental_warning_acknowledged: qt_method!(fn(&self, acknowledged: bool)),
     has_seen_device: qt_method!(fn(&self, udid: QString) -> bool),
     set_has_seen_device: qt_method!(fn(&self, udid: QString, seen: bool)),
     seen_device_udids: qt_method!(fn(&self) -> QStringList),
@@ -556,6 +558,7 @@ impl SettingsManager {
         self.set_airplay_use_legacy_ports(true);
         self.set_show_v4l2(false);
         self.set_is_sleepy_device_warning_dismissed(false);
+        self.set_backup_experimental_warning_acknowledged(false);
     }
 
     fn current_version(&self) -> QString {
@@ -654,6 +657,14 @@ impl SettingsManager {
 
     fn set_is_sleepy_device_warning_dismissed(&self, dismissed: bool) {
         write_bool("sleepyDeviceWarningDismissed", dismissed);
+    }
+
+    fn backup_experimental_warning_acknowledged(&self) -> bool {
+        read_bool("backupExperimentalWarningAcknowledged", false)
+    }
+
+    fn set_backup_experimental_warning_acknowledged(&self, acknowledged: bool) {
+        write_bool("backupExperimentalWarningAcknowledged", acknowledged);
     }
 
     fn has_seen_device(&self, udid: QString) -> bool {
