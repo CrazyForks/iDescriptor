@@ -57,35 +57,6 @@ Item {
             mipmap: true
         }
 
-        Rectangle {
-            Layout.alignment: Qt.AlignHCenter
-            implicitWidth: waitingRow.implicitWidth + 24
-            implicitHeight: 38
-            radius: 19
-            color: App.Theme.groupedBackground
-            border.color: App.Theme.separator
-            border.width: 1
-
-            RowLayout {
-                id: waitingRow
-                anchors.centerIn: parent
-                spacing: 8
-
-                Spinner {
-                    Layout.preferredWidth: 25
-                    Layout.preferredHeight: 25
-                    running: true
-                }
-
-                Label {
-                    text: qsTr("Waiting for confirmation…")
-                    color: App.Theme.textMuted
-                    font.pixelSize: 12
-                    font.weight: Font.Medium
-                }
-            }
-        }
-
         Item { Layout.fillHeight: true }
     }
 }
