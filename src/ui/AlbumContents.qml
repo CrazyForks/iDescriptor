@@ -169,16 +169,19 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
-                Button {
+                IconToolButton {
                     icon.source: "qrc:/resources/icons/material-symbols_arrow-left-alt.svg"
                     enabled : nav.depth > 1
+                    toolTipText: qsTr("Back")
                     onClicked : root.goBack()
                 }
 
-                Button {
-                    text: qsTr("Refresh")
+                IconToolButton {
                     icon.source: "qrc:/resources/icons/ic_outline-refresh.svg"
                     enabled: !query.reloading
+                    toolTipText: query.reloading
+                                 ? qsTr("Refreshing album contents")
+                                 : qsTr("Refresh")
                     onClicked: root.reloadAlbumContents()
                 }
 

@@ -250,13 +250,15 @@ Item {
 
                     Button {
                         text: qsTr("Import")
-                        // TODO: onClicked
+                        onClicked: App.Toolbox.toolClicked(5, false)
                     }
 
-                    Button {
-                        text: qsTr("Refresh")
+                    IconToolButton {
                         icon.source: "qrc:/resources/icons/ic_outline-refresh.svg"
                         enabled: !query.reloading
+                        toolTipText: query.reloading
+                                     ? qsTr("Refreshing gallery")
+                                     : qsTr("Refresh")
                         onClicked: query.reload()
                     }
 
