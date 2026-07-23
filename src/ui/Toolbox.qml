@@ -55,6 +55,8 @@ Item {
     property var backupManagerInstance: null
     readonly property bool hasDevice: App.DeviceContext.devices && App.DeviceContext.devices.count > 0
 
+    Component.onCompleted: Qt.callLater(root.syncNormalDeviceSelection)
+
     function showError(message) {
         errorDialog.text = message
         errorDialog.open()
@@ -108,6 +110,22 @@ Item {
         if (comp.status === Component.Ready) {
             const win = comp.createObject(root,args)
             if (win !== null) {
+                let destructionScheduled = false
+                let closeCheckScheduled = false
+                win.closing.connect(function(closeEvent) {
+                    if (closeCheckScheduled || destructionScheduled)
+                        return
+
+                    closeCheckScheduled = true
+                    Qt.callLater(function() {
+                        closeCheckScheduled = false
+                        if (win.visible || destructionScheduled)
+                            return
+
+                        destructionScheduled = true
+                        win.destroy(0)
+                    })
+                })
                 win.show()
                 return win
             } else {
@@ -160,13 +178,25 @@ Item {
             return createComp(loc, args)
         }
 
-        function createSingletonComp(loc, instanceName, _args = {}) {
-            if (focusToolWindow(root[instanceName])) return
+        function createSingletonComp(loc, instanceName, deviceBound, _args = {}) {
+            const currentInstance = root[instanceName]
+            if (currentInstance) {
+                if (!deviceBound || currentInstance.udid === currentDeviceUdid) {
+                    focusToolWindow(currentInstance)
+                    return
+                }
+
+                currentInstance.close()
+                if (currentInstance.visible) {
+                    focusToolWindow(currentInstance)
+                    return
+                }
+            }
 
             const args = {
                 device,
                 udid: currentDeviceUdid,
-                auto_close : false
+                auto_close: deviceBound
             }
 
             Object.assign(args, _args || {})
@@ -176,13 +206,9 @@ Item {
                 return
 
             root[instanceName] = win
-            win.closing.connect(function(closeEvent) {
-                if (!closeEvent.accepted)
-                    return
-
-                if (root[instanceName] === win)
+            win.visibleChanged.connect(function() {
+                if (!win.visible && root[instanceName] === win)
                     root[instanceName] = null
-                win.destroy(0)
             })
         }
 
@@ -211,7 +237,7 @@ Item {
                     return;
                 }
 
-                createSingletonComp("./tools/Airplay.qml", "airplayInstance")
+                createSingletonComp("./tools/Airplay.qml", "airplayInstance", false)
                 break;
             case 1:
                 createCompWrapped("./tools/SimulateLocation.qml")
@@ -224,19 +250,19 @@ Item {
                 createCompWrapped("./tools/QueryMobileGestalt.qml")
                 break;
             case 4:
-                createSingletonComp("./tools/DevDiskImages.qml", "devDiskImagesInstance")
+                createSingletonComp("./tools/DevDiskImages.qml", "devDiskImagesInstance", false)
                 break;
             case 5:
-                createSingletonComp("./tools/WirelessGalleryImport.qml", "wirelessGalleryImportInstance")
+                createSingletonComp("./tools/WirelessGalleryImport.qml", "wirelessGalleryImportInstance", false)
                 break;
             case 6:
-                createSingletonComp("./tools/IFuse.qml", "ifuseInstance")
+                createSingletonComp("./tools/IFuse.qml", "ifuseInstance", true)
                 break;
             case 7:
                 createCompWrapped("./tools/CableInfo.qml")
                 break;
             case 8:
-                createSingletonComp("./tools/NetworkDevices.qml", "networkDevicesInstance")
+                createSingletonComp("./tools/NetworkDevices.qml", "networkDevicesInstance", false)
                 break;
             case 10:
                 confirmDeviceAction(
@@ -266,7 +292,7 @@ Item {
                 )
                 break;
             case 14:
-                createSingletonComp("./tools/BackupManager.qml", "backupManagerInstance")
+                createSingletonComp("./tools/BackupManager.qml", "backupManagerInstance", true)
                 break;
             case 15:
                 createCompWrapped("./tools/TransferSpeedTest.qml")
@@ -281,6 +307,47 @@ Item {
     function deviceSelectionChanged(udid) {
         if (udid && udid.length) {
             App.DeviceContext.selectConnectedDevice(udid)
+        }
+    }
+
+    function deviceIndexForUdid(udid) {
+        if (!udid || !App.DeviceContext.getDevice(udid))
+            return -1
+
+        for (let i = 0; i < App.DeviceContext.devices.count; ++i) {
+            if (App.DeviceContext.devices.get(i).udid === udid)
+                return i
+        }
+        return -1
+    }
+
+    function syncNormalDeviceSelection() {
+        const udid = App.DeviceContext.currentDeviceUdid
+
+        // Recovery and pending selections clear currentDeviceUdid. Keep the
+        // toolbox's last normal-device selection when either of those is active.
+        if (!udid) {
+            if (!root.hasDevice) {
+                root.currentDeviceUdid = ""
+                deviceCombo.currentIndex = 0
+            }
+            return
+        }
+
+        const index = root.deviceIndexForUdid(udid)
+        if (index < 0)
+            return
+
+        root.currentDeviceUdid = udid
+        if (deviceCombo.currentIndex !== index)
+            deviceCombo.currentIndex = index
+    }
+
+    Connections {
+        target: App.DeviceContext
+
+        function onCurrentDeviceUdidChanged() {
+            root.syncNormalDeviceSelection()
         }
     }
 
@@ -450,15 +517,10 @@ Item {
                     root.deviceSelectionChanged(udid)
                 }
 
-                /* workaround to avoid connecting to devicecontext signal*/
                 onCountChanged: {
-                    if (count > 0) {
-                        const lastIndex = count - 1
-                        currentIndex = lastIndex
-                        const udid = deviceCombo.valueAt(lastIndex) || ""
-                        root.currentDeviceUdid = udid
-                        root.deviceSelectionChanged(udid)
-                    }
+                    // Model changes and DeviceContext selection updates can arrive
+                    // in the same event turn, so synchronize after both settle.
+                    Qt.callLater(root.syncNormalDeviceSelection)
                 }
             }
 
