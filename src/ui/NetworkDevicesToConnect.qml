@@ -8,10 +8,11 @@ import "./base"
 Item {
     id: root
 
+    readonly property int statusResetDelay: 2500
     property var networkDeviceCards : ({})
     ListModel { id: deviceModel }
 
-    property string statusText: qsTr("Scanning for network devices...")
+    property string statusText: deviceModel.count === 0 ? qsTr("No network devices found") : qsTr("Found %1 network device(s)").arg(deviceModel.count)
 
     function normalizeDevice(mac, dev) {
         return {
@@ -25,7 +26,8 @@ Item {
             state: "idle",           // idle|connecting|failed|noPairing|connected|alreadyExists
             stateText: "",
             buttonText: qsTr("Connect"),
-            buttonEnabled: true
+            buttonEnabled: true,
+            statusResetToken: 0
         }
     }
 
@@ -44,14 +46,17 @@ Item {
     }
 
     function setStatusAtIndex(i, state) {
+        const resetToken = deviceModel.get(i).statusResetToken + 1
+        deviceModel.setProperty(i, "statusResetToken", resetToken)
+
         if (state === "failed") {
             deviceModel.setProperty(i, "state", "failed")
             deviceModel.setProperty(i, "buttonText", qsTr("Failed to connect"))
-            deviceModel.setProperty(i, "buttonEnabled", false)
+            deviceModel.setProperty(i, "buttonEnabled", true)
         } else if (state === "noPairing") {
             deviceModel.setProperty(i, "state", "noPairing")
             deviceModel.setProperty(i, "buttonText", qsTr("No pairing file"))
-            deviceModel.setProperty(i, "buttonEnabled", false)
+            deviceModel.setProperty(i, "buttonEnabled", true)
         } else if (state === "connecting") {
             deviceModel.setProperty(i, "state", "connecting")
             deviceModel.setProperty(i, "buttonText", qsTr("Connecting..."))
@@ -69,6 +74,26 @@ Item {
             deviceModel.setProperty(i, "buttonText", qsTr("Connect"))
             deviceModel.setProperty(i, "buttonEnabled", true)
         }
+
+        if (state !== "idle")
+            scheduleStatusReset(i, resetToken)
+    }
+
+    function scheduleStatusReset(i, resetToken) {
+        const item = deviceModel.get(i)
+        const mac = item.mac
+        const ip = item.address
+
+        App.Helpers.setTimeout(function() {
+            const currentIndex = mac ? root.indexByMac(mac) : root.indexByIp(ip)
+            if (currentIndex < 0)
+                return
+
+            if (deviceModel.get(currentIndex).statusResetToken !== resetToken)
+                return
+
+            root.setStatusAtIndex(currentIndex, "idle")
+        }, root.statusResetDelay)
     }
 
     function setStatusForMac(mac, state) {
@@ -90,31 +115,23 @@ Item {
         return true
     }
 
-    function updateStatusLabel() {
-        if (deviceModel.count === 0) statusText = qsTr("No network devices found")
-        else statusText = qsTr("Found %1 network device(s)").arg(deviceModel.count)
-    }
-
-    function refreshDevices() {
-        deviceModel.clear()
-
-        // NetworkDeviceProvider.getNetworkDevices(): QMap<QString, QVariant>
-        var map = NetworkDeviceProvider.getNetworkDevices()
-        if (!map) {
-            statusText = qsTr("No network devices found")
+    function evalDevices() {
+        if (!App.Settings.auto_connect_wireless_devices)
             return
-        }
 
-        var keys = Object.keys(map)
-        for (var k = 0; k < keys.length; k++) {
-            var mac = keys[k]
-            var dev = map[mac]
-            deviceModel.append(normalizeDevice(mac, dev))
+        const devices = NetworkDeviceProvider.getNetworkDevices()
+        if (!devices)
+            return
+
+        const macAddresses = Object.keys(devices)
+        for (let i = 0; i < macAddresses.length; i++) {
+            const mac = macAddresses[i]
+            const device = devices[mac]
+            const ip = device.address || ""
+            if (mac && ip)
+                App.DeviceContext.tryToConnectToNetworkDevice(mac, ip, false)
         }
-        updateStatusLabel()
     }
-
-    Component.onCompleted: refreshDevices()
 
     Connections {
         target: NetworkDeviceProvider
@@ -127,13 +144,14 @@ Item {
             if (i >= 0) return
 
             deviceModel.append(root.normalizeDevice(mac, device))
-            root.updateStatusLabel()
+            if (App.Settings.auto_connect_wireless_devices) {
+                App.DeviceContext.tryToConnectToNetworkDevice(mac, device.address, false)
+            }
         }
 
         function onDeviceRemoved(macAddress) {
             var i = root.indexByMac(macAddress)
             if (i >= 0) deviceModel.remove(i, 1)
-            root.updateStatusLabel()
         }
     }
 
@@ -159,7 +177,7 @@ Item {
             root.setStatusForMac(mac, "connecting")
         }
 
-        function onDeviceAdded(mac) {
+        function onDeviceAdded(udid, mac) {
             root.setStatusForMac(mac, "connected")
         }
         function onDeviceAlreadyExistsMAC(mac) {
@@ -178,9 +196,7 @@ Item {
         interval: 30000
         repeat: true
         running: true
-        onTriggered: {
-            //FIXME
-        }
+        onTriggered: root.evalDevices()
     }
 
     ColumnLayout {
@@ -268,11 +284,8 @@ Item {
                                             text: buttonText
                                             enabled: buttonEnabled
                                             onClicked: {
-                                                buttonText = qsTr("Connecting...")
-                                                App.DeviceContext.tryToConnectToNetworkDevice(mac, address, true, true)
-                                                App.Helpers.setTimeout(function() {
-                                                    root.setStatusForMac(mac, "idle")
-                                                }, 10000)
+                                                root.setStatusForMac(mac, "connecting")
+                                                App.DeviceContext.tryToConnectToNetworkDevice(mac, address, true)
                                             }
                                         }
 
@@ -332,9 +345,6 @@ Item {
 
                                         App.DeviceContext.tryToConnectToNetworkDeviceCustom(address, path)
                                         root.setStatusForIp(address, "connecting")
-                                        Helpers.setTimeout(function() {
-                                            root.setStatusForIp(address, "idle")
-                                        }, 10000)
                                     }
                                 }
                             }
