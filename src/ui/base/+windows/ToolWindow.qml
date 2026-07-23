@@ -10,11 +10,13 @@ DefaultWindow {
     required property var device
     property bool auto_close: true
 
-    Component.onCompleted : {
-        if (root.auto_close) {
-            App.DeviceContext.deviceRemoved.connect((udid) => {
-                if (root.udid === udid) {root.close()}
-            })
+    Connections {
+        target: App.DeviceContext
+        enabled: root.auto_close
+
+        function onDeviceRemoved(removedUdid) {
+            if (root.udid === removedUdid)
+                root.close()
         }
     }
 }
