@@ -29,6 +29,7 @@ pub trait GalleryProvider: Send + Sync {
         media_filter: GalleryMediaFilter,
         most_recent_first: bool,
     ) -> GalleryFuture<Vec<String>>;
+    fn query_gallery_size(&self) -> GalleryFuture<u64>;
     fn name(&self) -> String;
 }
 
@@ -100,12 +101,19 @@ pub struct Query {
     resolve_album_export:
         qt_method!(fn(&mut self, request_id: QString, album_id: i32, album_name: QString)),
     albumQueried: qt_signal!(id: i32, media_filter: i32, most_recent_first: bool, items: QStringList),
+    albumQueryFailed: qt_signal!(
+        id: i32,
+        media_filter: i32,
+        most_recent_first: bool,
+        error: QString
+    ),
     albumExportResolved: qt_signal!(
         request_id: QString,
         album_id: i32,
         album_name: QString,
         items: QStringList
     ),
+    gallerySizeQueried: qt_signal!(size: u64),
     reloadFinished: qt_signal!(success: bool, revision: i32, error: QString),
     is_init: bool,
     use_sqlite_backend: bool,
@@ -153,9 +161,19 @@ impl Query {
                 let afc_arc = device_ctx::get_device(udid_clone).await?.afc;
                 if use_sqlite_backend {
                     let prov = build_sqlite_provider(afc_arc, ios_version).await?;
+                    let gallery_size = prov.query_gallery_size().await.unwrap_or(0);
+                    //fire this immediately so that the diskusage.qml can stop loading as soon as possible
+                    qt_thread.queue(move |s| {
+                        s.gallerySizeQueried(gallery_size);
+                    });
                     prov.read_albums().await?;
                     Ok(prov)
                 } else {
+                    //FIXME:untill there is a better way to query the gallery size for fs backend, we will just return 0
+                    // let gallery_size = prov.query_gallery_size().await?;
+                    qt_thread.queue(move |s| {
+                        s.gallerySizeQueried(0);
+                    });
                     let prov = build_fs_provider(afc_arc).await?;
                     /*
                         Better not do this for fs backend
@@ -179,6 +197,9 @@ impl Query {
                 }
                 Err(e) => {
                     println!("Gallery provider initialization failed: {}", e.to_string());
+                    qt_thread.queue(move |s| {
+                        s.gallerySizeQueried(0);
+                    });
 
                     /*
                         fallback to fs if sqlite fails to query properly
@@ -326,13 +347,21 @@ impl Query {
     }
 
     fn query_album(&mut self, id: i32, media_filter: i32, most_recent_first: bool) {
-        let provider = match &self.provider {
-            Some(provider) => provider.clone(),
-            None => return,
-        };
-
         let media_filter = GalleryMediaFilter::from_i32(media_filter);
         let media_filter_id = media_filter.as_i32();
+        let provider = match &self.provider {
+            Some(provider) => provider.clone(),
+            None => {
+                self.albumQueryFailed(
+                    id,
+                    media_filter_id,
+                    most_recent_first,
+                    QString::from("Gallery provider is not initialized"),
+                );
+                return;
+            }
+        };
+
         let revision = self.revision;
         let q_thread = self.qt_thread();
         RUNTIME.spawn(async move {
@@ -359,7 +388,18 @@ impl Query {
                     });
                 }
                 Err(e) => {
-                    println!("Error querying album {}", e.to_string())
+                    let error = e.to_string();
+                    println!("Error querying album {error}");
+                    q_thread.queue(move |q| {
+                        if q.revision == revision {
+                            q.albumQueryFailed(
+                                id,
+                                media_filter_id,
+                                most_recent_first,
+                                QString::from(error),
+                            );
+                        }
+                    });
                 }
             }
         });
@@ -434,11 +474,9 @@ fn split_device_path(path: &str) -> (String, String) {
     }
 }
 
-// FIXME:we need patch the sqlite if , wal or shm
 #[allow(dead_code)]
 fn patch_wal_legacy_mode(bytes: &mut [u8]) {
     // HACK: WAL -> legacy mode patch
-    // This is still needed for the old path where we can only export Photos.sqlite.
     if bytes.len() > 20 && bytes[18] == 0x02 {
         bytes[18] = 0x01;
         bytes[19] = 0x01;
