@@ -4,7 +4,7 @@ use crate::{
     utils,
 };
 use idevice::IdeviceService;
-use idevice::afc::{AfcClient, opcode::AfcFopenMode};
+use idevice::afc::{AfcClient, FileInfo, opcode::AfcFopenMode};
 use log::{debug, error, info, warn};
 use macros::QtThreading;
 use qmetaobject::prelude::*;
@@ -19,6 +19,8 @@ use std::{
 };
 use tokio::{fs, io::AsyncWriteExt};
 
+const DEFAULT_CHUNK_SIZE: usize = 1024 * 1024;
+
 #[derive(QObject, Default, QtThreading)]
 pub struct IOManager {
     base: qt_base_class!(trait QObject),
@@ -30,6 +32,7 @@ pub struct IOManager {
             job_id: QString,
             device_paths: QStringList,
             destination_dir: QString,
+            allow_directories: bool,
         )
     ),
     start_export_with_afc2: qt_method!(
@@ -39,6 +42,7 @@ pub struct IOManager {
             job_id: QString,
             device_paths: QStringList,
             destination_dir: QString,
+            allow_directories: bool,
         )
     ),
     start_export_with_hause_arrest_afc: qt_method!(
@@ -49,6 +53,7 @@ pub struct IOManager {
             device_paths: QStringList,
             destination_dir: QString,
             hause_arrest_afc: QString,
+            allow_directories: bool,
         )
     ),
     start_import: qt_method!(
@@ -127,6 +132,18 @@ struct TransferItemResult {
     error_message: Option<String>,
 }
 
+struct RemoteExportFile {
+    remote_path: String,
+    relative_path: PathBuf,
+    info: FileInfo,
+}
+
+struct DirectoryExportManifest {
+    directories: Vec<PathBuf>,
+    files: Vec<RemoteExportFile>,
+    total_bytes: i64,
+}
+
 enum AfcKind {
     Standard,
     Afc2,
@@ -158,6 +175,7 @@ impl IOManager {
         job_id: QString,
         device_paths: QStringList,
         destination_dir: QString,
+        allow_directories: bool,
     ) {
         self.spawn_export(
             udid,
@@ -165,6 +183,7 @@ impl IOManager {
             device_paths,
             destination_dir,
             AfcKind::Standard,
+            allow_directories,
         );
     }
 
@@ -174,8 +193,16 @@ impl IOManager {
         job_id: QString,
         device_paths: QStringList,
         destination_dir: QString,
+        allow_directories: bool,
     ) {
-        self.spawn_export(udid, job_id, device_paths, destination_dir, AfcKind::Afc2);
+        self.spawn_export(
+            udid,
+            job_id,
+            device_paths,
+            destination_dir,
+            AfcKind::Afc2,
+            allow_directories,
+        );
     }
 
     fn start_export_with_hause_arrest_afc(
@@ -185,6 +212,7 @@ impl IOManager {
         device_paths: QStringList,
         destination_dir: QString,
         hause_arrest_afc: QString,
+        allow_directories: bool,
     ) {
         self.spawn_export(
             udid,
@@ -192,6 +220,7 @@ impl IOManager {
             device_paths,
             destination_dir,
             AfcKind::HouseArrest(hause_arrest_afc.to_string()),
+            allow_directories,
         );
     }
 
@@ -264,6 +293,7 @@ impl IOManager {
         device_paths: QStringList,
         destination_dir: QString,
         afc_kind: AfcKind,
+        allow_directories: bool,
     ) {
         let udid = udid.to_string();
         let job_id = job_id.to_string();
@@ -308,6 +338,7 @@ impl IOManager {
                 qt_thread,
                 jobs,
                 cancel_flag,
+                allow_directories,
             )
             .await;
         });
@@ -413,6 +444,7 @@ async fn handle_start_export(
     qt_thread: QtThread<IOManager>,
     jobs: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
     cancel_flag: Arc<AtomicBool>,
+    allow_directories: bool,
 ) {
     let mut successful = 0_i32;
     let mut failed = 0_i32;
@@ -439,6 +471,7 @@ async fn handle_start_export(
             &job_id,
             &qt_thread,
             &cancel_flag,
+            allow_directories,
         )
         .await
         {
@@ -593,9 +626,8 @@ async fn export_single_item(
     job_id: &str,
     qt_thread: &QtThread<IOManager>,
     cancel_flag: &Arc<AtomicBool>,
+    allow_directories: bool,
 ) -> Result<TransferItemResult, String> {
-    use tokio::io::AsyncReadExt;
-
     fs::create_dir_all(destination_dir)
         .await
         .map_err(|e| format!("Failed to create destination directory {destination_dir}: {e}"))?;
@@ -612,33 +644,206 @@ async fn export_single_item(
         .get_file_info(device_path.to_string())
         .await
         .map_err(|e| format!("Failed to get file info for {device_path}: {e}"))?;
-    let file_size = info.size as i64;
-    let modified = info.modified;
 
+    if info.st_ifmt == "S_IFDIR" {
+        if !allow_directories {
+            return Err(format!("Directory export is not enabled for {device_path}"));
+        }
+
+        return export_directory(
+            afc,
+            device_path,
+            &output_path,
+            job_id,
+            qt_thread,
+            cancel_flag,
+        )
+        .await;
+    }
+
+    let transferred = export_remote_file(
+        afc,
+        device_path,
+        &output_path,
+        &info,
+        job_id,
+        qt_thread,
+        &file_name,
+        0,
+        info.size as i64,
+        cancel_flag,
+    )
+    .await?;
+
+    Ok(TransferItemResult {
+        success: !cancel_flag.load(Ordering::Relaxed),
+        bytes_transferred: transferred,
+        destination_path: output_path_str,
+        error_message: cancel_flag
+            .load(Ordering::Relaxed)
+            .then(|| "Export cancelled".to_string()),
+    })
+}
+
+async fn export_directory(
+    afc: &mut AfcClient,
+    device_path: &str,
+    output_path: &Path,
+    job_id: &str,
+    qt_thread: &QtThread<IOManager>,
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<TransferItemResult, String> {
+    let manifest = build_directory_export_manifest(afc, device_path, cancel_flag).await?;
+    let output_path_str = output_path.to_string_lossy().to_string();
+
+    for relative_directory in &manifest.directories {
+        if cancel_flag.load(Ordering::Relaxed) {
+            return Ok(TransferItemResult {
+                success: false,
+                bytes_transferred: 0,
+                destination_path: output_path_str,
+                error_message: Some("Export cancelled".to_string()),
+            });
+        }
+
+        let local_directory = output_path.join(relative_directory);
+        fs::create_dir_all(&local_directory).await.map_err(|err| {
+            format!(
+                "Failed to create exported directory {}: {err}",
+                local_directory.display()
+            )
+        })?;
+    }
+
+    let progress_name = file_name_for_path(device_path);
+    let mut transferred = 0_i64;
+    for file in manifest.files {
+        if cancel_flag.load(Ordering::Relaxed) {
+            break;
+        }
+
+        let local_path = output_path.join(&file.relative_path);
+        if let Some(parent) = local_path.parent() {
+            fs::create_dir_all(parent).await.map_err(|err| {
+                format!(
+                    "Failed to create exported directory {}: {err}",
+                    parent.display()
+                )
+            })?;
+        }
+
+        transferred += export_remote_file(
+            afc,
+            &file.remote_path,
+            &local_path,
+            &file.info,
+            job_id,
+            qt_thread,
+            &progress_name,
+            transferred,
+            manifest.total_bytes,
+            cancel_flag,
+        )
+        .await?;
+    }
+
+    Ok(TransferItemResult {
+        success: !cancel_flag.load(Ordering::Relaxed),
+        bytes_transferred: transferred,
+        destination_path: output_path_str,
+        error_message: cancel_flag
+            .load(Ordering::Relaxed)
+            .then(|| "Export cancelled".to_string()),
+    })
+}
+
+async fn build_directory_export_manifest(
+    afc: &mut AfcClient,
+    device_path: &str,
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<DirectoryExportManifest, String> {
+    let mut manifest = DirectoryExportManifest {
+        directories: vec![PathBuf::new()],
+        files: Vec::new(),
+        total_bytes: 0,
+    };
+    let mut pending_directories = vec![(device_path.to_string(), PathBuf::new())];
+
+    while let Some((remote_directory, relative_directory)) = pending_directories.pop() {
+        if cancel_flag.load(Ordering::Relaxed) {
+            return Err("Export cancelled while enumerating directory".to_string());
+        }
+
+        let entries = afc
+            .list_dir(&remote_directory)
+            .await
+            .map_err(|err| format!("Failed to list directory {remote_directory}: {err}"))?;
+
+        for name in entries {
+            if name == "." || name == ".." {
+                continue;
+            }
+            validate_remote_child_name(&name)?;
+
+            let remote_path = remote_child_path(&remote_directory, &name);
+            let relative_path = relative_directory.join(&name);
+            let info = afc
+                .get_file_info(&remote_path)
+                .await
+                .map_err(|err| format!("Failed to inspect {remote_path}: {err}"))?;
+
+            if info.st_ifmt == "S_IFDIR" {
+                manifest.directories.push(relative_path.clone());
+                pending_directories.push((remote_path, relative_path));
+            } else {
+                manifest.total_bytes = manifest.total_bytes.saturating_add(info.size as i64);
+                manifest.files.push(RemoteExportFile {
+                    remote_path,
+                    relative_path,
+                    info,
+                });
+            }
+        }
+    }
+
+    Ok(manifest)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn export_remote_file(
+    afc: &mut AfcClient,
+    device_path: &str,
+    output_path: &Path,
+    info: &FileInfo,
+    job_id: &str,
+    qt_thread: &QtThread<IOManager>,
+    progress_name: &str,
+    progress_offset: i64,
+    progress_total: i64,
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<i64, String> {
+    use tokio::io::AsyncReadExt;
+
+    let output_path_str = output_path.to_string_lossy().to_string();
     let mut remote = afc
         .open(device_path, AfcFopenMode::RdOnly)
         .await
-        .map_err(|e| format!("Failed to open device file {device_path}: {e}"))?;
-
-    let mut local = fs::File::create(&output_path)
+        .map_err(|err| format!("Failed to open device file {device_path}: {err}"))?;
+    let mut local = fs::File::create(output_path)
         .await
-        .map_err(|e| format!("Failed to create local file {output_path_str}: {e}"))?;
-
-    let mut chunk = vec![0u8; 1024 * 1024];
+        .map_err(|err| format!("Failed to create local file {output_path_str}: {err}"))?;
+    let mut chunk = vec![0_u8; DEFAULT_CHUNK_SIZE];
     let mut transferred = 0_i64;
 
     loop {
         if cancel_flag.load(Ordering::Relaxed) {
-            debug!(
-                "IOManager export item cancellation observed: job_id={job_id} device_path={device_path} bytes={transferred}"
-            );
             break;
         }
 
         let read = remote
             .read(&mut chunk)
             .await
-            .map_err(|e| format!("Failed to read from device file {device_path}: {e}"))?;
+            .map_err(|err| format!("Failed to read from device file {device_path}: {err}"))?;
         if read == 0 {
             break;
         }
@@ -646,33 +851,51 @@ async fn export_single_item(
         local
             .write_all(&chunk[..read])
             .await
-            .map_err(|e| format!("Failed to write to local file {output_path_str}: {e}"))?;
+            .map_err(|err| format!("Failed to write to local file {output_path_str}: {err}"))?;
         transferred += read as i64;
-
-        emit_progress(qt_thread, job_id, &file_name, transferred, file_size);
+        emit_progress(
+            qt_thread,
+            job_id,
+            progress_name,
+            progress_offset.saturating_add(transferred),
+            progress_total,
+        );
     }
 
     let _ = remote.close().await;
     let _ = local.flush().await;
 
-    /* preserve original modification time on exported file */
     if transferred > 0 {
-        let modified_utc = modified.and_utc();
+        let modified_utc = info.modified.and_utc();
         let mtime = filetime::FileTime::from_unix_time(
             modified_utc.timestamp(),
             modified_utc.timestamp_subsec_nanos(),
         );
-        if let Err(err) = filetime::set_file_times(&output_path, mtime, mtime) {
+        if let Err(err) = filetime::set_file_times(output_path, mtime, mtime) {
             warn!("Failed to preserve file time for {output_path_str}: {err}");
         }
     }
 
-    Ok(TransferItemResult {
-        success: !cancel_flag.load(Ordering::Relaxed),
-        bytes_transferred: transferred,
-        destination_path: output_path_str,
-        error_message: None,
-    })
+    Ok(transferred)
+}
+
+fn remote_child_path(parent: &str, name: &str) -> String {
+    if parent.ends_with('/') {
+        format!("{parent}{name}")
+    } else {
+        format!("{parent}/{name}")
+    }
+}
+
+fn validate_remote_child_name(name: &str) -> Result<(), String> {
+    let mut components = Path::new(name).components();
+    let valid = matches!(components.next(), Some(std::path::Component::Normal(_)))
+        && components.next().is_none();
+    if valid {
+        Ok(())
+    } else {
+        Err(format!("Refusing unsafe remote directory entry {name:?}"))
+    }
 }
 
 async fn import_single_item(
@@ -709,7 +932,7 @@ async fn import_single_item(
         .await
         .map_err(|e| format!("Failed to open device file {device_path} for writing: {e}"))?;
 
-    let mut chunk = vec![0u8; 1024 * 1024];
+    let mut chunk = vec![0u8; DEFAULT_CHUNK_SIZE];
     let mut transferred = 0_i64;
 
     loop {
