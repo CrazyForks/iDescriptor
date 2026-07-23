@@ -26,12 +26,14 @@ Item {
             Layout.fillWidth: true
             spacing: 18
 
-            DeviceImage {
-                // there is no way to get the ios version from recovery mode
-                iosVersion: 18
-                displayName: v("display_name", qsTr("Recovery Device"))
-                Layout.preferredWidth: 120
-                Layout.preferredHeight: 150
+            Image {
+                source: v("placeholder_path", "qrc:/resources/icons/iphone_gen1_placeholder.png")
+                sourceSize: Qt.size(300, 450)
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                mipmap: true
+                Layout.preferredWidth: 150
+                Layout.preferredHeight: 190
             }
 
             ColumnLayout {

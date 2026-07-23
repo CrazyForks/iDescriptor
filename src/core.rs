@@ -446,6 +446,17 @@ fn collect_recovery_device_info(device: &irecovery::RecoveryDevice) -> QVariantM
         "usb_serial_number",
         QString::from(device.usb_serial_number.clone().unwrap_or_default())
     );
+    qvariantmap_insert!(
+        info,
+        "placeholder_path",
+        QString::from(utils::device_placeholder_path(
+            device
+                .metadata
+                .as_ref()
+                .map(|metadata| metadata.model_identifier)
+                .unwrap_or_default()
+        ))
+    );
 
     if let Some(metadata) = &device.metadata {
         qvariantmap_insert!(
