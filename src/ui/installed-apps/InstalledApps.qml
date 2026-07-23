@@ -16,6 +16,8 @@ Item {
     property string searchText: ""
     property string selectedBundleId: ""
     property var houseArrestAfcClient: null
+    property bool fileExplorerLoading: false
+    property string fileExplorerError: ""
     property bool tabsDisabled: false
     property var iconForBundleId: ({})
     property var appTabForBundleId: ({})
@@ -33,6 +35,9 @@ Item {
         root.errorMessage = "";
         root.selectedBundleId = "";
         root.houseArrestAfcClient = null;
+        root.fileExplorerLoading = false;
+        root.fileExplorerError = "";
+        root.tabsDisabled = false;
         allAppsModel.clear();
         filteredAppsModel.clear();
         updateViewState();
@@ -135,14 +140,10 @@ Item {
         root.selectedBundleId = bundleId;
         root.tabsDisabled = true;
         root.houseArrestAfcClient = null;
+        root.fileExplorerLoading = true;
+        root.fileExplorerError = "";
 
-        var client = serviceFactory.create_hause_arrest_afc_client(root.udid, bundleId);
-        root.houseArrestAfcClient = client;
-        root.tabsDisabled = false;
-        if (client === null)
-            // FIXME: expose a success/error signal for house arrest session creation if this factory can fail asynchronously.
-            containerMessage.text = qsTr("No data available for this app.");
-
+        serviceFactory.create_hause_arrest_afc_client(root.udid, bundleId);
     }
 
     anchors.fill: parent
@@ -156,6 +157,27 @@ Item {
         interval: 300
         repeat: false
         onTriggered: root.init()
+    }
+
+    Connections {
+        target: serviceFactory
+
+        function onHouseArrestAfcClientCreated(client, udid, bundleId) {
+            if (udid !== root.udid || bundleId !== root.selectedBundleId)
+                return ;
+
+            root.tabsDisabled = false;
+            root.fileExplorerLoading = false;
+            if (!client) {
+                root.houseArrestAfcClient = null;
+                root.fileExplorerError = qsTr("Failed to open the document container for %1.").arg(bundleId);
+                return;
+            }
+
+            root.fileExplorerError = "";
+            root.houseArrestAfcClient = client;
+        }
+
     }
 
     Connections {
@@ -209,26 +231,10 @@ Item {
         retryable: true
         onRetryRequested: root.refresh()
 
-        //TODO: move to a seperate comp
-        contentItem: SplitView {
+        contentItem: ThemedSplitView {
             orientation: Qt.Horizontal
             anchors.fill: parent
             spacing: 0
-
-            handle: Rectangle {
-                implicitWidth: 7
-                radius: 10
-                color: SplitHandle.pressed
-                    ? Theme.focus
-                    : SplitHandle.hovered ? Theme.selectionStroke : Theme.sidebarDivider
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: 1
-                    height: parent.height
-                    color: Theme.sidebarDivider
-                }
-            }
 
             Rectangle {
                 SplitView.preferredWidth: 275
@@ -319,27 +325,42 @@ Item {
                 SplitView.fillWidth: true
                 SplitView.fillHeight: true
 
-                FileExplorer {
-                    id: explorer
-
+                StateView {
                     anchors.fill: parent
-                    udid: root.device.info["UniqueDeviceID"]
-                    afcClient: root.houseArrestAfcClient
-                    rootPath: "/Documents"
-                    favEnabled: false
-                    visible: !!root.houseArrestAfcClient
-                }
+                    autoSwitchContent: false
+                    viewState: root.fileExplorerLoading
+                               ? StateView.State.Loading
+                               : root.fileExplorerError.length > 0
+                                 ? StateView.State.Error
+                                 : StateView.State.Content
+                    errorText: root.fileExplorerError
+                    retryable: root.selectedBundleId.length > 0
+                    onRetryRequested: root.selectApp(root.selectedBundleId)
 
-                Text {
-                    id: containerMessage
+                    contentItem: Item {
+                        anchors.fill: parent
 
-                    anchors.centerIn: parent
-                    width: Math.min(parent.width * 0.8, 420)
-                    text: root.selectedBundleId.length > 0 ? qsTr("No data available for this app.") : qsTr("Select an app to browse its documents.")
-                    wrapMode: Text.WordWrap
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.72)
-                    visible: !root.houseArrestAfcClient
+                        FileExplorer {
+                            id: explorer
+
+                            anchors.fill: parent
+                            udid: root.device.info["UniqueDeviceID"]
+                            afcClient: root.houseArrestAfcClient
+                            rootPath: "/Documents"
+                            favEnabled: false
+                            visible: !!root.houseArrestAfcClient
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            width: Math.min(parent.width * 0.8, 420)
+                            text: qsTr("Select an app to browse its documents.")
+                            wrapMode: Text.WordWrap
+                            horizontalAlignment: Text.AlignHCenter
+                            color: Theme.textMuted
+                            visible: !root.houseArrestAfcClient
+                        }
+                    }
                 }
 
             }

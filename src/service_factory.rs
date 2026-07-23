@@ -1,15 +1,20 @@
-use crate::device_ctx;
 use crate::gallery::Query;
 use crate::service_manager::ServiceManager;
 use crate::springboard_services::SpringBoardServices;
 use crate::transfer_speed_tester::TransferSpeedTester;
+use crate::{RUNTIME, device_ctx};
 
 use crate::utils::{empty_qjsvalue, engine_ptr_new_object, vend_app_documents};
 
-use crate::{afc_services::AfcServices, run_sync};
+use crate::{
+    afc_services::AfcServices,
+    qt_threading::{QtThread, QtThreading},
+    run_sync,
+};
 use idevice::IdeviceService;
 use idevice::afc::AfcClient;
 use idevice::{provider::IdeviceProvider, springboardservices::SpringBoardServicesClient};
+use macros::QtThreading;
 use qmetaobject::{QJSValue, prelude::*};
 use std::ffi::c_void;
 use std::sync::Arc;
@@ -20,18 +25,20 @@ use tokio::sync::Mutex;
     cannot pass constructor args
     https://forum.qt.io/topic/155986/qt6-qabstractlistmodel-constructor-with-two-arguments-qml-element-is-not-creatable/2
 */
-#[derive(QObject, Default)]
+#[allow(non_snake_case)]
+#[derive(QObject, Default, QtThreading)]
 pub struct ServiceFactory {
     base: qt_base_class!(trait QObject),
     /* SAFETY: check if engine_ptr.is_null() */
     engine_ptr: Option<*mut c_void>,
     create_afc_client: qt_method!(fn(&self, udid: QString, afc2: bool) -> QJSValue),
-    create_hause_arrest_afc_client:
-        qt_method!(fn(&self, udid: QString, bundle_id: QString) -> QJSValue),
+    create_hause_arrest_afc_client: qt_method!(fn(&self, udid: QString, bundle_id: QString)),
     create_service_manager: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
     create_query_backend: qt_method!(fn(&self, udid: QString, ios_version: u32) -> QJSValue),
     create_springboard_services_client: qt_method!(fn(&self, udid: QString) -> QJSValue),
     create_transfer_speed_tester: qt_method!(fn(&self, udid: QString) -> QJSValue),
+
+    houseArrestAfcClientCreated: qt_signal!(client: QJSValue, udid: QString, bundle_id: QString),
 }
 
 impl ServiceFactory {
@@ -85,45 +92,60 @@ impl ServiceFactory {
         engine_ptr_new_object(engine_ptr, obj_ptr)
     }
 
-    fn create_hause_arrest_afc_client(&self, udid: QString, bundle_id: QString) -> QJSValue {
-        let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
-        let udid_clone = udid.clone();
-        let bundle_id_clone = bundle_id.clone();
-        if engine_ptr.is_null() {
+    // this call shouldn't be blocking
+    fn create_hause_arrest_afc_client(&self, udid: QString, bundle_id: QString) {
+        if self.engine_ptr.is_none_or(|ptr| ptr.is_null()) {
             eprintln!("ServiceFactory: engine_ptr is null");
-            return empty_qjsvalue();
+            return;
         }
 
-        let afc_res: anyhow::Result<AfcClient> = run_sync(async move {
-            let device = device_ctx::get_device(udid).await?;
+        let qt_thread = self.qt_thread();
 
-            let provider_guard = device.provider.lock().await;
+        RUNTIME.spawn(async move {
+            let afc_result: anyhow::Result<AfcClient> = async {
+                let device = device_ctx::get_device(udid.clone()).await?;
+                let provider = device.provider.lock().await;
 
-            Ok(vend_app_documents(provider_guard.as_ref(), &bundle_id.to_string()).await?)
+                Ok(vend_app_documents(provider.as_ref(), &bundle_id.to_string()).await?)
+            }
+            .await;
+
+            qt_thread.queue(move |factory| match afc_result {
+                Ok(afc) => {
+                    let Some(engine_ptr) = factory.engine_ptr else {
+                        factory.houseArrestAfcClientCreated(empty_qjsvalue(), udid, bundle_id);
+                        return;
+                    };
+
+                    if engine_ptr.is_null() {
+                        factory.houseArrestAfcClientCreated(empty_qjsvalue(), udid, bundle_id);
+                        return;
+                    }
+
+                    let object = AfcServices::from_afc_client(
+                        Arc::new(Mutex::new(afc)),
+                        udid.to_string(),
+                        Some(bundle_id.to_string()),
+                    );
+
+                    let object_ptr = qmetaobject::into_leaked_cpp_ptr(object);
+
+                    let client = engine_ptr_new_object(engine_ptr, object_ptr);
+
+                    factory.houseArrestAfcClientCreated(client, udid, bundle_id);
+                }
+                Err(error) => {
+                    log::warn!(
+                        "Couldn't create house-arrest AFC for bundle {} on device {}: {}",
+                        bundle_id,
+                        udid,
+                        error
+                    );
+
+                    factory.houseArrestAfcClientCreated(empty_qjsvalue(), udid, bundle_id);
+                }
+            });
         });
-
-        match afc_res {
-            Ok(afc) => {
-                let obj = AfcServices::from_afc_client(
-                    Arc::new(Mutex::new(afc)),
-                    udid_clone.to_string(),
-                    Some(bundle_id_clone.to_string()),
-                );
-                let obj_ptr = qmetaobject::into_leaked_cpp_ptr(obj);
-
-                engine_ptr_new_object(engine_ptr, obj_ptr)
-            }
-            Err(e) => {
-                println!(
-                    "Couldn't create hause_arrest_afc for bundle id {} for device {} : Error : {}",
-                    bundle_id_clone,
-                    udid_clone,
-                    e.to_string()
-                );
-
-                return empty_qjsvalue();
-            }
-        }
     }
 
     fn create_service_manager(&self, udid: QString, ios_version: u32) -> QJSValue {
