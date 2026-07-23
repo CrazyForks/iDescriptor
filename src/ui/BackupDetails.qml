@@ -69,11 +69,29 @@ Item {
     }
 
     function readValue(text, key) {
-        var re = new RegExp(key + ":\\s*(?:\\\"([^\\\"]*)\\\"|([^,}\\n>]+))")
+        var re = new RegExp("(?:^|[,{}])\\s*" + key
+                            + "\\s*[:=]\\s*(?:\\\"([^\\\"]*)\\\"|([^,}\\n>]+))")
         var match = re.exec(text || "")
         if (!match)
             return ""
         return String(match[1] !== undefined ? match[1] : match[2]).trim()
+    }
+
+    function backupDateText() {
+        var raw = root.deviceSummary.backupDate || ""
+        if (!raw)
+            return qsTr("Unknown")
+
+        // MobileBackup2 returns dates such as "2026-07-19 20:56:15 +0000".
+        // Convert the timezone to ISO 8601 so QML parses it consistently.
+        var normalized = raw.replace(
+            /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+([+-]\d{2})(\d{2})$/,
+            "$1T$2$3:$4")
+        var date = new Date(normalized)
+        if (isNaN(date.getTime()))
+            return raw
+
+        return Qt.formatDateTime(date, "yyyy-MM-dd hh:mm")
     }
 
     function parseBackupContent(content) {
@@ -88,6 +106,7 @@ Item {
             backupState: readValue(statusText, "backupState") || qsTr("Unknown"),
             snapshotState: readValue(statusText, "snapshotState"),
             fullBackup: readValue(statusText, "fullBackup"),
+            backupDate: readValue(statusText, "date"),
             encrypted: readValue(driveText, "encrypted") === "1",
             passcodeSet: readValue(driveText, "passcodeSet") === "1",
             productVersion: readValue(driveText, "ProductVersion"),
@@ -153,6 +172,7 @@ Item {
         target: backupManager
 
         function onBackupInfoReady(udid, success, res) {
+            console.log("Backup info ready for udid:", udid, "success:", success, "res:", JSON.stringify(res))
             if (udid !== root.udid)
                 return
 
@@ -244,7 +264,7 @@ Item {
                         }
 
                         Label {
-                            text: root.deviceSummary.passcodeSet ? qsTr("Passcode") : qsTr("No Passcode")
+                            text: root.deviceSummary.passcodeSet ? qsTr("Passcode Was Set") : qsTr("No Passcode")
                             color: root.deviceSummary.passcodeSet ? App.Theme.textMuted : App.Theme.dangerText
                             leftPadding: 10
                             rightPadding: 10
@@ -279,6 +299,14 @@ Item {
                             text: qsTr("iOS %1 - Serial %2")
                                 .arg(root.deviceSummary.productVersion || qsTr("Unknown"))
                                 .arg(root.deviceSummary.serialNumber || qsTr("Unknown"))
+                            color: App.Theme.textMuted
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Backup Date: %1").arg(root.backupDateText())
                             color: App.Theme.textMuted
                             font.pixelSize: 12
                             elide: Text.ElideRight

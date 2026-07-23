@@ -6,19 +6,30 @@ use crate::{
 };
 use idevice::{
     IdeviceError, IdeviceService,
+    afc::{AfcClient, errors::AfcError, file::OwnedFileDescriptor, opcode::AfcFopenMode},
+    installation_proxy::InstallationProxyClient,
+    lockdown::LockdownClient,
     mobilebackup2::{
-        BackupDelegate, DirEntryInfo, FsBackupDelegate, MobileBackup2Client, RestoreOptions,
+        BackupDelegate, BackupOptions, DirEntryInfo, FsBackupDelegate, MobileBackup2Client,
+        RestoreOptions,
+    },
+    notification_proxy::{
+        MOBILEBACKUP2_NOTIFICATIONS, MobileBackup2Notification, NotificationProxyClient,
+        SYNC_DID_FINISH, SYNC_DID_START, SYNC_LOCK_REQUEST, SYNC_WILL_START,
     },
     provider::IdeviceProvider,
+    springboardservices::SpringBoardServicesClient,
 };
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use macros::QtThreading;
-use plist::Value;
+use plist_macro::plist;
 use qmetaobject::{SimpleListItem, prelude::*};
 use qttypes::{QString, QVariantMap};
 use std::{
     cell::RefCell,
     collections::HashMap,
+    error::Error as StdError,
+    fmt,
     future::Future,
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -27,7 +38,6 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 use tokio::task::JoinHandle;
-use tracing::field::debug;
 
 #[derive(SimpleListItem, Default, Clone)]
 struct BackupListItem {
@@ -66,16 +76,36 @@ pub struct BackupManager {
     backup_model: qt_property!(RefCell<ListModel<BackupListItem>>; NOTIFY backup_model_changed),
     backup_model_changed: qt_signal!(),
     progressUpdate: qt_signal!(udid: QString, progress: f64),
-    operationFinished: qt_signal!(operation: QString, udid: QString, success: bool),
+    operationFinished: qt_signal!(
+        operation: QString,
+        udid: QString,
+        success: bool,
+        errorCode: i32,
+        errorString: QString
+    ),
     backupInfoReady: qt_signal!(udid: QString, success: bool, res: QString),
     backupInfoReadyWithoutDevice: qt_signal!(udid: QString, success: bool, res: QString),
     fileReceived: qt_signal!(udid: QString, path: QString),
+    backupPasscodeChanged: qt_signal!(udid: QString, requested: bool),
+    backupCancellationRequested: qt_signal!(udid: QString),
+    backupEncryptionStatusReady: qt_signal!(
+        udid: QString,
+        success: bool,
+        enabled: bool,
+        errorString: QString
+    ),
+    backupEncryptionFinished: qt_signal!(
+        udid: QString,
+        success: bool,
+        enabled: bool,
+        errorString: QString
+    ),
     init: qt_method!(fn(&mut self, backup_root_path: QString)),
     // refresh :
     does_backup_exist_for_udid: qt_method!(fn(&self, udid: QString) -> bool),
     get_backup_info: qt_method!(fn(&self, udid: QString, root: QString)),
     // refresh_backups: qt_method!(fn(&mut self, root: QString)),
-    start_backup: qt_method!(fn(&mut self, root: QString, udid: QString)),
+    start_backup: qt_method!(fn(&mut self, root: QString, udid: QString, force_full: bool)),
     start_restore: qt_method!(
         fn(
             &mut self,
@@ -89,14 +119,16 @@ pub struct BackupManager {
             remove_items_not_restored: bool,
         )
     ),
-    // erase_device: qt_method!(fn(&mut self, root: QString, udid: QString)),
-    // cancel: qt_method!(fn(&mut self)),
-    // is_init : bool,
+    erase_device: qt_method!(fn(&mut self, root: QString, udid: QString)),
     get_backup_info_without_device: qt_method!(fn(&self, udid: QString, root: QString)),
     cancel_operation: qt_method!(fn(&mut self, udid: String) -> bool),
     has_active_tasks: qt_method!(fn(&self) -> bool),
     cancel_all_operations: qt_method!(fn(&mut self) -> bool),
     get_backup_metadata: qt_method!(fn(&self, udid: QString, root: QString) -> QVariantMap),
+    get_backup_encryption_status: qt_method!(fn(&self, udid: QString)),
+    change_backup_password: qt_method!(
+        fn(&mut self, root: QString, udid: QString, old_password: QString, new_password: QString)
+    ),
     tasks: HashMap<String, JoinHandle<()>>,
 }
 
@@ -211,15 +243,117 @@ impl BackupManager {
         });
     }
 
-    fn start_backup(&mut self, root: QString, udid: QString) {
+    fn get_backup_encryption_status(&self, udid: QString) {
+        let q_thread = self.qt_thread();
+        let udid = udid.to_string();
+        RUNTIME.spawn(async move {
+            let result = query_backup_encryption(&udid).await;
+            q_thread.queue(move |manager| match result {
+                Ok(enabled) => manager.backupEncryptionStatusReady(
+                    QString::from(udid),
+                    true,
+                    enabled,
+                    QString::default(),
+                ),
+                Err(err) => {
+                    warn!("failed to query backup encryption for {udid}: {err}");
+                    manager.backupEncryptionStatusReady(
+                        QString::from(udid),
+                        false,
+                        false,
+                        QString::from(err.to_string()),
+                    );
+                }
+            });
+        });
+    }
+
+    fn change_backup_password(
+        &mut self,
+        root: QString,
+        udid: QString,
+        old_password: QString,
+        new_password: QString,
+    ) {
+        let udid = udid.to_string();
+        if udid.is_empty() || new_password.is_empty() {
+            self.backupEncryptionFinished(
+                QString::from(udid),
+                false,
+                false,
+                QString::from("A new backup password is required."),
+            );
+            return;
+        }
+        if self.tasks.contains_key(&udid) {
+            self.backupEncryptionFinished(
+                QString::from(udid),
+                false,
+                false,
+                QString::from("Another backup operation is already running for this device."),
+            );
+            return;
+        }
+
+        let root = root.to_string();
+        let old_password = old_password.to_string();
+        let new_password = new_password.to_string();
+        let task_udid = udid.clone();
+        let q_thread = self.qt_thread();
+        let task = RUNTIME.spawn(async move {
+            let result = run_change_backup_password(
+                q_thread.clone(),
+                &udid,
+                &root,
+                &old_password,
+                &new_password,
+            )
+            .await;
+
+            q_thread.queue(move |manager| {
+                manager.tasks.remove(&udid);
+                manager.update_busy_from_tasks();
+                manager.backupPasscodeChanged(QString::from(udid.clone()), false);
+                match result {
+                    Ok(enabled) => manager.backupEncryptionFinished(
+                        QString::from(udid),
+                        true,
+                        enabled,
+                        QString::default(),
+                    ),
+                    Err(err) => {
+                        error!("failed to change backup encryption for {udid}: {err}");
+                        manager.backupEncryptionFinished(
+                            QString::from(udid),
+                            false,
+                            false,
+                            QString::from(err.to_string()),
+                        );
+                    }
+                }
+            });
+        });
+        self.tasks.insert(task_udid, task);
+        self.busy = true;
+        self.busy_changed();
+    }
+
+    fn start_backup(&mut self, root: QString, udid: QString, force_full: bool) {
         let udid = udid.to_string();
         let root = root.to_string();
         let q_thread = self.qt_thread();
         let udid_for_task = udid.clone();
         let task = RUNTIME.spawn(async move {
             let finish_udid = udid.clone();
-            let result = run_backup(q_thread.clone(), udid, root.clone()).await;
-            let success = result.is_ok();
+            let result = run_backup(q_thread.clone(), udid, root.clone(), force_full).await;
+            let (success, error_code, error_string) = match result {
+                Ok(()) => (true, 0, String::new()),
+                Err(err) => {
+                    error!("backup failed for {finish_udid}: {err}");
+                    let (code, message) = operation_error_details(&err);
+                    (false, code, message)
+                }
+            };
             q_thread.queue(move |manager| {
                 manager.tasks.remove(&finish_udid);
                 manager.update_busy_from_tasks();
@@ -227,6 +361,8 @@ impl BackupManager {
                     QString::from("backup"),
                     QString::from(finish_udid),
                     success,
+                    error_code,
+                    QString::from(error_string),
                 );
             });
         });
@@ -252,7 +388,6 @@ impl BackupManager {
     fn has_active_tasks(&self) -> bool {
         let val = self.tasks.values().any(|task| !task.is_finished());
         println!("Active task {}", val);
-        return true;
         val
     }
 
@@ -295,7 +430,14 @@ impl BackupManager {
         let root = root.to_string();
         let password = password.to_string();
         let q_thread = self.qt_thread();
-
+        debug!(
+            "Starting restore for backup: {udid} with password: {}",
+            if password.is_empty() {
+                "(none)"
+            } else {
+                "(provided)"
+            }
+        );
         let task = RUNTIME.spawn(async move {
             let finish_udid = udid.clone();
             let result = run_restore(
@@ -311,10 +453,14 @@ impl BackupManager {
             )
             .await;
 
-            let success = result.is_ok();
-            if let Err(err) = result {
-                error!("restore failed for {finish_udid}: {err}");
-            }
+            let (success, error_code, error_string) = match result {
+                Ok(()) => (true, 0, String::new()),
+                Err(err) => {
+                    error!("restore failed for {finish_udid}: {err}");
+                    let (code, message) = operation_error_details(&err);
+                    (false, code, message)
+                }
+            };
             q_thread.queue(move |manager| {
                 manager.tasks.remove(&finish_udid);
                 manager.update_busy_from_tasks();
@@ -322,6 +468,8 @@ impl BackupManager {
                     QString::from("restore"),
                     QString::from(finish_udid),
                     success,
+                    error_code,
+                    QString::from(error_string),
                 );
             });
         });
@@ -350,119 +498,43 @@ impl BackupManager {
         result_metadata
     }
 
-    // fn erase_device(&mut self, root: QString, udid: QString) {
-    //     if self.is_busy("erase") {
-    //         return;
-    //     }
+    fn erase_device(&mut self, root: QString, udid: QString) {
+        let udid = udid.to_string();
+        let udid_for_task = udid.clone();
+        let root = root.to_string();
+        let q_thread = self.qt_thread();
 
-    //     let udid = udid.to_string();
-    //     let root = root.to_string();
-    //     let q_thread = self.qt_thread();
-    //     self.set_state(
-    //         true,
-    //         "erase",
-    //         0.0,
-    //         "0%",
-    //         "",
-    //         "Sending erase command...",
-    //         "",
-    //         &root,
-    //         &udid,
-    //     );
-    //     self.operationStarted(QString::from("erase"), QString::from(udid.clone()));
+        let task = RUNTIME.spawn(async move {
+            let finish_udid = udid.clone();
+            let result = run_erase(udid, root).await;
+            let real_success = result.is_ok();
+            /*
+                device immediately disconnects after erase command
+                we will just assume success for now
+                23:50:51 [ERROR] failed to erase device c1daf1e6d74de3862141f00c0a*****: device socket io failed
+            */
+            let success = true;
+            debug!("Assuming erase success for {finish_udid}: {real_success}");
 
-    //     let task = RUNTIME.spawn(async move {
-    //         let finish_udid = udid.clone();
-    //         let result = run_erase(udid, root.clone()).await;
-    //         let success = result.is_ok();
-    //         q_thread.queue(move |manager| {
-    //             manager.active_task = None;
-    //             match result {
-    //                 Ok(()) => manager.set_state(
-    //                     false,
-    //                     "",
-    //                     1.0,
-    //                     "100%",
-    //                     "",
-    //                     "Erase command sent.",
-    //                     "",
-    //                     &root,
-    //                     &finish_udid,
-    //                 ),
-    //                 Err(err) => manager.set_state(
-    //                     false,
-    //                     "",
-    //                     0.0,
-    //                     "0%",
-    //                     "",
-    //                     "Erase failed.",
-    //                     &err.to_string(),
-    //                     &root,
-    //                     &finish_udid,
-    //                 ),
-    //             }
-    //             manager.operationFinished(
-    //                 QString::from("erase"),
-    //                 QString::from(finish_udid),
-    //                 success,
-    //             );
-    //         });
-    //     });
+            q_thread.queue(move |manager| {
+                manager.tasks.remove(&finish_udid);
+                manager.update_busy_from_tasks();
+                manager.operationFinished(
+                    QString::from("erase"),
+                    QString::from(finish_udid),
+                    success,
+                    0,
+                    QString::default(),
+                );
+            });
+        });
 
-    //     self.active_task = Some(task);
-    // }
-
-    // fn cancel(&mut self) {
-    //     if let Some(task) = self.active_task.take() {
-    //         task.abort();
-    //         self.set_state(false, "", 0.0, "0%", "", "Operation cancelled.", "", "", "");
-    //     }
-    // }
-
-    // fn is_busy(&mut self, operation: &str) -> bool {
-    //     if self.active_task.is_some() {
-    //         error!("backup manager refused {operation}: another operation is active");
-    //         self.set_state(
-    //             true,
-    //             operation,
-    //             0.0,
-    //             "0%",
-    //             "",
-    //             "Another backup operation is already running.",
-    //             "Wait for the current operation to finish or cancel it first.",
-    //             "",
-    //             "",
-    //         );
-    //         return true;
-    //     }
-    //     false
-    // }
-
-    // fn set_state(
-    //     &mut self,
-    //     busy: bool,
-    //     operation: &str,
-    //     progress: f64,
-    //     percent_text: &str,
-    //     time_remaining: &str,
-    //     status_text: &str,
-    //     error: &str,
-    //     backup_root: &str,
-    //     active_udid: &str,
-    // ) {
-    //     self.state = state_map(
-    //         busy,
-    //         operation,
-    //         progress,
-    //         percent_text,
-    //         time_remaining,
-    //         status_text,
-    //         error,
-    //         backup_root,
-    //         active_udid,
-    //     );
-    //     self.state_changed();
-    // }
+        if let Some(previous_task) = self.tasks.insert(udid_for_task, task) {
+            previous_task.abort();
+        }
+        self.busy = true;
+        self.busy_changed();
+    }
 }
 
 // impl Drop for BackupManager {
@@ -502,7 +574,7 @@ fn read_backup_metadata(udid: QString, root: QString) -> anyhow::Result<(bool, b
     let was_passcode_set = metadata
         .get("WasPasscodeSet")
         .and_then(|v| v.as_boolean())
-        .ok_or_else(|| anyhow::anyhow!("WasPasscodeSet is not a boolean"))?;
+        .unwrap_or(false);
     let is_encrypted = metadata
         .get("IsEncrypted")
         .and_then(|v| v.as_boolean())
@@ -664,14 +736,7 @@ async fn get_info_for_backup(
         .await?;
     let value_dict = plist::Value::from(dict);
     let json = serde_json::to_string(&value_dict)?;
-    // drop(provider_guard);
 
-    // let response = client
-    //     .backup_from_path(Path::new(&root), None, None, &delegate)
-    //     .await?;
-    // check_response(response)?;
-    // let _ = client.disconnect().await;
-    // info!("backup completed");
     Ok(json)
 }
 
@@ -744,23 +809,626 @@ async fn calculate_folder_size(path: PathBuf) -> anyhow::Result<(u64, u64)> {
     .await?
 }
 
+async fn query_backup_encryption(udid: &str) -> anyhow::Result<bool> {
+    let device = crate::device_ctx::get_device(udid.to_owned()).await?;
+    let mut lockdown = device.lockdown.lock().await;
+    match lockdown
+        .get_value(Some("WillEncrypt"), Some("com.apple.mobile.backup"))
+        .await?
+    {
+        plist::Value::Boolean(enabled) => Ok(enabled),
+        value => anyhow::bail!("WillEncrypt returned an unexpected value: {value:?}"),
+    }
+}
+
+async fn run_change_backup_password(
+    qt_thread: QtThread<BackupManager>,
+    udid: &str,
+    root: &str,
+    old_password: &str,
+    new_password: &str,
+) -> anyhow::Result<bool> {
+    let was_encrypted = query_backup_encryption(udid).await?;
+    if was_encrypted && old_password.is_empty() {
+        anyhow::bail!("The current backup password is required.");
+    }
+
+    tokio::fs::create_dir_all(root).await?;
+    let device = crate::device_ctx::get_device(udid.to_owned()).await?;
+    let provider_guard = device.provider.lock().await;
+    let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
+    let mut client = MobileBackup2Client::connect(provider_ref).await?;
+    let mut notification_client = match NotificationProxyClient::connect(provider_ref).await {
+        Ok(mut notifications) => match notifications
+            .observe_notifications(MOBILEBACKUP2_NOTIFICATIONS)
+            .await
+        {
+            Ok(()) => Some(notifications),
+            Err(err) => {
+                warn!("unable to observe backup encryption notifications for {udid}: {err}");
+                None
+            }
+        },
+        Err(err) => {
+            warn!("unable to connect to notification proxy for {udid}: {err}");
+            None
+        }
+    };
+    drop(provider_guard);
+
+    let delegate = iDescriptorBackupDelegate::new(
+        qt_thread.clone(),
+        "change-password",
+        root.to_owned(),
+        QString::from(udid),
+    );
+    let old_password = was_encrypted.then_some(old_password);
+    info!(
+        "{} encrypted backups for {udid}",
+        if was_encrypted {
+            "changing password for"
+        } else {
+            "enabling"
+        }
+    );
+
+    let response = if let Some(notifications) = notification_client.as_mut() {
+        let operation = client.change_password_from_path(
+            Path::new(root),
+            old_password,
+            Some(new_password),
+            &delegate,
+        );
+        tokio::pin!(operation);
+        let mut monitor_notifications = true;
+
+        loop {
+            tokio::select! {
+                result = &mut operation => break result?,
+                notification = notifications.receive_notification(), if monitor_notifications => {
+                    match notification {
+                        Ok(name) => match MobileBackup2Notification::from_name(&name) {
+                            Some(MobileBackup2Notification::PasscodeRequested) => {
+                                let signal_udid = QString::from(udid);
+                                qt_thread.queue(move |manager| {
+                                    manager.backupPasscodeChanged(signal_udid, true);
+                                });
+                            }
+                            Some(MobileBackup2Notification::PasscodeRequestDismissed) => {
+                                let signal_udid = QString::from(udid);
+                                qt_thread.queue(move |manager| {
+                                    manager.backupPasscodeChanged(signal_udid, false);
+                                });
+                            }
+                            Some(MobileBackup2Notification::BackupDomainChanged) => {
+                                debug!("backup encryption domain changed for {udid}");
+                            }
+                            Some(MobileBackup2Notification::CancelRequested) => {
+                                return Err(BackupCancelledError.into());
+                            }
+                            None => {}
+                        },
+                        Err(err) => {
+                            warn!("backup encryption notification monitoring stopped for {udid}: {err}");
+                            monitor_notifications = false;
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        client
+            .change_password_from_path(Path::new(root), old_password, Some(new_password), &delegate)
+            .await?
+    };
+
+    check_response(response)?;
+    let _ = client.disconnect().await;
+    for attempt in 0..5 {
+        if query_backup_encryption(udid).await? {
+            info!("encrypted backups are enabled for {udid}");
+            return Ok(true);
+        }
+        if attempt < 4 {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+    }
+    anyhow::bail!("The device did not enable encrypted backups.");
+}
+
+async fn verify_backup_snapshot_finished(root: &str, udid: &str) -> anyhow::Result<()> {
+    let status_path = PathBuf::from(root).join(udid).join("Status.plist");
+    tokio::task::spawn_blocking(move || {
+        let status = plist::Value::from_file(&status_path)?;
+        let snapshot_state = status
+            .as_dictionary()
+            .and_then(|dict| dict.get("SnapshotState"))
+            .and_then(plist::Value::as_string)
+            .ok_or_else(|| anyhow::anyhow!("Status.plist is missing SnapshotState"))?;
+        if snapshot_state != "finished" {
+            anyhow::bail!("backup snapshot state is {snapshot_state:?}, expected \"finished\"");
+        }
+        Ok(())
+    })
+    .await?
+}
+
+const ITUNES_SYNC_LOCK_PATH: &str = "/com.apple.itunes.lock_sync";
+const RESTORE_APPLICATIONS_DIR: &str = "/iTunesRestore";
+const RESTORE_APPLICATIONS_PATH: &str = "/iTunesRestore/RestoreApplications.plist";
+
+struct BackupSyncSession {
+    notifications: NotificationProxyClient,
+    lock_file: OwnedFileDescriptor,
+}
+
+impl BackupSyncSession {
+    async fn begin(provider: &dyn IdeviceProvider) -> anyhow::Result<Self> {
+        let mut notifications = NotificationProxyClient::connect(provider).await?;
+        notifications.post_notification(SYNC_WILL_START).await?;
+
+        let afc = AfcClient::connect(provider).await?;
+        let mut lock_file = afc
+            .open_owned(ITUNES_SYNC_LOCK_PATH, AfcFopenMode::Rw)
+            .await?;
+        notifications.post_notification(SYNC_LOCK_REQUEST).await?;
+
+        for attempt in 0..50 {
+            match lock_file.lock_exclusive().await {
+                Ok(()) => {
+                    notifications.post_notification(SYNC_DID_START).await?;
+                    return Ok(Self {
+                        notifications,
+                        lock_file,
+                    });
+                }
+                Err(IdeviceError::Afc(AfcError::OpWouldBlock)) if attempt < 49 => {
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                }
+                Err(err) => return Err(err.into()),
+            }
+        }
+
+        anyhow::bail!("Timed out waiting for the iTunes synchronization lock")
+    }
+
+    async fn finish(mut self) -> anyhow::Result<()> {
+        let unlock_result = self.lock_file.unlock().await;
+        let close_result = self.lock_file.close().await;
+        let notification_result = self.notifications.post_notification(SYNC_DID_FINISH).await;
+
+        unlock_result?;
+        close_result?;
+        notification_result?;
+        Ok(())
+    }
+}
+
+async fn read_afc_file(afc: &mut AfcClient, path: &str) -> anyhow::Result<Vec<u8>> {
+    let mut file = afc.open(path, AfcFopenMode::RdOnly).await?;
+    let contents = file.read_entire().await;
+    let close_result = file.close().await;
+    let contents = contents?;
+    close_result?;
+    Ok(contents)
+}
+
+fn copy_plist_field(
+    destination: &mut plist::Dictionary,
+    source: &plist::Dictionary,
+    source_key: &str,
+    destination_key: &str,
+) {
+    if let Some(value) = source.get(source_key) {
+        destination.insert(destination_key.to_owned(), value.clone());
+    }
+}
+
+async fn create_backup_info_plist(
+    provider: &dyn IdeviceProvider,
+    udid: &str,
+) -> anyhow::Result<plist::Value> {
+    let pairing_file = provider.get_pairing_file().await?;
+    let mut lockdown = LockdownClient::connect(provider).await?;
+    lockdown.start_session(&pairing_file).await?;
+    let device_values = lockdown
+        .get_value(None, None)
+        .await?
+        .into_dictionary()
+        .ok_or_else(|| anyhow::anyhow!("Lockdown device values were not a dictionary"))?;
+    let itunes_settings = lockdown
+        .get_value(None, Some("com.apple.iTunes"))
+        .await
+        .unwrap_or_else(|err| {
+            warn!("unable to read iTunes settings for backup metadata: {err}");
+            plist::Value::Dictionary(plist::Dictionary::new())
+        });
+    let minimum_itunes_version = lockdown
+        .get_value(Some("MinITunesVersion"), Some("com.apple.mobile.iTunes"))
+        .await
+        .ok();
+
+    let mut installed_applications = Vec::new();
+    let mut applications = plist::Dictionary::new();
+    let browse_options = plist!({
+        "ApplicationType": "User",
+        "ReturnAttributes": [
+            "CFBundleIdentifier",
+            "ApplicationSINF",
+            "iTunesMetadata"
+        ]
+    });
+    let app_entries = match InstallationProxyClient::connect(provider).await {
+        Ok(mut installation_proxy) => installation_proxy
+            .browse(Some(browse_options))
+            .await
+            .unwrap_or_else(|err| {
+                warn!("unable to enumerate installed applications for Info.plist: {err}");
+                Vec::new()
+            }),
+        Err(err) => {
+            warn!("unable to connect to installation proxy for Info.plist: {err}");
+            Vec::new()
+        }
+    };
+    let mut springboard = match SpringBoardServicesClient::connect(provider).await {
+        Ok(client) => Some(client),
+        Err(err) => {
+            warn!("unable to connect to SpringBoard services for backup icons: {err}");
+            None
+        }
+    };
+
+    for entry in app_entries {
+        let Some(entry) = entry.into_dictionary() else {
+            continue;
+        };
+        let Some(bundle_id) = entry
+            .get("CFBundleIdentifier")
+            .and_then(plist::Value::as_string)
+            .map(str::to_owned)
+        else {
+            continue;
+        };
+        installed_applications.push(plist::Value::String(bundle_id.clone()));
+
+        let (Some(sinf), Some(metadata)) =
+            (entry.get("ApplicationSINF"), entry.get("iTunesMetadata"))
+        else {
+            continue;
+        };
+        let mut app = plist::Dictionary::new();
+        app.insert("ApplicationSINF".into(), sinf.clone());
+        app.insert("iTunesMetadata".into(), metadata.clone());
+        if let Some(springboard) = springboard.as_mut()
+            && let Ok(icon) = springboard.get_icon_pngdata(bundle_id.clone()).await
+        {
+            app.insert("PlaceholderIcon".into(), plist::Value::Data(icon));
+        }
+        applications.insert(bundle_id, plist::Value::Dictionary(app));
+    }
+
+    let mut info = plist::Dictionary::new();
+    info.insert(
+        "Applications".into(),
+        plist::Value::Dictionary(applications),
+    );
+    copy_plist_field(&mut info, &device_values, "BuildVersion", "Build Version");
+    copy_plist_field(&mut info, &device_values, "DeviceName", "Device Name");
+    copy_plist_field(&mut info, &device_values, "DeviceName", "Display Name");
+    copy_plist_field(
+        &mut info,
+        &device_values,
+        "IntegratedCircuitCardIdentity",
+        "ICCID",
+    );
+    copy_plist_field(
+        &mut info,
+        &device_values,
+        "InternationalMobileEquipmentIdentity",
+        "IMEI",
+    );
+    copy_plist_field(
+        &mut info,
+        &device_values,
+        "MobileEquipmentIdentifier",
+        "MEID",
+    );
+    copy_plist_field(&mut info, &device_values, "PhoneNumber", "Phone Number");
+    copy_plist_field(&mut info, &device_values, "ProductType", "Product Type");
+    copy_plist_field(
+        &mut info,
+        &device_values,
+        "ProductVersion",
+        "Product Version",
+    );
+    copy_plist_field(&mut info, &device_values, "SerialNumber", "Serial Number");
+    info.insert(
+        "GUID".into(),
+        plist::Value::String(uuid::Uuid::new_v4().simple().to_string().to_uppercase()),
+    );
+    info.insert(
+        "Installed Applications".into(),
+        plist::Value::Array(installed_applications),
+    );
+    info.insert(
+        "Last Backup Date".into(),
+        plist::Value::Date(SystemTime::now().into()),
+    );
+    info.insert(
+        "Target Identifier".into(),
+        plist::Value::String(udid.to_owned()),
+    );
+    info.insert("Target Type".into(), plist::Value::String("Device".into()));
+    info.insert(
+        "Unique Identifier".into(),
+        plist::Value::String(udid.to_uppercase()),
+    );
+
+    let mut afc = AfcClient::connect(provider).await?;
+    if let Ok(contents) = read_afc_file(&mut afc, "/Books/iBooksData2.plist").await {
+        info.insert("iBooks Data 2".into(), plist::Value::Data(contents));
+    }
+
+    let mut itunes_files = plist::Dictionary::new();
+    for name in [
+        "ApertureAlbumPrefs",
+        "IC-Info.sidb",
+        "IC-Info.sidv",
+        "PhotosFolderAlbums",
+        "PhotosFolderName",
+        "PhotosFolderPrefs",
+        "VoiceMemos.plist",
+        "iPhotoAlbumPrefs",
+        "iTunesApplicationIDs",
+        "iTunesPrefs",
+        "iTunesPrefs.plist",
+    ] {
+        let path = format!("/iTunes_Control/iTunes/{name}");
+        if let Ok(contents) = read_afc_file(&mut afc, &path).await {
+            itunes_files.insert(name.into(), plist::Value::Data(contents));
+        }
+    }
+    info.insert(
+        "iTunes Files".into(),
+        plist::Value::Dictionary(itunes_files),
+    );
+    info.insert("iTunes Settings".into(), itunes_settings);
+    info.insert(
+        "iTunes Version".into(),
+        minimum_itunes_version.unwrap_or_else(|| plist::Value::String("10.0.1".into())),
+    );
+
+    Ok(plist::Value::Dictionary(info))
+}
+
+async fn write_backup_info_plist(
+    provider: &dyn IdeviceProvider,
+    root: &str,
+    udid: &str,
+) -> anyhow::Result<()> {
+    info!("generating iTunes-compatible Info.plist for backup {udid}");
+    let info = create_backup_info_plist(provider, udid).await?;
+    let mut bytes = Vec::new();
+    plist::to_writer_xml(&mut bytes, &info)?;
+    let backup_dir = PathBuf::from(root).join(udid);
+    tokio::fs::create_dir_all(&backup_dir).await?;
+    let temporary_path = backup_dir.join("Info.plist.tmp");
+    let final_path = backup_dir.join("Info.plist");
+    tokio::fs::write(&temporary_path, bytes).await?;
+    if let Err(err) = tokio::fs::remove_file(&final_path).await
+        && err.kind() != std::io::ErrorKind::NotFound
+    {
+        return Err(err.into());
+    }
+    tokio::fs::rename(&temporary_path, &final_path).await?;
+    Ok(())
+}
+
+async fn validate_restore_backup(
+    root: &str,
+    udid: &str,
+    password: &str,
+) -> anyhow::Result<plist::Value> {
+    info!("validating backup metadata before restoring {udid}");
+    let backup_dir = PathBuf::from(root).join(udid);
+    let info_path = backup_dir.join("Info.plist");
+    let manifest_path = backup_dir.join("Manifest.plist");
+    let status_path = backup_dir.join("Status.plist");
+    let password_supplied = !password.is_empty();
+
+    tokio::task::spawn_blocking(move || {
+        let info = plist::Value::from_file(&info_path)
+            .map_err(|err| anyhow::anyhow!("Invalid or missing Info.plist: {err}"))?;
+        let manifest = plist::Value::from_file(&manifest_path)
+            .map_err(|err| anyhow::anyhow!("Invalid or missing Manifest.plist: {err}"))?;
+        let status = plist::Value::from_file(&status_path)
+            .map_err(|err| anyhow::anyhow!("Invalid or missing Status.plist: {err}"))?;
+
+        let snapshot_state = status
+            .as_dictionary()
+            .and_then(|dict| dict.get("SnapshotState"))
+            .and_then(plist::Value::as_string);
+        if snapshot_state != Some("finished") {
+            anyhow::bail!("The selected backup does not contain a finished snapshot");
+        }
+        let encrypted = manifest
+            .as_dictionary()
+            .and_then(|dict| dict.get("IsEncrypted"))
+            .and_then(plist::Value::as_boolean)
+            .unwrap_or(false);
+        if encrypted && !password_supplied {
+            anyhow::bail!("A password is required to restore this encrypted backup");
+        }
+        Ok(info)
+    })
+    .await?
+}
+
+async fn write_restore_applications(
+    provider: &dyn IdeviceProvider,
+    info: &plist::Value,
+) -> anyhow::Result<()> {
+    let Some(applications) = info
+        .as_dictionary()
+        .and_then(|dict| dict.get("Applications"))
+    else {
+        info!("Info.plist has no Applications entry; skipping app restore preparation");
+        return Ok(());
+    };
+
+    let mut bytes = Vec::new();
+    plist::to_writer_xml(&mut bytes, applications)?;
+    info!("preparing RestoreApplications.plist");
+    let mut afc = AfcClient::connect(provider).await?;
+    if let Err(err) = afc.mk_dir(RESTORE_APPLICATIONS_DIR).await
+        && !matches!(err, IdeviceError::Afc(AfcError::ObjectExists))
+    {
+        return Err(err.into());
+    }
+    let mut file = afc
+        .open(RESTORE_APPLICATIONS_PATH, AfcFopenMode::WrOnly)
+        .await?;
+    let write_result = file.write_entire(&bytes).await;
+    let close_result = file.close().await;
+    write_result?;
+    close_result?;
+    Ok(())
+}
+
+async fn remove_restore_applications(provider: &dyn IdeviceProvider) {
+    let Ok(mut afc) = AfcClient::connect(provider).await else {
+        return;
+    };
+    let _ = afc.remove(RESTORE_APPLICATIONS_PATH).await;
+    let _ = afc.remove(RESTORE_APPLICATIONS_DIR).await;
+}
+
 async fn run_backup(
     qt_thread: QtThread<BackupManager>,
     udid: String,
     root: String,
+    force_full: bool,
 ) -> anyhow::Result<()> {
+    if !query_backup_encryption(&udid).await? {
+        anyhow::bail!("Encrypted backups must be enabled before starting a backup.");
+    }
     let device = crate::device_ctx::get_device(udid.clone()).await?;
     let provider_guard = device.provider.lock().await;
     let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
     let mut client = MobileBackup2Client::connect(provider_ref).await?;
+
+    let mut notification_client = match NotificationProxyClient::connect(provider_ref).await {
+        Ok(mut notification_client) => {
+            match notification_client
+                .observe_notifications(MOBILEBACKUP2_NOTIFICATIONS)
+                .await
+            {
+                Ok(()) => Some(notification_client),
+                Err(err) => {
+                    warn!("unable to observe backup notifications for {udid}: {err}");
+                    None
+                }
+            }
+        }
+        Err(err) => {
+            warn!("unable to connect to notification proxy for backup {udid}: {err}");
+            None
+        }
+    };
+    write_backup_info_plist(provider_ref, &root, &udid).await?;
+    let sync_session = BackupSyncSession::begin(provider_ref).await?;
     drop(provider_guard);
 
-    let delegate = iDescriptorBackupDelegate::new(qt_thread, "backup", root.clone(), udid.into());
-    let response = client
-        .backup_from_path(Path::new(&root), None, None, &delegate)
-        .await?;
-    check_response(response)?;
+    let delegate = iDescriptorBackupDelegate::new(
+        qt_thread.clone(),
+        "backup",
+        root.clone(),
+        QString::from(udid.clone()),
+    );
+    let options = BackupOptions::new().with_force_full_backup(force_full);
+    info!(
+        "starting {} backup for {udid}",
+        if force_full { "full" } else { "incremental" }
+    );
+
+    enum BackupWaitResult<T> {
+        Finished(T),
+        DeviceCancelled,
+    }
+
+    let backup_result = if let Some(notifications) = notification_client.as_mut() {
+        let backup =
+            client.backup_from_path_with_options(Path::new(&root), None, options, &delegate);
+        tokio::pin!(backup);
+        let mut monitor_notifications = true;
+
+        loop {
+            tokio::select! {
+                result = &mut backup => break BackupWaitResult::Finished(result),
+                notification = notifications.receive_notification(), if monitor_notifications => {
+                    match notification {
+                        Ok(name) => match MobileBackup2Notification::from_name(&name) {
+                            Some(MobileBackup2Notification::PasscodeRequested) => {
+                                let signal_udid = QString::from(udid.clone());
+                                qt_thread.queue(move |manager| {
+                                    manager.backupPasscodeChanged(signal_udid, true);
+                                });
+                            }
+                            Some(MobileBackup2Notification::PasscodeRequestDismissed) => {
+                                let signal_udid = QString::from(udid.clone());
+                                qt_thread.queue(move |manager| {
+                                    manager.backupPasscodeChanged(signal_udid, false);
+                                });
+                            }
+                            Some(MobileBackup2Notification::CancelRequested) => {
+                                let signal_udid = QString::from(udid.clone());
+                                qt_thread.queue(move |manager| {
+                                    manager.backupCancellationRequested(signal_udid);
+                                });
+                                break BackupWaitResult::DeviceCancelled;
+                            }
+                            Some(MobileBackup2Notification::BackupDomainChanged) => {
+                                debug!("backup encryption domain changed for {udid}");
+                            }
+                            None => {}
+                        },
+                        Err(err) => {
+                            warn!("backup notification monitoring stopped for {udid}: {err}");
+                            monitor_notifications = false;
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        BackupWaitResult::Finished(
+            client
+                .backup_from_path_with_options(Path::new(&root), None, options, &delegate)
+                .await,
+        )
+    };
+
+    let signal_udid = QString::from(udid.clone());
+    qt_thread.queue(move |manager| {
+        manager.backupPasscodeChanged(signal_udid, false);
+    });
+
+    let operation_result: anyhow::Result<()> = async {
+        let response = match backup_result {
+            BackupWaitResult::Finished(result) => result?,
+            BackupWaitResult::DeviceCancelled => {
+                return Err(BackupCancelledError.into());
+            }
+        };
+        check_response(response)?;
+        verify_backup_snapshot_finished(&root, &udid).await
+    }
+    .await;
     let _ = client.disconnect().await;
+    let sync_result = sync_session.finish().await;
+    operation_result?;
+    sync_result?;
     info!("backup completed");
     Ok(())
 }
@@ -777,10 +1445,17 @@ async fn run_restore(
     system_files: bool,
     remove_items_not_restored: bool,
 ) -> anyhow::Result<()> {
+    let info_plist = validate_restore_backup(&root, &udid, &password).await?;
     let device = crate::device_ctx::get_device(udid.clone()).await?;
     let provider_guard = device.provider.lock().await;
     let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
     let mut client = MobileBackup2Client::connect(provider_ref).await?;
+    let sync_session = BackupSyncSession::begin(provider_ref).await?;
+    if let Err(err) = write_restore_applications(provider_ref, &info_plist).await {
+        remove_restore_applications(provider_ref).await;
+        let _ = sync_session.finish().await;
+        return Err(err);
+    }
     drop(provider_guard);
 
     let mut options = RestoreOptions::new()
@@ -793,154 +1468,165 @@ async fn run_restore(
         options = options.with_password(password);
     }
 
-    let delegate =
-        iDescriptorBackupDelegate::new(qt_thread, "restore", root.clone(), QString::from(udid));
-    let response = client
-        .restore_from_path(Path::new(&root), None, Some(options), &delegate)
-        .await?;
-    check_response(response)?;
+    let delegate = iDescriptorBackupDelegate::new(
+        qt_thread,
+        "restore",
+        root.clone(),
+        QString::from(udid.clone()),
+    );
+    let operation_result: anyhow::Result<()> = async {
+        let response = client
+            .restore_from_path(Path::new(&root), None, Some(options), &delegate)
+            .await?;
+        check_response(response)
+    }
+    .await;
     let _ = client.disconnect().await;
+    if operation_result.is_err() {
+        let provider_guard = device.provider.lock().await;
+        remove_restore_applications(provider_guard.as_ref()).await;
+    }
+    let sync_result = sync_session.finish().await;
+    operation_result?;
+    sync_result?;
     info!("restore completed");
     Ok(())
 }
 
-// async fn run_erase(udid: String, root: String) -> anyhow::Result<()> {
-//     let device = crate::device_ctx::get_device(udid.clone()).await?;
-//     let provider_guard = device.provider.lock().await;
-//     let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
-//     let mut client = MobileBackup2Client::connect(provider_ref).await?;
-//     drop(provider_guard);
+async fn run_erase(udid: String, root: String) -> anyhow::Result<()> {
+    let device = crate::device_ctx::get_device(udid.clone()).await?;
+    let provider_guard = device.provider.lock().await;
+    let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
+    let mut client = MobileBackup2Client::connect(provider_ref).await?;
+    drop(provider_guard);
 
-//     let delegate = FsBackupDelegate;
-//     client
-//         .erase_device_from_path(Path::new(&root), &delegate)
-//         .await?;
-//     let _ = client.disconnect().await;
-//     info!("erase command sent");
-//     Ok(())
-// }
+    let delegate = FsBackupDelegate;
+    client
+        .erase_device_from_path(Path::new(&root), &delegate)
+        .await?;
+    let _ = client.disconnect().await;
+    info!("erase command sent");
+    Ok(())
+}
+
+#[derive(Debug)]
+struct MobileBackupResponseError {
+    code: i32,
+    description: String,
+}
+
+impl fmt::Display for MobileBackupResponseError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "ErrorCode {}: {}", self.code, self.description)
+    }
+}
+
+impl StdError for MobileBackupResponseError {}
+
+#[derive(Debug)]
+struct BackupCancelledError;
+
+impl fmt::Display for BackupCancelledError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("The backup was cancelled from the device.")
+    }
+}
+
+impl StdError for BackupCancelledError {}
+
+fn operation_error_details(error: &anyhow::Error) -> (i32, String) {
+    let code = error
+        .downcast_ref::<MobileBackupResponseError>()
+        .map(|error| error.code)
+        .or_else(|| error.downcast_ref::<BackupCancelledError>().map(|_| -2))
+        .unwrap_or(-1);
+    (code, error.to_string())
+}
 
 fn check_response(response: Option<plist::Dictionary>) -> anyhow::Result<()> {
-    if let Some(response) = response {
-        if let Some(code) = response
-            .get("ErrorCode")
-            .and_then(|v| v.as_unsigned_integer())
-        {
-            if code != 0 {
-                let desc = response
-                    .get("ErrorDescription")
-                    .and_then(|v| v.as_string())
-                    .unwrap_or("Unknown error");
-                anyhow::bail!("ErrorCode {code}: {desc}");
-            }
+    let response = response
+        .ok_or_else(|| anyhow::anyhow!("MobileBackup2 disconnected without a final response"))?;
+    let code = response
+        .get("ErrorCode")
+        .and_then(|value| {
+            value.as_signed_integer().or_else(|| {
+                value
+                    .as_unsigned_integer()
+                    .and_then(|code| i64::try_from(code).ok())
+            })
+        })
+        .ok_or_else(|| anyhow::anyhow!("MobileBackup2 response is missing ErrorCode"))?;
+
+    if code != 0 {
+        let desc = response
+            .get("ErrorDescription")
+            .and_then(|v| v.as_string())
+            .unwrap_or("Unknown error");
+        return Err(MobileBackupResponseError {
+            code: i32::try_from(code).unwrap_or(-1),
+            description: desc.to_owned(),
         }
+        .into());
     }
     Ok(())
 }
 
-// async fn read_backup_info(path: PathBuf) -> Option<BackupInfo> {
-//     let source = path.file_name()?.to_string_lossy().to_string();
-//     let udid = source.clone();
-//     let info_path = path.join("Info.plist");
-//     let manifest_path = path.join("Manifest.plist");
-//     let status_path = path.join("Status.plist");
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     if !tokio::fs::try_exists(&info_path).await.ok()?
-//         || !tokio::fs::try_exists(&manifest_path).await.ok()?
-//     {
-//         return None;
-//     }
+    #[test]
+    fn accepts_successful_mobilebackup_response() {
+        let mut response = plist::Dictionary::new();
+        response.insert("ErrorCode".into(), plist::Value::Integer(0_u64.into()));
+        assert!(check_response(Some(response)).is_ok());
+    }
 
-//     let info = read_plist_dict(&info_path).await.unwrap_or_default();
-//     let manifest = read_plist_dict(&manifest_path).await.unwrap_or_default();
-//     let status = read_plist_dict(&status_path).await.unwrap_or_default();
+    #[test]
+    fn preserves_signed_mobilebackup_error_code() {
+        let mut response = plist::Dictionary::new();
+        response.insert("ErrorCode".into(), plist::Value::Integer((-7_i64).into()));
+        response.insert(
+            "ErrorDescription".into(),
+            plist::Value::String("Incorrect password".into()),
+        );
 
-//     let device_name = string_value(&info, "Device Name")
-//         .or_else(|| string_value(&info, "DeviceName"))
-//         .unwrap_or_else(|| "Unknown Device".to_string());
-//     let display_name = string_value(&info, "Display Name")
-//         .or_else(|| string_value(&info, "DisplayName"))
-//         .unwrap_or_else(|| device_name.clone());
-//     let version = string_value(&info, "Product Version")
-//         .or_else(|| string_value(&info, "ProductVersion"))
-//         .unwrap_or_default();
-//     let encrypted = manifest
-//         .get("IsEncrypted")
-//         .and_then(|v| v.as_boolean())
-//         .unwrap_or(false);
-//     let status_text = string_value(&status, "Status").unwrap_or_else(|| "Available".to_string());
-//     let last_backup = plist_date_string(&status)
-//         .or_else(|| plist_date_string(&info))
-//         .or_else(|| file_modified_string(&path))
-//         .unwrap_or_default();
+        let error = check_response(Some(response)).expect_err("response should fail");
+        let response_error = error
+            .downcast_ref::<MobileBackupResponseError>()
+            .expect("typed MobileBackup2 error");
+        assert_eq!(response_error.code, -7);
+        assert_eq!(response_error.description, "Incorrect password");
+    }
 
-//     Some(BackupInfo {
-//         udid,
-//         source,
-//         device_name,
-//         display_name,
-//         last_backup,
-//         version,
-//         encrypted,
-//         path: path.to_string_lossy().to_string(),
-//         status: status_text,
-//     })
-// }
+    #[test]
+    fn rejects_disconnect_without_final_response() {
+        assert!(check_response(None).is_err());
+    }
 
-// async fn read_plist_dict(path: &Path) -> Option<plist::Dictionary> {
-//     let data = tokio::fs::read(path).await.ok()?;
-//     match plist::from_bytes::<Value>(&data).ok()? {
-//         Value::Dictionary(dict) => Some(dict),
-//         _ => None,
-//     }
-// }
+    #[test]
+    fn restore_options_match_system_settings_cli_flow() {
+        let options = RestoreOptions::new()
+            .with_reboot(true)
+            .with_copy(false)
+            .with_preserve_settings(false)
+            .with_system_files(true)
+            .with_remove_items_not_restored(false)
+            .with_password("secret")
+            .to_plist();
 
-// fn string_value(dict: &plist::Dictionary, key: &str) -> Option<String> {
-//     dict.get(key)
-//         .and_then(|value| value.as_string())
-//         .map(ToString::to_string)
-// }
-
-// fn plist_date_string(dict: &plist::Dictionary) -> Option<String> {
-//     for key in ["Date", "Last Backup Date", "LastBackupDate", "SnapshotDate"] {
-//         if let Some(value) = dict.get(key) {
-//             if let Some(date) = value.as_date() {
-//                 return Some(format!("{date:?}"));
-//             }
-//             if let Some(text) = value.as_string() {
-//                 return Some(text.to_string());
-//             }
-//         }
-//     }
-//     None
-// }
-
-// fn file_modified_string(path: &Path) -> Option<String> {
-//     let modified = std::fs::metadata(path).ok()?.modified().ok()?;
-//     let duration = modified.duration_since(SystemTime::UNIX_EPOCH).ok()?;
-//     Some(format!("{} seconds since epoch", duration.as_secs()))
-// }
-
-// fn state_map(
-//     busy: bool,
-//     operation: &str,
-//     progress: f64,
-//     percent_text: &str,
-//     time_remaining: &str,
-//     status_text: &str,
-//     error: &str,
-//     backup_root: &str,
-//     active_udid: &str,
-// ) -> QVariantMap {
-//     let mut state = QVariantMap::default();
-//     qvariantmap_insert!(state, "busy", busy);
-//     qvariantmap_insert!(state, "operation", QString::from(operation));
-//     qvariantmap_insert!(state, "progress", progress);
-//     qvariantmap_insert!(state, "percentText", QString::from(percent_text));
-//     qvariantmap_insert!(state, "timeRemaining", QString::from(time_remaining));
-//     qvariantmap_insert!(state, "statusText", QString::from(status_text));
-//     qvariantmap_insert!(state, "error", QString::from(error));
-//     qvariantmap_insert!(state, "backupRoot", QString::from(backup_root));
-//     qvariantmap_insert!(state, "activeUdid", QString::from(active_udid));
-//     state
-// }
+        assert_eq!(
+            options.get("RestoreSystemFiles"),
+            Some(&plist::Value::Boolean(true))
+        );
+        assert_eq!(
+            options.get("RestorePreserveSettings"),
+            Some(&plist::Value::Boolean(false))
+        );
+        assert_eq!(
+            options.get("RestoreDontCopyBackup"),
+            Some(&plist::Value::Boolean(true))
+        );
+        assert!(!options.contains_key("RestoreShouldReboot"));
+    }
+}

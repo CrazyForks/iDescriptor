@@ -16,6 +16,7 @@ Item {
     property int totalFiles: 0
     property int totalApplications: 0
     property double totalBytes: 0
+    property bool encrypted: false
 
     signal backRequested()
 
@@ -214,7 +215,7 @@ Item {
 
                 Label {
                     Layout.fillWidth: true
-                    text: qsTr("Tip: Connect the device that created this backup to view more details.")
+                    text: !root.encrypted ?qsTr("Tip: Connect the device that created this backup to view more details.") : qsTr("For now encrypted backup details are limited. Having the device connected will not provide more information.")
                     horizontalAlignment: Text.AlignLeft
                 }
 
@@ -228,7 +229,8 @@ Item {
                         spacing: 8
 
                         Label {
-                            text: qsTr("Offline Backup")
+                            text: qsTr("Offline Device Backup")
+                            visible: !root.encrypted
                             color: App.Theme.textMuted
                             leftPadding: 10
                             rightPadding: 10
@@ -258,7 +260,7 @@ Item {
                         }
 
                         Label {
-                            text: root.deviceSummary.passcodeSet ? qsTr("Passcode") : qsTr("No Passcode")
+                            text: root.deviceSummary.passcodeSet ? qsTr("Screen Passcode Set") : qsTr("No Screen Passcode")
                             color: root.deviceSummary.passcodeSet ? App.Theme.textMuted : App.Theme.dangerText
                             leftPadding: 10
                             rightPadding: 10

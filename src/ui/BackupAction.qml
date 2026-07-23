@@ -13,6 +13,7 @@ Item {
     required property string title
     required property string iconPath
     required property bool wireless
+    required property bool initialForceFullBackup
 
     readonly property int readyPhase: 0
     readonly property int runningPhase: 1
@@ -22,13 +23,16 @@ Item {
     property int phase: readyPhase
     property string statusDetail: ""
     property int receivedFileCount: 0
+    property bool passcodeRequested: false
+    property bool checkingEncryption: false
+    property bool startAfterEncryption: false
     readonly property int maxLogEntries: 500
     readonly property bool inProgress: phase === runningPhase
+    readonly property bool interactionLocked: inProgress || checkingEncryption
     readonly property string deviceName: title || qsTr("This Device")
     readonly property string placeholderSource: {
-        const source = String(iconPath || "")
-        if (source.endsWith(".svg"))
-            return source.slice(0, -4) + "_placeholder.png"
+        if (iconPath && iconPath.length > 0)
+            return iconPath
         return "qrc:/resources/icons/iphone_gen1_placeholder.png"
     }
 
@@ -36,17 +40,42 @@ Item {
     signal doneRequested()
     signal backupRootSelected(string path)
     signal backupFinished()
+    signal detailsRequested()
 
     function requestBackup() {
         if (!root.backupRoot || backupManager.busy)
             return
 
         if (root.wireless) {
-            wirelessWarningDialog.open()
+            App.Helpers.messageBox(
+                root,
+                qsTr("Back Up Over Wi-Fi?"),
+                qsTr("Wireless backups can take longer and may stop if the connection changes. Keep the device nearby, connected to power, and on the same Wi-Fi network until the backup finishes."),
+                MessageDialog.Yes | MessageDialog.No,
+                function(button) {
+                    if (button === MessageDialog.Yes)
+                        root.ensureEncryptedBackup()
+                })
             return
         }
 
-        root.startBackup()
+        root.ensureEncryptedBackup()
+    }
+
+    function ensureEncryptedBackup() {
+        if (!root.backupRoot || backupManager.busy || root.checkingEncryption)
+            return
+
+        root.checkingEncryption = true
+        root.statusDetail = qsTr("Checking backup encryption...")
+        backupManager.get_backup_encryption_status(root.udid)
+    }
+
+    function manageEncryption() {
+        if (backupManager.busy || root.checkingEncryption)
+            return
+        root.startAfterEncryption = false
+        encryptionDialog.open()
     }
 
     function startBackup() {
@@ -55,9 +84,10 @@ Item {
 
         fileLog.clear()
         root.receivedFileCount = 0
+        root.passcodeRequested = false
         root.statusDetail = qsTr("Preparing the backup...")
         root.phase = root.runningPhase
-        backupManager.start_backup(root.backupRoot, root.udid)
+        backupManager.start_backup(root.backupRoot, root.udid, forceFullBackupCheck.checked)
     }
 
     function cancelBackup() {
@@ -71,6 +101,7 @@ Item {
             return
         }
 
+        root.passcodeRequested = false
         root.phase = root.cancelledPhase
         root.statusDetail = qsTr("The backup was cancelled. Files already written may remain in the selected folder.")
     }
@@ -121,83 +152,66 @@ Item {
             root.appendFile(path)
         }
 
-        function onOperationFinished(operation, udid, success) {
+        function onBackupPasscodeChanged(udid, requested) {
+            if (!root.inProgress || udid !== root.udid)
+                return
+
+            root.passcodeRequested = requested
+            root.statusDetail = requested
+                    ? qsTr("Enter the device passcode on the device to continue.")
+                    : qsTr("Preparing the backup...")
+        }
+
+        function onBackupCancellationRequested(udid) {
+            if (!root.inProgress || udid !== root.udid)
+                return
+
+            root.statusDetail = qsTr("The device requested that this backup be cancelled.")
+        }
+
+        function onBackupEncryptionStatusReady(udid, success, enabled, errorString) {
+            if (udid !== root.udid
+                    || !root.checkingEncryption
+                    || root.startAfterEncryption)
+                return
+
+            if (!success) {
+                root.checkingEncryption = false
+                root.phase = root.failedPhase
+                root.statusDetail = errorString
+                    || qsTr("The device's backup encryption status could not be read.")
+                return
+            }
+
+            if (enabled) {
+                root.checkingEncryption = false
+                root.startBackup()
+                return
+            }
+
+            root.startAfterEncryption = true
+            Qt.callLater(function() {
+                encryptionDialog.open()
+            })
+        }
+
+        function onOperationFinished(operation, udid, success, errorCode, errorString) {
             if (operation !== "backup" || udid !== root.udid)
                 return
 
             if (success) {
+                root.passcodeRequested = false
                 root.phase = root.completedPhase
                 root.statusDetail = qsTr("Saved to %1").arg(root.backupRoot)
                 root.backupFinished()
+            } else if (errorCode === -2) {
+                root.passcodeRequested = false
+                root.phase = root.cancelledPhase
+                root.statusDetail = errorString || qsTr("The backup was cancelled from the device.")
             } else {
+                root.passcodeRequested = false
                 root.phase = root.failedPhase
-                root.statusDetail = qsTr("The backup operation ended before it could be completed.")
-            }
-        }
-    }
-
-    AnimatedDialog {
-        id: wirelessWarningDialog
-        modal: true
-        focus: true
-        anchors.centerIn: Overlay.overlay
-        width: Math.min(440, root.width - 48)
-        standardButtons: Dialog.NoButton
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        contentItem: ColumnLayout {
-            spacing: 16
-
-            Image {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: 34
-                Layout.preferredHeight: 34
-                source: "qrc:/resources/icons/qlementine-icons_wireless-1-16.svg"
-                fillMode: Image.PreserveAspectFit
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: qsTr("Back Up Over Wi-Fi?")
-                color: App.Theme.text
-                font.pixelSize: 20
-                font.weight: Font.DemiBold
-                horizontalAlignment: Text.AlignHCenter
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: qsTr("Wireless backups can take longer and may stop if the connection changes. Keep the device nearby, connected to power, and on the same Wi-Fi network until the backup finishes.")
-                color: App.Theme.textMuted
-                wrapMode: Text.WordWrap
-                horizontalAlignment: Text.AlignHCenter
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 1
-                color: App.Theme.separator
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-
-                Item { Layout.fillWidth: true }
-
-                Button {
-                    text: qsTr("Cancel")
-                    onClicked: wirelessWarningDialog.close()
-                }
-
-                Button {
-                    text: qsTr("Back Up Anyway")
-                    highlighted: true
-                    onClicked: {
-                        wirelessWarningDialog.close()
-                        root.startBackup()
-                    }
-                }
+                root.statusDetail = errorString || qsTr("The backup operation ended before it could be completed.")
             }
         }
     }
@@ -207,6 +221,33 @@ Item {
         title: qsTr("Select Backup Directory")
         currentFolder: App.Helpers.toFileUrl(root.backupRoot)
         onAccepted: root.backupRootSelected(QmlUtils.url_to_path(selectedFolder))
+    }
+
+    BackupEncryptionDialog {
+        id: encryptionDialog
+        anchors.centerIn: Overlay.overlay
+        udid: root.udid
+        deviceName: root.deviceName
+        backupRoot: root.backupRoot
+
+        onEncryptionConfigured: {
+            const shouldStart = root.startAfterEncryption
+            root.startAfterEncryption = false
+            root.checkingEncryption = false
+            if (shouldStart) {
+                root.startBackup()
+            } else {
+                App.Helpers.showInfo(root, qsTr("The encrypted backup password was updated."))
+            }
+        }
+
+        onClosed: {
+            if (root.startAfterEncryption) {
+                root.startAfterEncryption = false
+                root.checkingEncryption = false
+                root.statusDetail = ""
+            }
+        }
     }
 
     StateView {
@@ -223,25 +264,15 @@ Item {
                 Layout.fillWidth: true
                 spacing: 12
 
-                ToolButton {
-                    id: backButton
+                IconToolButton {
                     Layout.preferredWidth: 32
                     Layout.preferredHeight: 32
-                    enabled: !root.inProgress
-                    display: AbstractButton.IconOnly
+                    enabled: !root.interactionLocked
                     icon.source: "qrc:/resources/icons/material-symbols_arrow-left-alt.svg"
-                    icon.width: 18
-                    icon.height: 18
-                    ToolTip.visible: hovered
-                    ToolTip.text: root.inProgress
-                                      ? qsTr("A backup is in progress")
-                                      : qsTr("Back")
+                    toolTipText: root.interactionLocked
+                                 ? qsTr("A backup operation is in progress")
+                                 : qsTr("Back")
                     onClicked: root.backRequested()
-
-                    background: Rectangle {
-                        radius: 7
-                        color: backButton.hovered && backButton.enabled ? App.Theme.hover : "transparent"
-                    }
                 }
 
                 ColumnLayout {
@@ -295,9 +326,32 @@ Item {
                     Layout.fillWidth: true
                     labelText: qsTr("Backup Location")
                     location: root.backupRoot
-                    changeVisible: !root.inProgress && root.phase !== root.completedPhase
-                    changeEnabled: !backupManager.busy
+                    changeVisible: !root.interactionLocked && root.phase !== root.completedPhase
+                    changeEnabled: !backupManager.busy && !root.checkingEncryption
                     onChangeRequested: backupRootDialog.open()
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    visible: !root.inProgress && root.phase !== root.completedPhase
+
+                    CheckBox {
+                        id: forceFullBackupCheck
+                        text: qsTr("Force full backup")
+                        checked: root.initialForceFullBackup
+                        enabled: !backupManager.busy && !root.checkingEncryption
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: forceFullBackupCheck.indicator.width
+                                           + forceFullBackupCheck.spacing
+                        text: qsTr("Only change this if you know what you are doing. If not, just leave it as it is.")
+                        color: App.Theme.textMuted
+                        font.pixelSize: 12
+                        wrapMode: Text.WordWrap
+                    }
                 }
 
                 Rectangle {
@@ -366,7 +420,18 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            visible: fileLog.count === 0
+                            visible: fileLog.count === 0 && root.passcodeRequested
+                            text: qsTr("Enter the device passcode on the device to continue the backup.")
+                            color: App.Theme.systemOrange
+                            wrapMode: Text.WordWrap
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            visible: fileLog.count === 0 && !root.passcodeRequested
                             text: qsTr("Logs will appear here as files are received from the device.")
                             color: App.Theme.textMuted
                             wrapMode: Text.WordWrap
@@ -385,8 +450,8 @@ Item {
             ProgressBar {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 8
-                visible: root.inProgress
-                indeterminate: root.inProgress
+                visible: root.interactionLocked
+                indeterminate: root.interactionLocked
             }
 
             Rectangle {
@@ -420,6 +485,12 @@ Item {
 
                 Button {
                     visible: root.phase === root.completedPhase
+                    text: qsTr("Show Details")
+                    onClicked: root.detailsRequested(root.udid)
+                }
+
+                Button {
+                    visible: root.phase === root.completedPhase
                     text: Qt.platform.os === "osx" ? qsTr("Show in Finder") : qsTr("Show in Folder")
                     onClicked: Qt.openUrlExternally(App.Helpers.toFileUrl(root.backupRoot))
                 }
@@ -435,9 +506,20 @@ Item {
                     visible: root.phase === root.readyPhase
                           || root.phase === root.failedPhase
                           || root.phase === root.cancelledPhase
+                    text: qsTr("Manage Encryption…")
+                    enabled: !backupManager.busy && !root.checkingEncryption
+                    onClicked: root.manageEncryption()
+                }
+
+                Button {
+                    visible: root.phase === root.readyPhase
+                          || root.phase === root.failedPhase
+                          || root.phase === root.cancelledPhase
                     text: root.phase === root.readyPhase ? qsTr("Back Up Now") : qsTr("Try Again")
                     highlighted: true
-                    enabled: root.backupRoot.length > 0 && !backupManager.busy
+                    enabled: root.backupRoot.length > 0
+                             && !backupManager.busy
+                             && !root.checkingEncryption
                     onClicked: root.requestBackup()
                 }
             }

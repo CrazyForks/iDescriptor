@@ -19,13 +19,11 @@ ToolWindow {
     readonly property bool busy: backupManager.busy
     readonly property bool loading: state.loading
     property string selectedBackupUdid: ""
-    property string selectedBackupSource: ""
     property string selectedBackupName: ""
     property bool selectedBackupEncrypted: false
     property string eraseUdid: ""
     property string eraseName: ""
     property var deviceBackupSections: ({})
-    property var passwordWasSet: false
     function deviceName(device) {
         if (!device)
             return qsTr("Unknown")
@@ -60,39 +58,47 @@ ToolWindow {
 
         const metadata = backupManager.get_backup_metadata(udid, root.backupRoot)
         if (!metadata || !metadata.success) {
-            //handle error somehow
+            App.Helpers.showError(root, qsTr("The backup metadata could not be read."))
             return
         }
 
         root.selectedBackupUdid = udid
         root.selectedBackupName = title || udid
         root.selectedBackupEncrypted = metadata.IsEncrypted
-        root.passwordWasSet = metadata.WasPasscodeSet
-        passwordField.text = ""
-        encryptedBackup.checked = root.selectedBackupEncrypted
-        restoreDialog.open()
+        Qt.callLater(function() {
+            restoreDialog.open()
+        })
     }
 
 
     function openBackupDetails(udid, title) {
+        const metadata = backupManager.get_backup_metadata(udid, root.backupRoot)
+        if (metadata && metadata.success && metadata.IsEncrypted === true) {
+            root.openBackupDetailsWithoutDevice(udid, title, true)
+            return
+        }
+
         nav.push(detailsHostComponent, {
             sectionUdid: udid,
             sectionTitle: title || udid
         })
     }
 
-    function openBackupDetailsWithoutDevice(udid) {
+    function openBackupDetailsWithoutDevice(udid, title, encrypted) {
         nav.push(detailsHostComponentWithoutDevice, {
-            udid
+            udid,
+            title: title || udid,
+            encrypted
         })
     }
 
-    function openBackupAction(udid, title, iconPath, wireless) {
+    function openBackupAction(udid, title, iconPath, wireless, forceFullBackup) {
         nav.push(backupActionHostComponent, {
             sectionUdid: udid,
             sectionTitle: title || udid,
             sectionIconPath: iconPath || "qrc:/resources/icons/iphone_gen1.svg",
-            sectionWireless: wireless === true
+            sectionWireless: wireless === true,
+            sectionForceFullBackup: forceFullBackup === true
         })
     }
 
@@ -106,19 +112,30 @@ ToolWindow {
         backupManager.init(path)
     }
 
+    function showExperimentalBackupWarning() {
+        if (!settingsManager.backup_experimental_warning_acknowledged())
+            experimentalBackupDialog.open()
+    }
+
     Component.onCompleted: {
         backupManager.init(root.backupRoot)
+        Qt.callLater(root.showExperimentalBackupWarning)
         // refreshBackups()
     }
 
     onClosing: function(close) {
+        if ((eraseDialog.visible && eraseDialog.dismissalLocked)
+                || (restoreDialog.visible && restoreDialog.dismissalLocked)) {
+            close.accepted = false
+            return
+        }
         App.ClosingHandler.handler("backup", close, root)
     }
 
     Connections {
         target: backupManager
 
-        function onOperationFinished(operation, udid, success) {
+        function onOperationFinished(operation, udid, success, errorCode, errorString) {
             if (operation !== "restore")
                 return
 
@@ -145,184 +162,108 @@ ToolWindow {
         onAccepted: root.chooseBackupRoot(QmlUtils.url_to_path(selectedFolder))
     }
 
-    Dialog {
-        id: restoreDialog
+    AnimatedDialog {
+        id: experimentalBackupDialog
+        anchors.centerIn: Overlay.overlay
         modal: true
         focus: true
-        anchors.centerIn: Overlay.overlay
-        width: Math.min(460, root.width - 48)
-        title: qsTr("Restore Backup")
-        standardButtons: Dialog.Cancel | Dialog.Ok
-        onAccepted: {
-            if (!root.selectedBackupUdid || !root.selectedBackupSource)
-                return
+        title: qsTr("Experimental Backup Feature")
+        standardButtons: Dialog.NoButton
+        closePolicy: Popup.NoAutoClose
+        width: Math.min(root.width - 48, 520)
+        height: 450
+        padding: 24
 
-            if (root.passwordWasSet && !passwordField.text) {
-                // TODO: handle error
-                return
-            }
-
-            backupManager.start_restore(
-                root.backupRoot,
-                root.selectedBackupUdid,
-                root.selectedBackupSource,
-                encryptedBackup.checked ? passwordField.text : "",
-                rebootToggle.checked,
-                copyToggle.checked,
-                preserveToggle.checked,
-                systemToggle.checked,
-                removeToggle.checked
-            )
-
-            const section = root.deviceBackupSections[root.selectedBackupUdid]
-            if (section) {
-                section.isRestoring = true
-                section.progress = 0
-                section.cancelRequested = false
-            }
+        Overlay.modal: Rectangle {
+            color: Qt.rgba(0, 0, 0, App.Theme.darkMode ? 0.52 : 0.30)
         }
 
-        ColumnLayout {
-            width: parent.width
-            spacing: 14
+        contentItem: ColumnLayout {
+            spacing: 16
+
+            Rectangle {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: 64
+                Layout.preferredHeight: 64
+                radius: width / 2
+                color: Qt.rgba(1, 0.59, 0, App.Theme.darkMode ? 0.20 : 0.12)
+
+                Label {
+                    anchors.centerIn: parent
+                    text: "!"
+                    color: App.Theme.systemOrange
+                    font.pixelSize: 34
+                    font.bold: true
+                }
+            }
 
             Label {
                 Layout.fillWidth: true
-                text: qsTr("Restore “%1” to its matching device.").arg(root.selectedBackupName)
+                text: qsTr("Backups and restores are experimental")
                 color: App.Theme.text
+                font.pixelSize: 20
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
             }
 
-            ColumnLayout {
+            Label {
                 Layout.fillWidth: true
-                spacing: 0
-
-                Label {
-                    Layout.fillWidth: true
-                    text: qsTr("Restore Settings")
-                    color: App.Theme.textMuted
-                    font.pixelSize: 12
-                    bottomPadding: 6
-                }
-
-                CheckBox {
-                    id: rebootToggle
-                    Layout.fillWidth: true
-                    text: qsTr("Restart device after restore")
-                    checked: true
-                }
-
-                CheckBox {
-                    id: copyToggle
-                    Layout.fillWidth: true
-                    text: qsTr("Copy backup data")
-                    checked: true
-                }
-
-                CheckBox {
-                    id: preserveToggle
-                    Layout.fillWidth: true
-                    text: qsTr("Preserve settings")
-                    checked: true
-                }
-
-                CheckBox {
-                    id: systemToggle
-                    Layout.fillWidth: true
-                    text: qsTr("Restore system files")
-                    checked: false
-                }
-
-                CheckBox {
-                    id: removeToggle
-                    Layout.fillWidth: true
-                    text: qsTr("Remove items not restored")
-                    checked: false
-                }
+                text: qsTr("Proceed with care. Unexpected device, connection, or storage problems may cause an incomplete backup, a failed restore, or data loss. Keep another trusted backup and do not rely on iDescriptor as the only copy of important data.")
+                color: App.Theme.text
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
             }
 
-            CheckBox {
-                id: encryptedBackup
+            Label {
                 Layout.fillWidth: true
-                text: qsTr("Encrypted Backup")
-                checked: root.selectedBackupEncrypted
+                text: qsTr("This notice will only be shown once. Pressing OK confirms that you understand the risks.")
+                color: App.Theme.textMuted
+                font.pixelSize: 12
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
             }
 
-            TextField {
-                id: passwordField
-                Layout.fillWidth: true
-                visible: root.passwordWasSet
-                echoMode: TextInput.Password
-                placeholderText: qsTr("Backup password")
+            Item {
+                Layout.fillHeight: true
             }
-        }
-    }
 
-    Dialog {
-        id: advancedDialog
-        modal: true
-        focus: true
-        anchors.centerIn: Overlay.overlay
-        width: Math.min(460, root.width - 48)
-        title: qsTr("Advanced")
-        standardButtons: Dialog.Close
-
-        ColumnLayout {
-            width: parent.width
-            spacing: 0
-
-            Repeater {
-                model: App.DeviceContext.devices
-
-                ItemDelegate {
-                    Layout.fillWidth: true
-                    enabled: !root.busy
-                    text: qsTr("Erase %1…").arg(root.deviceName(model))
-                    palette.text: App.Theme.dangerText
-                    onClicked: {
-                        root.eraseUdid = model.udid
-                        root.eraseName = root.deviceName(model)
-                        advancedDialog.close()
-                        eraseConfirmOne.open()
-                    }
+            Button {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: 120
+                text: qsTr("OK")
+                highlighted: true
+                onClicked: {
+                    settingsManager.set_backup_experimental_warning_acknowledged(true)
+                    experimentalBackupDialog.close()
                 }
             }
         }
     }
 
-    Dialog {
-        id: eraseConfirmOne
-        modal: true
-        focus: true
+    App.RestoreDialog {
+        id: restoreDialog
         anchors.centerIn: Overlay.overlay
-        width: Math.min(440, root.width - 48)
-        title: qsTr("Erase Device")
-        standardButtons: Dialog.Cancel | Dialog.Ok
-        onAccepted: eraseConfirmTwo.open()
-
-        Label {
-            width: parent.width
-            text: qsTr("This will erase all content and settings from %1. This action cannot be undone.").arg(root.eraseName)
-            color: App.Theme.text
-            wrapMode: Text.WordWrap
+        backupRoot: root.backupRoot
+        selectedBackupUdid: root.selectedBackupUdid
+        selectedBackupName: root.selectedBackupName
+        selectedBackupEncrypted: root.selectedBackupEncrypted
+        onClosed: {
+            root.selectedBackupUdid = ""
+            root.selectedBackupName = ""
+            root.selectedBackupEncrypted = false
         }
     }
 
-    Dialog {
-        id: eraseConfirmTwo
-        modal: true
-        focus: true
+    App.EraseDialog {
+        id: eraseDialog
         anchors.centerIn: Overlay.overlay
-        width: Math.min(440, root.width - 48)
-        title: qsTr("Confirm Erase")
-        standardButtons: Dialog.Cancel | Dialog.Ok
-        onAccepted: backupManager.erase_device(root.backupRoot, root.eraseUdid)
-
-        Label {
-            width: parent.width
-            text: qsTr("Confirm again to permanently erase this device.")
-            color: App.Theme.dangerText
-            wrapMode: Text.WordWrap
+        udid: root.eraseUdid
+        displayName: root.eraseName
+        backupRoot: root.backupRoot
+        onClosed: {
+            root.eraseUdid = ""
+            root.eraseName = ""
         }
     }
 
@@ -342,7 +283,7 @@ ToolWindow {
 
 
             signal detailsRequested(string udid, string title)
-            signal backupRequested(string udid, string title, string iconPath, bool wireless)
+            signal backupRequested(string udid, string title, string iconPath, bool wireless, bool forceFullBackup)
 
             function handleReset() {
                 isRestoring = false
@@ -407,7 +348,7 @@ ToolWindow {
                         }
 
                         Button {
-                            text: !sectionRoot.backupExists ? qsTr("Back Up Now") : qsTr("Back Up Again")
+                            text: !sectionRoot.backupExists ? qsTr("Back Up Now") : qsTr("Update Backup")
                             highlighted: !sectionRoot.backupExists
                             enabled: !root.busy
                             onClicked: {
@@ -415,8 +356,21 @@ ToolWindow {
                                   sectionRoot.sectionUdid,
                                   sectionRoot.sectionTitle,
                                   sectionRoot.sectionIconPath,
-                                  sectionRoot.sectionWireless
+                                  sectionRoot.sectionWireless,
+                                  !sectionRoot.backupExists
                               )
+                            }
+                        }
+                        Button {
+                            text: qsTr("Erase")
+                            enabled: !root.busy
+                            palette.text: App.Theme.dangerText
+                            onClicked: {
+                                root.eraseUdid = sectionRoot.sectionUdid
+                                root.eraseName = sectionRoot.sectionTitle
+                                Qt.callLater(function() {
+                                    eraseDialog.open()
+                                })
                             }
                         }
 
@@ -626,7 +580,7 @@ ToolWindow {
                                         onLoaded: {
                                             item.sectionUdid = model.udid
                                             item.sectionTitle = model.info.marketing_name
-                                            item.sectionIconPath = model.info.icon_path
+                                            item.sectionIconPath = model.info.placeholder_path
                                             item.sectionWireless = model.info.is_wireless === true
                                             item.backupExists = backupManager.does_backup_exist_for_udid(model.udid)
                                             item.detailsRequested.connect(root.openBackupDetails)
@@ -699,6 +653,7 @@ ToolWindow {
             required property string sectionTitle
             required property string sectionIconPath
             required property bool sectionWireless
+            required property bool sectionForceFullBackup
 
             Loader {
                 anchors.fill: parent
@@ -708,10 +663,15 @@ ToolWindow {
                     title: itemRoot.sectionTitle
                     iconPath: itemRoot.sectionIconPath
                     wireless: itemRoot.sectionWireless
+                    initialForceFullBackup: itemRoot.sectionForceFullBackup
                     onBackRequested: nav.pop()
                     onDoneRequested: nav.pop()
                     onBackupRootSelected: function(path) {
                         root.chooseBackupRoot(path)
+                    }
+                    onDetailsRequested: function(udid) {
+                        // TODO: remove unnecessary args
+                        root.openBackupDetails(udid, udid)
                     }
                     onBackupFinished: backupManager.init(root.backupRoot)
                 }
@@ -725,11 +685,15 @@ ToolWindow {
         Item {
             id: itemRoot
             required property string udid
+            required property string title
+            property bool encrypted: false
             Loader {
                 anchors.fill: parent
                 sourceComponent: App.BackupDetailsWithoutDevice {
                     udid: itemRoot.udid
                     backupRoot: root.backupRoot
+                    title: itemRoot.title
+                    encrypted: itemRoot.encrypted
                     onBackRequested: nav.pop()
                 }
             }
