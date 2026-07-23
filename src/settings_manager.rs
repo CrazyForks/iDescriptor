@@ -116,6 +116,7 @@ pub struct SettingsManager {
     set_default_jailbroken_root_password: qt_method!(fn(&self, password: QString)),
     reset_to_defaults: qt_method!(fn(&self)),
 
+    current_version: qt_method!(fn(&self) -> QString),
     app_version: qt_method!(fn(&self) -> QString),
     set_app_version: qt_method!(fn(&self, version: QString)),
     icon_size_base_multiplier: qt_method!(fn(&self) -> f64),
@@ -555,6 +556,10 @@ impl SettingsManager {
         self.set_airplay_use_legacy_ports(true);
         self.set_show_v4l2(false);
         self.set_is_sleepy_device_warning_dismissed(false);
+    }
+
+    fn current_version(&self) -> QString {
+        QString::from(env!("CARGO_PKG_VERSION"))
     }
 
     fn app_version(&self) -> QString {
