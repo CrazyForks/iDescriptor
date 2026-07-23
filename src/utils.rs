@@ -1,6 +1,6 @@
 use crate::qvariantmap_insert;
 use crate::{POSSIBLE_ROOT, run_sync};
-use ::log::{debug, error, warn};
+use ::log::{debug, error,info, warn};
 use cpp::*;
 use idevice::{
     IdeviceError, IdeviceService,
@@ -213,8 +213,9 @@ pub fn parse_diag_info_old(dict: Dictionary) -> ParsedBatteryInfo {
         .get("MaxCapacity")
         .and_then(|v| v.as_unsigned_integer())
         .unwrap_or(0);
-    // skipping on very old devices for now
-    let battery_serial_number = "";
+
+    let battery_serial_number = dict.get("Serial").and_then(|v| v.as_string()).unwrap_or("Error retrieving serial number".into());
+
 
     let health_percent = format!(
         "{}%",
@@ -242,6 +243,7 @@ pub fn parse_diag_info_old(dict: Dictionary) -> ParsedBatteryInfo {
 }
 
 pub fn parse_diag_info(dict: Dictionary, raw_product_type: String) -> ParsedBatteryInfo {
+
     let cycle_count = dict
         .get("BatteryData")
         .and_then(|v| v.as_dictionary())
@@ -258,12 +260,7 @@ pub fn parse_diag_info(dict: Dictionary, raw_product_type: String) -> ParsedBatt
         .map(|device| device.major > 8 || (device.major == 8 && device.minor > 1))
         .unwrap_or(false);
 
-    let battery_serial_number = dict
-        .get("BatteryData")
-        .and_then(|v| v.as_dictionary())
-        .and_then(|v| v.get("BatterySerialNumber"))
-        .and_then(|v| v.as_string())
-        .unwrap_or("Error retrieving serial number".into());
+    let battery_serial_number = dict.get("Serial").and_then(|v| v.as_string()).unwrap_or("Error retrieving serial number".into());
     let design_capacity = dict
         .get("BatteryData")
         .and_then(|v| v.as_dictionary())
