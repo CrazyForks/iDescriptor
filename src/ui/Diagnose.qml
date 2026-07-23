@@ -116,13 +116,6 @@ Item {
                         Layout.fillWidth: true
                         spacing: 12
 
-                        Rectangle {
-                            Layout.preferredWidth: 12
-                            Layout.preferredHeight: 12
-                            radius: 6
-                            color: root.colorForKind(root.diagnoseState.summaryKind)
-                        }
-
                         Label {
                             Layout.fillWidth: true
                             text: root.diagnoseState.summary || qsTr("Checking system dependencies...")
@@ -159,12 +152,6 @@ Item {
                                 anchors.margins: 10
                                 spacing: 10
 
-                                Rectangle {
-                                    Layout.preferredWidth: 9
-                                    Layout.preferredHeight: 9
-                                    radius: 5
-                                    color: root.colorForKind(modelData.statusKind)
-                                }
 
                                 ColumnLayout {
                                     Layout.fillWidth: true
