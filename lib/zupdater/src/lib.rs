@@ -182,18 +182,7 @@ impl Updater {
 
     /// Checks GitHub releases and returns update information when a newer release exists.
     pub async fn check_for_updates(&self) -> Result<Option<Update>> {
-        let url = format!(
-            "https://api.github.com/repos/{}/releases",
-            self.repo
-        );
-        let releases = self
-            .client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Vec<GitHubRelease>>()
-            .await?;
+        let releases = self.fetch_releases().await?;
 
         let Some(release) = self.find_newer_release(releases)? else {
             return Ok(None);
@@ -230,6 +219,45 @@ impl Updater {
         }
 
         Ok(Some(update))
+    }
+
+    /// Returns metadata for the release matching the running application version.
+    pub async fn current_release(&self) -> Result<Option<Release>> {
+        Ok(self
+            .find_current_release(self.fetch_releases().await?)?
+            .map(Release::from))
+    }
+
+    async fn fetch_releases(&self) -> Result<Vec<GitHubRelease>> {
+        let url = format!("https://api.github.com/repos/{}/releases", self.repo);
+        Ok(self
+            .client
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Vec<GitHubRelease>>()
+            .await?)
+    }
+
+    fn find_current_release(&self, releases: Vec<GitHubRelease>) -> Result<Option<GitHubRelease>> {
+        let current = parse_version(&self.current_version)?;
+
+        for release in releases {
+            if self.skip_prerelease && release.prerelease {
+                continue;
+            }
+
+            let Ok(version) = parse_version(&release.tag_name) else {
+                continue;
+            };
+
+            if version == current {
+                return Ok(Some(release));
+            }
+        }
+
+        Ok(None)
     }
 
     fn find_newer_release(&self, releases: Vec<GitHubRelease>) -> Result<Option<GitHubRelease>> {
@@ -311,6 +339,36 @@ pub struct Update {
     /// Optional frontend message for package-manager-managed installs.
     pub package_manager_managed_message: Option<String>,
     client: Client,
+}
+
+/// Public metadata for a GitHub release without platform-specific asset selection.
+#[derive(Clone, Debug)]
+pub struct Release {
+    /// Raw GitHub release tag name.
+    pub tag_name: String,
+    /// Optional GitHub release display name.
+    pub release_name: Option<String>,
+    /// Release body/changelog text.
+    pub changelog: String,
+    /// Browser URL for the GitHub release page.
+    pub release_url: String,
+    /// Whether this is a prerelease.
+    pub prerelease: bool,
+    /// GitHub publish timestamp when provided.
+    pub published_at: Option<String>,
+}
+
+impl From<GitHubRelease> for Release {
+    fn from(release: GitHubRelease) -> Self {
+        Self {
+            tag_name: release.tag_name,
+            release_name: release.name,
+            changelog: release.body.unwrap_or_default(),
+            release_url: release.html_url,
+            prerelease: release.prerelease,
+            published_at: release.published_at,
+        }
+    }
 }
 
 impl Update {
@@ -600,5 +658,27 @@ mod tests {
             .unwrap();
 
         assert_eq!(release.tag_name, "v1.1");
+    }
+
+    #[test]
+    fn finds_release_matching_current_version() {
+        let updater = Updater::builder()
+            .repo("owner/repo")
+            .current_version("1.2.0")
+            .application_name("Example")
+            .platform(Platform::Linux)
+            .architecture(Architecture::X86_64)
+            .build()
+            .unwrap();
+
+        let release = updater
+            .find_current_release(vec![
+                release_for_test("v2.0.0", false, Vec::new()),
+                release_for_test("v1.2", false, Vec::new()),
+            ])
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(release.tag_name, "v1.2");
     }
 }
