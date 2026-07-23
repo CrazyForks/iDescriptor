@@ -1,3 +1,4 @@
+use anyhow::{Context, anyhow};
 use futures::StreamExt;
 use idevice::afc::opcode::AfcFopenMode;
 use idevice::{
@@ -14,10 +15,11 @@ use qmetaobject::{qt_base_class, qt_method};
 use qttypes::QVariantMap;
 use url::form_urlencoded::parse;
 
-use ::log::{debug, trace};
+use ::log::{debug, info, trace, warn};
 use std::f64::INFINITY;
 use std::future::Future;
 use std::sync::mpsc;
+use std::time::Duration;
 use std::{any, thread};
 use std::{any::type_name, sync::Arc};
 use std::{collections::HashMap, net::IpAddr};
@@ -40,25 +42,25 @@ use crate::{device_db, qvariantmap_insert, run_sync};
 use macros::QtThreading;
 use plist::{Dictionary, Value};
 use qmetaobject::prelude::*;
+
+const WIRELESS_INIT_TIMEOUT: Duration = Duration::from_secs(20);
+
 #[allow(non_snake_case)]
 #[derive(Default, QObject, QtThreading)]
 pub struct Core {
     base: qt_base_class!(trait QObject),
     init: qt_method!(fn(&mut self)),
-    init_wireless_device:
-        qt_method!(fn(&mut self, ip: QString, pairing_file: QString, mac_address: QString)),
+    init_wireless_device: qt_method!(fn(&mut self, ip: QString, mac_address: QString)),
     init_wireless_device_custom: qt_method!(fn(&mut self, ip: QString, pairing_file: QString)),
     exit_recovery_mode: qt_method!(fn(&mut self, ecid: QString) -> bool),
     // mac address will only be available if the pairing file was read successfully, otherwise it will be empty
     customInitFailed: qt_signal!(ip: QString, mac_address: QString, error: QString),
-    get_pairing_files: qt_method!(fn(&mut self) -> QVariantMap),
     remove_device: qt_method!(fn(&mut self, udid: QString)),
     deviceEvent: qt_signal!(eventType : u32, udid : QString , info : QVariantMap),
     recoveryDeviceEvent: qt_signal!(eventType : u32, id : QString , info : QVariantMap),
     initFailed: qt_signal!(mac_address : QString),
     noPairingFile: qt_signal!(mac_address : QString),
     sleepyTimeDetected: qt_signal!(),
-    deviceBecameWired: qt_signal!(udid: QString),
     is_init: bool,
 }
 
@@ -231,74 +233,58 @@ impl Core {
         })
     }
 
-    fn init_wireless_device(&mut self, ip: QString, pairing_file: QString, mac_address: QString) {
-        eprintln!(
-            "init_wireless_device: MAC: {} IP: {} Pairing File: {}",
-            mac_address, ip, pairing_file
-        );
+    fn init_wireless_device(&mut self, ip: QString, mac_address: QString) {
         let qt_thread = self.qt_thread();
         let ip_owned = ip.to_string();
-        let pairing_path = pairing_file.to_string();
         let mac_address_owned = mac_address.to_string();
         RUNTIME.spawn(async move {
-            let pairing_file = match PairingFile::read_from_file(&pairing_path) {
-                Ok(pf) => pf,
-                Err(e) => {
-                    qt_thread
-                        .queue(move |core_qobj| {
-                            core_qobj.noPairingFile(QString::from(mac_address_owned));
-                        });
-                    eprintln!("Failed to read pairing file: {e}");
-                    return;
-                }
-            };
-
             let addr = match ip_owned.parse::<IpAddr>() {
                 Ok(addr) => addr,
                 Err(e) => {
-                    //FIXME: emit event for failure
-                    eprintln!("Invalid IP address {}: {}", ip_owned, e);
+                    warn!("Invalid wireless device IP address {ip_owned}: {e}");
+                    qt_thread.queue(move |core_qobj| {
+                        core_qobj.initFailed(QString::from(mac_address_owned));
+                    });
                     return;
                 }
             };
 
-            let t = TcpProvider {
-                addr,
-                pairing_file,
-                label: APP_LABEL.to_string(),
-                scope_id : None
-            };
-
-
-            let qt_t_clone = qt_thread.clone();
-            let result = tokio::select! {
-                res = init_idescriptor_device(t, qt_t_clone) => res,
-                /* timeout */
-                _ = tokio::time::sleep(tokio::time::Duration::from_secs(20)) => {
-                    eprintln!("Timeout collecting device info for wireless device mac address: {mac_address_owned}");
-                    Err(IdeviceError::Timeout)
-                }
-            };
+            let result = tokio::time::timeout(
+                WIRELESS_INIT_TIMEOUT,
+                init_wireless_device_from_candidates(addr, &mac_address_owned, qt_thread.clone()),
+            )
+            .await;
 
             match result {
-                Ok((udid, info)) => {
+                Ok(Ok((udid, info))) => {
+                    info!(
+                        "Successfully initialized wireless device mac={} ip={} udid={}",
+                        mac_address_owned, ip_owned, udid
+                    );
                     // emit event with info
-                    qt_thread
-                        .queue(move |core_qobj| {
-                            core_qobj.deviceEvent(
-                                EV_CONNECTED,
-                                QString::from(udid),
-                                info,
-                            );
-                        });
+                    qt_thread.queue(move |core_qobj| {
+                        core_qobj.deviceEvent(EV_CONNECTED, QString::from(udid), info);
+                    });
                 }
-                Err(e) => {
-                    eprintln!("Failed to initialize wireless device mac address: {mac_address_owned} {e:?}");
+                Ok(Err(error)) => {
+                    warn!(
+                        "Failed to initialize wireless device mac={} ip={}: {}",
+                        mac_address_owned, ip_owned, error
+                    );
 
-                    qt_thread
-                        .queue(move |core_qobj| {
-                            core_qobj.initFailed(QString::from(mac_address_owned));
-                        });
+                    qt_thread.queue(move |core_qobj| {
+                        core_qobj.initFailed(QString::from(mac_address_owned));
+                    });
+                }
+                Err(_) => {
+                    warn!(
+                        "Timed out initializing wireless device mac={} ip={}",
+                        mac_address_owned, ip_owned
+                    );
+
+                    qt_thread.queue(move |core_qobj| {
+                        core_qobj.initFailed(QString::from(mac_address_owned));
+                    });
                 }
             }
         });
@@ -368,6 +354,18 @@ impl Core {
                         core_qobj.deviceEvent(EV_CONNECTED, QString::from(udid), info);
                     });
                 }
+                //pairing file doesn't belong to the device
+                Err(IdeviceError::InvalidHostID) => {
+                    eprintln!("Invalid pairing file for wireless device ip: {ip_owned}");
+
+                    qt_thread.queue(move |core_qobj| {
+                        core_qobj.customInitFailed(
+                            QString::from(ip_owned),
+                            QString::from(mac_address_owned),
+                            QString::from("invalid pairing file for this device"),
+                        );
+                    });
+                }
                 Err(e) => {
                     eprintln!("Failed to initialize wireless device ip: {ip_owned} {e:?}");
 
@@ -383,72 +381,6 @@ impl Core {
         });
     }
 
-    fn get_pairing_files(&mut self) -> QVariantMap {
-        let mut map = QVariantMap::default();
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let paths = match std::fs::read_dir(utils::get_lockdown_path()) {
-                Ok(iter) => iter
-                    .filter_map(|entry| {
-                        let entry = entry.ok()?;
-                        let path = entry.path();
-                        if path.is_file() { Some(path) } else { None }
-                    })
-                    .collect::<Vec<_>>(),
-                Err(_) => Vec::new(),
-            };
-
-            paths.into_iter().for_each(|path| {
-                if let Ok(pf) = PairingFile::read_from_file(&path) {
-                    let abs = path.canonicalize().unwrap_or(path);
-                    let abs_str = abs.to_string_lossy().to_string();
-
-                    map.insert(
-                        QString::from(pf.wifi_mac_address),
-                        QVariant::from(&QString::from(abs_str)),
-                    );
-                }
-            });
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            let entries: Vec<(String, String)> = crate::run_sync(async {
-                let mut out = Vec::new();
-
-                if let Ok(mut uc) = UsbmuxdConnection::default().await {
-                    if let Ok(devs) = uc.get_devices().await {
-                        for dev in devs {
-                            if let Ok(pair_rec) = uc.get_pair_record(&dev.udid).await {
-                                out.push((
-                                    pair_rec.wifi_mac_address.clone(),
-                                    format!("{}.plist", dev.udid),
-                                ));
-                            }
-                        }
-                    }
-                }
-
-                out
-            });
-
-            let base = utils::get_lockdown_path();
-
-            // turn $UDID.plist into /var/db/lockdown/UDID.plist
-            for (wifi_mac, file_name) in entries {
-                let full_path = base.join(&file_name);
-                let full_path_str = full_path.to_string_lossy().into_owned();
-
-                map.insert(
-                    QString::from(wifi_mac),
-                    QVariant::from(&QString::from(full_path_str)),
-                );
-            }
-        }
-
-        map
-    }
     fn remove_device(&mut self, udid: QString) {
         let udid_str = udid.to_string();
         RUNTIME.spawn(async move {
@@ -745,6 +677,199 @@ async fn emit_connected(qt_thread: QtThread<Core>, udid: String) {
     }
 }
 
+#[derive(Debug)]
+struct PairingCandidate {
+    pairing_file: PairingFile,
+    path: String,
+}
+
+fn normalize_mac_address(mac: &str) -> String {
+    mac.chars()
+        .filter(|character| character.is_ascii_hexdigit())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn prioritize_by_mac<T, F>(candidates: &mut [T], requested_mac: &str, candidate_mac: F)
+where
+    F: Fn(&T) -> &str,
+{
+    let requested_mac = normalize_mac_address(requested_mac);
+    candidates
+        .sort_by_key(|candidate| normalize_mac_address(candidate_mac(candidate)) != requested_mac);
+}
+
+fn prioritize_pairing_candidates(candidates: &mut [PairingCandidate], requested_mac: &str) {
+    prioritize_by_mac(candidates, requested_mac, |candidate| {
+        &candidate.pairing_file.wifi_mac_address
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn discover_pairing_candidates() -> anyhow::Result<Vec<PairingCandidate>> {
+    tokio::task::spawn_blocking(|| {
+        let lockdown_path = utils::get_lockdown_path();
+        let entries = std::fs::read_dir(&lockdown_path).with_context(|| {
+            format!(
+                "failed to read lockdown directory {}",
+                lockdown_path.display()
+            )
+        })?;
+
+        let mut candidates = Vec::new();
+        for entry in entries {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error) => {
+                    debug!("Skipping unreadable lockdown directory entry: {error}");
+                    continue;
+                }
+            };
+            let path = entry.path();
+            if !path.is_file()
+                || path.to_str().map_or(true, |s| {
+                    !s.ends_with(".plist") || s.ends_with("SystemConfiguration.plist")
+                })
+            {
+                continue;
+            }
+
+            match PairingFile::read_from_file(&path) {
+                Ok(pairing_file) => candidates.push(PairingCandidate {
+                    pairing_file,
+                    path: path.to_string_lossy().into_owned(),
+                }),
+                Err(error) => {
+                    debug!(
+                        "Skipping unusable pairing record path={}: {error}",
+                        path.display()
+                    );
+                }
+            }
+        }
+
+        Ok(candidates)
+    })
+    .await
+    .context("pairing-record discovery worker failed")?
+}
+
+#[cfg(target_os = "macos")]
+async fn discover_pairing_candidates() -> anyhow::Result<Vec<PairingCandidate>> {
+    let mut usbmuxd = UsbmuxdConnection::default()
+        .await
+        .context("failed to connect to usbmuxd for pairing records")?;
+    let devices = usbmuxd
+        .get_devices()
+        .await
+        .context("failed to list usbmuxd devices for pairing records")?;
+
+    let mut candidates = Vec::new();
+    for device in devices {
+        use std::path::PathBuf;
+
+        use idevice::pairing_file;
+
+        match usbmuxd.get_pair_record(&device.udid).await {
+            Ok(pairing_file) => candidates.push(PairingCandidate {
+                pairing_file,
+                path: PathBuf::new()
+                    .join(utils::get_lockdown_path())
+                    .join(&device.udid)
+                    .to_string_lossy()
+                    .into_owned(),
+            }),
+            Err(error) => {
+                debug!(
+                    "Skipping unavailable usbmuxd pairing record udid={}: {error}",
+                    device.udid
+                );
+            }
+        }
+    }
+
+    Ok(candidates)
+}
+
+async fn init_wireless_device_from_candidates(
+    addr: IpAddr,
+    requested_mac: &str,
+    qt_thread: QtThread<Core>,
+) -> anyhow::Result<(String, QVariantMap)> {
+    let normalized_requested_mac = normalize_mac_address(requested_mac);
+    if normalized_requested_mac.len() != 12 {
+        return Err(anyhow!(
+            "invalid wireless device MAC address: {requested_mac}"
+        ));
+    }
+
+    let mut candidates = discover_pairing_candidates().await?;
+    if candidates.is_empty() {
+        return Err(anyhow!("no pairing records found"));
+    }
+    prioritize_pairing_candidates(&mut candidates, requested_mac);
+
+    let candidate_count = candidates.len();
+    for (index, candidate) in candidates.into_iter().enumerate() {
+        info!(
+            "Trying wireless pairing record {}/{} target_ip={} requested_mac={} candidate_mac={} candidate_udid={} path={}",
+            index + 1,
+            candidate_count,
+            addr,
+            requested_mac,
+            candidate.pairing_file.wifi_mac_address,
+            candidate
+                .pairing_file
+                .udid
+                .as_deref()
+                .unwrap_or("<unknown>"),
+            candidate.path,
+        );
+
+        let candidate_mac_normalized =
+            normalize_mac_address(&candidate.pairing_file.wifi_mac_address);
+
+        let provider = TcpProvider {
+            addr,
+            pairing_file: candidate.pairing_file,
+            label: APP_LABEL.to_string(),
+            scope_id: None,
+        };
+
+        match init_idescriptor_device(provider, qt_thread.clone()).await {
+            Ok((udid, info)) => {
+                info!(
+                    "Successfully initialized wireless device target_ip={} requested_mac={} candidate_mac={} candidate_udid={} path={}",
+                    addr, requested_mac, candidate_mac_normalized, udid, candidate.path,
+                );
+                return Ok((udid, info));
+            }
+            Err(IdeviceError::InvalidHostID) => {
+                warn!(
+                    "Pairing record did not authenticate wireless device target_ip={} requested_mac={} candidate_mac={} path={}",
+                    addr, requested_mac, candidate_mac_normalized, candidate.path,
+                );
+                continue;
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to initialize wireless device target_ip={} requested_mac={} candidate_mac={} path={} error={:?}",
+                    addr, requested_mac, candidate_mac_normalized, candidate.path, e,
+                );
+                continue;
+            }
+        }
+    }
+
+    warn!(
+        "Exhausted {} pairing records for wireless device target_ip={} requested_mac={}",
+        candidate_count, addr, requested_mac
+    );
+    Err(anyhow!(
+        "no pairing record authenticated the requested wireless device"
+    ))
+}
+
 async fn init_idescriptor_device<
     T: idevice::provider::IdeviceProvider + Send + Sync + Clone + 'static,
 >(
@@ -850,14 +975,19 @@ async fn init_idescriptor_device<
         ios_version: iOSVersion::from_str(&ios_version),
     };
 
-    let udid_for_signal = udid.clone();
     let udid_for_task = udid.clone();
 
-    // FIXME: probably not want we need to do here
-    // insert_device will return true if device became wired, so we can emit the signal here
+    // Existing QML service objects own clients for the previous connection. Remove the
+    // old logical device before the caller emits the normal connected event so those
+    // objects are discarded and recreated from the newly inserted services.
     if insert_device(udid.clone(), device_services).await {
+        let replaced_udid = udid.clone();
         qt_thread.queue(move |core_qobj| {
-            core_qobj.deviceBecameWired(QString::from(udid_for_signal));
+            core_qobj.deviceEvent(
+                EV_DISCONNECTED,
+                QString::from(replaced_udid),
+                QVariantMap::default(),
+            );
         });
     }
 
@@ -890,10 +1020,10 @@ async fn init_idescriptor_device<
 }
 
 async fn collect_info(
-    mut def_vals_dict: &mut Dictionary,
+    def_vals_dict: &mut Dictionary,
     mut afc: &mut AfcClient,
-    mut lc: &mut LockdownClient,
-    mut diag_relay: &mut DiagnosticsRelayClient,
+    lc: &mut LockdownClient,
+    diag_relay: &mut DiagnosticsRelayClient,
     is_wireless: bool,
 ) -> Result<QVariantMap, IdeviceError> {
     let mut info = QVariantMap::default();
@@ -1039,6 +1169,17 @@ async fn collect_info(
         } else {
             QString::from("USB")
         }),
+    );
+
+    info.insert(
+        QString::from("ProductionDevice"),
+        QVariant::from(QString::from(
+            def_vals_dict
+                .get("ProductionSOC")
+                .and_then(|value| value.as_boolean())
+                .map(|production| if production { "Yes" } else { "No" })
+                .unwrap_or("Unknown"),
+        )),
     );
 
     info.insert(QString::from("is_wireless"), QVariant::from(is_wireless));
