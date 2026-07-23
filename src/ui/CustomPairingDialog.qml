@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
-import "." as App
+import "./"
 import "./base"
 
 
@@ -31,6 +31,7 @@ AnimatedDialog {
         title: qsTr("Choose pairing file")
         fileMode: FileDialog.OpenFile
         nameFilters: [qsTr("Property List files (*.plist)")]
+        currentFolder: Helpers.toFileUrl(QmlUtils.get_lockdown_path())
         onAccepted: {
             root.pairingFilePath = QmlUtils.url_to_path(selectedFile)
             root.errorText = ""
@@ -50,7 +51,7 @@ AnimatedDialog {
     }
 
     Connections {
-        target: App.DeviceContext
+        target: DeviceContext
 
         function onDeviceAdded(udid, mac) {
             if (!root.connecting)
@@ -69,7 +70,7 @@ AnimatedDialog {
         Label {
             Layout.fillWidth: true
             text: qsTr("Connect with pairing file")
-            color: App.Theme.text
+            color: Theme.text
             font.pixelSize: 20
             font.weight: Font.Medium
         }
@@ -77,7 +78,7 @@ AnimatedDialog {
         Label {
             Layout.fillWidth: true
             text: qsTr("Select a .plist pairing file and enter the device IP address.")
-            color: App.Theme.textMuted
+            color: Theme.textMuted
             font.pixelSize: 13
             wrapMode: Text.WordWrap
         }
@@ -87,8 +88,8 @@ AnimatedDialog {
             visible: root.errorText.length > 0
             implicitHeight: errorLabel.implicitHeight + 18
             radius: 10
-            color: Qt.rgba(App.Theme.dangerText.r, App.Theme.dangerText.g, App.Theme.dangerText.b, 0.10)
-            border.color: App.Theme.dangerText
+            color: Qt.rgba(Theme.dangerText.r, Theme.dangerText.g, Theme.dangerText.b, 0.10)
+            border.color: Theme.dangerText
             border.width: 1
 
             Label {
@@ -96,7 +97,7 @@ AnimatedDialog {
                 anchors.fill: parent
                 anchors.margins: 9
                 text: root.errorText
-                color: App.Theme.dangerText
+                color: Theme.dangerText
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
             }
@@ -108,7 +109,7 @@ AnimatedDialog {
 
             Label {
                 text: qsTr("Pairing file")
-                color: App.Theme.textMuted
+                color: Theme.textMuted
                 font.pixelSize: 12
             }
 
@@ -120,8 +121,8 @@ AnimatedDialog {
                     Layout.fillWidth: true
                     implicitHeight: 42
                     radius: 10
-                    color: App.Theme.softBg
-                    border.color: root.pairingFilePath.length > 0 ? App.Theme.controlStroke : App.Theme.dangerText
+                    color: Theme.softBg
+                    border.color: root.pairingFilePath.length > 0 ? Theme.controlStroke : Theme.dangerText
                     border.width: root.pairingFilePath.length > 0 ? 1 : 1
 
                     Label {
@@ -129,7 +130,7 @@ AnimatedDialog {
                         anchors.leftMargin: 12
                         anchors.rightMargin: 12
                         text: root.pairingFilePath.length > 0 ? root.pairingFilePath : qsTr("Choose a .plist file")
-                        color: root.pairingFilePath.length > 0 ? App.Theme.text : App.Theme.textMuted
+                        color: root.pairingFilePath.length > 0 ? Theme.text : Theme.textMuted
                         elide: Text.ElideMiddle
                         verticalAlignment: Text.AlignVCenter
                     }
@@ -143,8 +144,8 @@ AnimatedDialog {
 
                     background: Rectangle {
                         radius: 10
-                        color: parent.down ? App.Theme.pressed : (parent.hovered ? App.Theme.hover : App.Theme.softBg)
-                        border.color: App.Theme.controlStroke
+                        color: parent.down ? Theme.pressed : (parent.hovered ? Theme.hover : Theme.softBg)
+                        border.color: Theme.controlStroke
                         border.width: 1
                     }
                 }
@@ -157,7 +158,7 @@ AnimatedDialog {
 
             Label {
                 text: qsTr("IP address")
-                color: App.Theme.textMuted
+                color: Theme.textMuted
                 font.pixelSize: 12
             }
 
@@ -167,9 +168,9 @@ AnimatedDialog {
                 text: root.ipAddress
                 enabled: !root.connecting
                 placeholderText: qsTr("192.168.1.42")
-                color: App.Theme.text
-                selectedTextColor: App.Theme.textSelected
-                selectionColor: App.Theme.selection
+                color: Theme.text
+                selectedTextColor: Theme.textSelected
+                selectionColor: Theme.selection
                 onTextChanged: {
                     root.ipAddress = text
                     root.errorText = ""
@@ -177,10 +178,10 @@ AnimatedDialog {
 
                 background: Rectangle {
                     radius: 10
-                    color: App.Theme.softBg
-                    border.color: ipField.activeFocus ? App.Theme.focus
-                                : root.ipAddress.trim().length > 0 ? App.Theme.controlStroke
-                                                                  : App.Theme.dangerText
+                    color: Theme.softBg
+                    border.color: ipField.activeFocus ? Theme.focus
+                                : root.ipAddress.trim().length > 0 ? Theme.controlStroke
+                                                                  : Theme.dangerText
                     border.width: ipField.activeFocus ? 2 : 1
                 }
             }
@@ -201,7 +202,7 @@ AnimatedDialog {
 
                 background: Rectangle {
                     radius: 10
-                    color: parent.hovered ? App.Theme.hover : "transparent"
+                    color: parent.hovered ? Theme.hover : "transparent"
                 }
             }
 
@@ -213,7 +214,7 @@ AnimatedDialog {
 
                 contentItem: Label {
                     text: parent.text
-                    color: parent.enabled ? App.Theme.textSelected : App.Theme.textMuted
+                    color: parent.enabled ? Theme.textSelected : Theme.textMuted
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     font.weight: Font.Medium
@@ -221,8 +222,8 @@ AnimatedDialog {
 
                 background: Rectangle {
                     radius: 12
-                    color: parent.enabled ? (parent.down ? App.Theme.accentPressed : App.Theme.accent)
-                                          : App.Theme.softBg
+                    color: parent.enabled ? (parent.down ? Theme.accentPressed : Theme.accent)
+                                          : Theme.softBg
                 }
             }
         }
@@ -235,6 +236,6 @@ AnimatedDialog {
         root.errorText = ""
         root.connecting = true
         root.activeIpAddress = root.ipAddress.trim()
-        App.DeviceContext.tryToConnectToNetworkDeviceCustom(root.activeIpAddress, root.pairingFilePath)
+        DeviceContext.tryToConnectToNetworkDeviceCustom(root.activeIpAddress, root.pairingFilePath)
     }
 }
