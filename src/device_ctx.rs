@@ -118,16 +118,17 @@ pub async fn clean_device_from_app_state(udid: &str) {
     }
 }
 
-/// Insert a device into the global state and, returns true if the device became wired
+/// Inserts a device into the global state and returns whether an existing connection
+/// for the same UDID was replaced.
 pub async fn insert_device(udid: impl Into<String>, services: DeviceServices) -> bool {
     let udid = udid.into();
     let mut state = APP_DEVICE_STATE.lock().await;
     if let Some(mut old) = state.insert(udid.clone(), services) {
         if let Some(task) = old.heartbeat_task.take() {
-            eprintln!("device became wired - UDID {}", udid);
             task.abort();
-            return true;
         }
+        eprintln!("Replaced existing device connection - UDID {}", udid);
+        return true;
     }
     false
 }
