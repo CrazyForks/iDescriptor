@@ -6,6 +6,35 @@ import Qt5Compat.GraphicalEffects
 import "../" as App
 
 Dialog {
+    id: root
+
+    header: Label {
+        visible: root.title.length > 0
+        text: root.title
+        color: palette.text
+        elide: Text.ElideRight
+        font.bold: true
+        leftPadding: root.leftPadding
+        rightPadding: root.rightPadding
+        topPadding: 14
+        bottomPadding: 8
+
+        // The rounded panel is the dialog's only outer surface. Qt's default
+        // header background is square and otherwise leaks into its corners.
+        background: Item {}
+    }
+
+    footer: DialogButtonBox {
+        visible: count > 0
+        leftPadding: root.leftPadding
+        rightPadding: root.rightPadding
+        topPadding: 8
+        bottomPadding: 12
+
+        // Keep standard buttons while allowing the rounded panel to show
+        // through instead of drawing Qt's square footer background.
+        background: Item {}
+    }
 
     enter: Transition {
         ParallelAnimation {
