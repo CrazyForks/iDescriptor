@@ -14,8 +14,8 @@ QtObject {
     property string currentPendingDeviceUdid: ""
     property int currentTab: 0
     property bool showWelcomePage : true
-    //Record<mac,pairing_file_path>
-    property var pairing_files : ({})
+    // Record<normalized MAC, { ip, selectOnSuccess }>
+    property var wirelessConnectionAttempts: ({})
 
     signal deviceRemoved(string udid)
     signal deviceAdded(string udid, string mac)
@@ -139,17 +139,28 @@ QtObject {
     }
 
     function getDeviceByMacAddress(mac) {
+        const normalizedMac = root.normalizeMacAddress(mac)
+        if (normalizedMac.length !== 12)
+            return null
         for (let i = 0; i < devices.count; i++) {
             const device = devices.get(i)
-            if (device.info["WiFiAddress"] === mac) {
+            if (root.normalizeMacAddress(device.info["WiFiAddress"]) === normalizedMac) {
                 return device
             }
         }
         return null
     }
 
-    function cachePairedDevices() {
-        Object.assign(root.pairing_files, core.get_pairing_files());
+    function normalizeMacAddress(mac) {
+        return String(mac || "").replace(/[^0-9a-f]/gi, "").toLowerCase()
+    }
+
+    function finishWirelessConnectionAttempt(mac) {
+        const key = root.normalizeMacAddress(mac)
+        const attempt = root.wirelessConnectionAttempts[key]
+        if (attempt)
+            delete root.wirelessConnectionAttempts[key]
+        return attempt || null
     }
 
     // receives path of pairing file
@@ -158,38 +169,35 @@ QtObject {
         core.init_wireless_device_custom(ip, path)
     }
 
-    function tryToConnectToNetworkDevice(
-        mac, ip, force_cache, set_as_selection_if_exists
-    ){
-        console.log("QML: Trying to connect to network device with MAC:", mac, "IP:", ip, `should force cache=${force_cache}`);
-
-        if (force_cache) {
-            cachePairedDevices();
-        }
+    function tryToConnectToNetworkDevice(mac, ip, select_on_success) {
+        console.log("QML: Trying to connect to network device with MAC:", mac, "IP:", ip);
 
         const existingDevice = root.getDeviceByMacAddress(mac);
 
-        //FIXME
         if (existingDevice) {
             console.log("Device with MAC:", mac, "already exists. Emitting deviceAlreadyExistsMAC event");
             root.deviceAlreadyExistsMAC(mac);
-            if (set_as_selection_if_exists) {
+            if (select_on_success) {
                 console.log("Setting existing device as current selection");
                 root.selectConnectedDevice(existingDevice.udid);
             }
             return;
         }
 
-        cachePairedDevices();
-        const pairing_file = root.pairing_files[mac];
-        console.log(JSON.stringify(root.pairing_files));
-        if (!pairing_file) {
-            console.log("No pairing file found for MAC:", mac);
-            root.noPairingFileForWirelessDevice(mac);
+        const key = root.normalizeMacAddress(mac)
+        const existingAttempt = root.wirelessConnectionAttempts[key]
+        if (existingAttempt) {
+            // A manual request upgrades an automatic attempt without starting another connection.
+            if (select_on_success)
+                existingAttempt.selectOnSuccess = true
             return;
         }
-        //--- fn init_wireless_device(ip: QString, pairing_file: QString, mac_address: QString) ---
-        core.init_wireless_device(ip, pairing_file, mac);
+
+        root.wirelessConnectionAttempts[key] = {
+            ip: ip,
+            selectOnSuccess: !!select_on_success
+        }
+        core.init_wireless_device(ip, mac);
         root.initStarted(mac);
     }
 
@@ -220,14 +228,15 @@ QtObject {
             console.log("Device event:", eventType, udid, JSON.stringify(info))
 
             switch (eventType) {
+                /* Device added */
                 case 1:
                     root.removePendingDevice(udid, false)
                     const service_manager = serviceFactory.create_service_manager(udid, info.ios_version_major)
                     const sb_client = serviceFactory.create_springboard_services_client(udid)
                     const text = `${info.marketing_name} / ${udid.slice(0,10)}...`
                     const mac = info["WiFiAddress"]
-                    root.pairing_files[mac] = QmlUtils.get_lockdown_dir() + `/${udid}.plist`;
-                    console.log(JSON.stringify(root.pairing_files));
+                    const wirelessAttempt = info.is_wireless
+                            ? root.finishWirelessConnectionAttempt(mac) : null
                     devices.append(
                         {
                             udid: udid,
@@ -241,8 +250,12 @@ QtObject {
                         }
                     )
                     root.deviceAdded(udid, mac)
-                    root.selectConnectedDevice(udid)
+                    // Automatic wireless connections stay in the background. Wired and
+                    // custom pairing-file connections preserve their existing behavior.
+                    if (!wirelessAttempt || wirelessAttempt.selectOnSuccess)
+                        root.selectConnectedDevice(udid)
                     break;
+                /* Device removed */
                 case 2:
                     // FIXME: find an O(1) solution
                     for (let i = 0; i < devices.count; i++) {
@@ -258,6 +271,7 @@ QtObject {
                     root.deviceRemoved(udid)
                     root.selectFallbackDevice()
                     break;
+                /* Pending device added */
                 case 3:
                     if (root.getDevice(udid) || root.getPendingDevice(udid))
                         break
@@ -273,6 +287,7 @@ QtObject {
                         root.selectPendingDevice(udid)
                     }
                     break;
+                /* Pending device removed */
                 case 4:
                     if (root.getPendingDevice(udid)) {
                         root.removePendingDevice(udid, true)
@@ -292,6 +307,7 @@ QtObject {
             console.log("Recovery device event:", eventType, id, JSON.stringify(info))
 
             switch (eventType) {
+                /* Recovery device added */
                 case 1:
 
                     const name = info.marketing_name;
@@ -304,6 +320,7 @@ QtObject {
                             && !root.currentPendingDeviceUdid)
                         root.selectRecoveryDevice(id)
                     break;
+                /* Recovery device removed */
                 case 2:
                     for (let i = 0; i < recoveryDevices.count; i++) {
                         const device = recoveryDevices.get(i)
@@ -317,6 +334,18 @@ QtObject {
                     root.selectFallbackDevice()
                     break;
             }
+            /* force garbage collection otherwise
+            things get cleaned up after a long time */
+            gc();
+        }
+
+        function onInitFailed(macAddress) {
+            root.finishWirelessConnectionAttempt(macAddress)
+        }
+
+        function onNoPairingFile(macAddress) {
+            root.finishWirelessConnectionAttempt(macAddress)
+            root.noPairingFileForWirelessDevice(macAddress)
         }
     }
 
