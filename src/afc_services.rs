@@ -1,18 +1,21 @@
 use crate::device_ctx;
 use crate::media_streamer::MediaStreamSession;
 use crate::qt_threading::QtThreading;
-use crate::{RUNTIME, run_sync};
-use idevice::afc::AfcClient;
+use crate::utils::{heic_to_qimage, image_to_b64, is_heic_file};
+use crate::{RUNTIME, qvariantmap_insert, run_sync};
+use base64::{Engine as _, engine::general_purpose};
+use idevice::afc::opcode::AfcFopenMode;
+use idevice::afc::{AfcClient, FileInfo};
 use log::{debug, error, info, warn};
 use macros::QtThreading;
 use qmetaobject::prelude::*;
 use qttypes::{QStringList, QVariantMap};
-use std::sync::Arc;
+use std::{collections::HashSet, path::Component, sync::Arc};
 use tokio::sync::Mutex;
-#[derive(QObject, QtThreading)]
+#[derive(QObject, Default, QtThreading)]
 pub struct AfcServices {
     base: qt_base_class!(trait QObject),
-    afc: Arc<Mutex<AfcClient>>,
+    afc: Option<Arc<Mutex<AfcClient>>>,
     udid: String,
     // file_to_buffer: qt_method!(fn(self, file_path: QString) -> QByteArray),
     // get_file_size: qt_method!(fn(self, path: QString) -> i64),
@@ -21,6 +24,21 @@ pub struct AfcServices {
     check_is_dir_and_list_finished: qt_signal!(
         success: bool,
         entries: QVariantMap
+    ),
+    fileToBase64ImgReady: qt_signal!(file_path: QString, source: QString),
+    fileToBase64ImgFailed: qt_signal!(file_path: QString, error: QString),
+    file_to_base64_img: qt_method!(fn(&self, file_path: QString)),
+    fileInfoReady: qt_signal!(file_path: QString, info: QVariantMap),
+    fileInfoFailed: qt_signal!(file_path: QString, error: QString),
+    get_file_info: qt_method!(fn(&self, file_path: QString)),
+    deletePathsFinished: qt_signal!(
+        request_id: QString,
+        successful_items: i32,
+        failed_items: i32,
+        first_error: QString
+    ),
+    delete_paths: qt_method!(
+        fn(&self, request_id: QString, paths: QStringList, recursive_directories_confirmed: bool)
     ),
     start_video_stream: qt_method!(fn(&self, file_path: QString) -> QString),
     release_video_stream: qt_method!(fn(&self, url: QString)),
@@ -37,27 +55,180 @@ impl AfcServices {
         //only required for hause_arrest afc
         bundle_id: Option<String>,
     ) -> Self {
-        Self {
-            afc: afc_client,
-            udid: udid,
-            base: Default::default(),
-            // list_dir: Default::default(),
-            // file_to_buffer: Default::default(),
-            // is_directory: Default::default(),
-            // get_file_size: Default::default(),
-            check_is_dir_and_list: Default::default(),
-            check_is_dir_and_list_finished: Default::default(),
-            start_video_stream: Default::default(),
-            release_video_stream: Default::default(),
-            delete_path: Default::default(),
-            bundle_id: bundle_id.map_or_else(QString::default, QString::from),
-        }
+        let mut service = Self::default();
+        service.afc = Some(afc_client);
+        service.udid = udid;
+        service.bundle_id = bundle_id.map_or_else(QString::default, QString::from);
+        service
+    }
+
+    fn afc_client(&self, operation: &str) -> Option<Arc<Mutex<AfcClient>>> {
+        let Some(afc) = self.afc.as_ref() else {
+            let udid = if self.udid.is_empty() {
+                "unknown"
+            } else {
+                &self.udid
+            };
+            warn!("AfcServices cannot {operation}: AFC client is unavailable for udid={udid}");
+            return None;
+        };
+
+        Some(afc.clone())
+    }
+
+    fn file_to_base64_img(&self, file_path: QString) {
+        let Some(afc) = self.afc_client("load a preview image") else {
+            return;
+        };
+        let path = file_path.to_string();
+        let qt_thread = self.qt_thread();
+
+        RUNTIME.spawn(async move {
+            let result: anyhow::Result<QString> = async {
+                let mut afc = afc.lock().await;
+                let mut file = afc.open(&path, AfcFopenMode::RdOnly).await?;
+                let read_result = file.read_entire().await;
+                file.close().await.ok();
+                let data = read_result?;
+                drop(afc);
+
+                if data.is_empty() {
+                    anyhow::bail!("Image file is empty");
+                }
+
+                if is_heic_file(&path) {
+                    let image = heic_to_qimage(&data);
+                    let size = image.size();
+                    if size.width <= 0 || size.height <= 0 {
+                        anyhow::bail!("Failed to decode HEIC image");
+                    }
+                    return Ok(image_to_b64(image));
+                }
+
+                let encoded = general_purpose::STANDARD.encode(data);
+                Ok(QString::from(format!(
+                    "data:{};base64,{encoded}",
+                    image_mime_type(&path)
+                )))
+            }
+            .await;
+
+            let signal_path = QString::from(path.clone());
+            qt_thread.queue(move |service| match result {
+                Ok(source) => service.fileToBase64ImgReady(signal_path, source),
+                Err(err) => {
+                    warn!("Failed to load preview image {path}: {err}");
+                    service.fileToBase64ImgFailed(signal_path, QString::from(err.to_string()));
+                }
+            });
+        });
+    }
+
+    fn get_file_info(&self, file_path: QString) {
+        let Some(afc) = self.afc_client("get file information") else {
+            return;
+        };
+        let path = file_path.to_string();
+        let qt_thread = self.qt_thread();
+
+        RUNTIME.spawn(async move {
+            let result = {
+                let mut afc = afc.lock().await;
+                afc.get_file_info(&path).await
+            };
+
+            let signal_path = QString::from(path.clone());
+            qt_thread.queue(move |service| match result {
+                Ok(info) => service.fileInfoReady(signal_path, file_info_to_qvariant_map(info)),
+                Err(err) => {
+                    warn!("Failed to get AFC file info for {path}: {err}");
+                    service.fileInfoFailed(signal_path, QString::from(err.to_string()));
+                }
+            });
+        });
+    }
+
+    fn delete_paths(
+        &self,
+        request_id: QString,
+        paths: QStringList,
+        recursive_directories_confirmed: bool,
+    ) {
+        let Some(afc) = self.afc_client("delete paths") else {
+            return;
+        };
+        let request_id = request_id.to_string();
+        let paths: Vec<String> = paths.into_iter().map(|path| path.to_string()).collect();
+        let qt_thread = self.qt_thread();
+
+        RUNTIME.spawn(async move {
+            let mut successful_items = 0_i32;
+            let mut failed_items = 0_i32;
+            let mut first_error = None;
+            let mut seen_paths = HashSet::new();
+            let mut afc = afc.lock().await;
+
+            for path in paths {
+                if !seen_paths.insert(path.clone()) {
+                    continue;
+                }
+
+                let result: Result<(), String> = async {
+                    validate_deletion_path(&path)?;
+                    let info = afc
+                        .get_file_info(&path)
+                        .await
+                        .map_err(|err| format!("Failed to inspect {path}: {err}"))?;
+
+                    if info.st_ifmt == "S_IFDIR" {
+                        if !recursive_directories_confirmed {
+                            return Err(format!(
+                                "Refusing to recursively delete unconfirmed directory {path}"
+                            ));
+                        }
+
+                        afc.remove_all(&path)
+                            .await
+                            .map_err(|err| format!("Failed to delete directory {path}: {err}"))
+                    } else {
+                        afc.remove(&path)
+                            .await
+                            .map_err(|err| format!("Failed to delete {path}: {err}"))
+                    }
+                }
+                .await;
+
+                match result {
+                    Ok(()) => successful_items += 1,
+                    Err(err) => {
+                        warn!("AFC batch deletion failed: {err}");
+                        failed_items += 1;
+                        if first_error.is_none() {
+                            first_error = Some(err);
+                        }
+                    }
+                }
+            }
+
+            let request_id = QString::from(request_id);
+            let first_error = QString::from(first_error.unwrap_or_default());
+            qt_thread.queue(move |service| {
+                service.deletePathsFinished(
+                    request_id,
+                    successful_items,
+                    failed_items,
+                    first_error,
+                );
+            });
+        });
     }
 
     // FIXME: resolve symlinks
     fn check_is_dir_and_list(&self, path: QString) {
+        let Some(afc_arc) = self.afc_client("list a directory") else {
+            return;
+        };
         let path_str = path.to_string();
-        let afc_arc = self.afc.clone();
         let qt_thread = self.qt_thread();
         RUNTIME.spawn(async move {
             let mut map = QVariantMap::default();
@@ -93,144 +264,11 @@ impl AfcServices {
         });
     }
 
-    // fn file_to_buffer(&self, album_path: QString) -> QByteArray {
-    //     let udid = self.get_udid().to_string();
-    //     let album_path_string = album_path.to_string();
-
-    //     let data: Vec<u8> = run_sync(async move {
-    //         let afc_arc = {
-    //             let maybe_device = APP_DEVICE_STATE.lock().await.get(udid.as_str()).cloned();
-
-    //             let device = match maybe_device {
-    //                 Some(d) => d,
-    //                 None => {
-    //                     eprintln!("file_to_buffer: device {udid} not found");
-    //                     return Vec::new();
-    //                 }
-    //             };
-    //             device.afc.clone()
-    //         };
-
-    //         let mut afc = afc_arc.lock().await;
-
-    //         let mut fd = match afc
-    //             .open(album_path_string.clone(), AfcFopenMode::RdOnly)
-    //             .await
-    //         {
-    //             Ok(f) => f,
-    //             Err(e) => {
-    //                 eprintln!("file_to_buffer: failed to open {album_path_string}: {e}");
-    //                 return Vec::new();
-    //             }
-    //         };
-
-    //         let mut buf = Vec::new();
-    //         let mut chunk = vec![0u8; 8192];
-
-    //         loop {
-    //             let n = match fd.read(&mut chunk).await {
-    //                 Ok(n) => n,
-    //                 Err(e) => {
-    //                     eprintln!("file_to_buffer: failed to read {album_path_string}: {e}");
-    //                     buf.clear();
-    //                     break;
-    //                 }
-    //             };
-    //             if n == 0 {
-    //                 break;
-    //             }
-    //             buf.extend_from_slice(&chunk[..n]);
-    //         }
-    //         fd.close().await.ok();
-    //         buf
-    //     });
-
-    //     if data.is_empty() {
-    //         QByteArray::default()
-    //     } else {
-    //         QByteArray::from(&data[..])
-    //     }
-    // }
-
-    // fn get_file_size(self: &Self, path: QString) -> i64 {
-    //     let udid = self.get_udid().to_string();
-    //     let path_string = path.to_string();
-
-    //     run_sync(async move {
-    //         let afc_arc = {
-    //             let maybe_device = APP_DEVICE_STATE.lock().await.get(udid.as_str()).cloned();
-
-    //             let device = match maybe_device {
-    //                 Some(d) => d,
-    //                 None => {
-    //                     eprintln!("file_to_buffer: device {udid} not found");
-    //                     return -1;
-    //                 }
-    //             };
-    //             device.afc.clone()
-    //         };
-
-    //         let mut afc = afc_arc.lock().await;
-
-    //         afc::get_file_size(&mut afc, path_string)
-    //             .await
-    //             .map(|v| v as i64)
-    //             .unwrap_or(-1)
-    //     })
-    // }
-
-    // fn get_dirs_item_count(self: &Self, dirs: QList<QString>) -> i64 {
-    //     let udid = self.get_udid().to_string();
-
-    //     let mut dir_vec: Vec<String> = Vec::new();
-    //     for i in 0..dirs.len() {
-    //         if let Some(qdir) = dirs.get(i) {
-    //             dir_vec.push(qdir.to_string());
-    //         }
-    //     }
-
-    //     run_sync(async move {
-    //         let afc_arc = {
-    //             let maybe_device = APP_DEVICE_STATE.lock().await.get(udid.as_str()).cloned();
-
-    //             let device = match maybe_device {
-    //                 Some(d) => d,
-    //                 None => {
-    //                     eprintln!("get_dirs_item_count: device {udid} not found");
-    //                     return -1;
-    //                 }
-    //             };
-
-    //             device.afc.clone()
-    //         };
-
-    //         let mut afc = afc_arc.lock().await;
-    //         let mut total: i64 = 0;
-
-    //         for dir_str in dir_vec {
-    //             let names = match afc.list_dir(&dir_str).await {
-    //                 Ok(list) => list,
-    //                 Err(e) => {
-    //                     eprintln!("get_dirs_item_count: list_dir({dir_str}) failed: {e}");
-    //                     continue;
-    //                 }
-    //             };
-
-    //             let count = names
-    //                 .into_iter()
-    //                 .filter(|name| name != "." && name != "..")
-    //                 .count() as i64;
-
-    //             total += count;
-    //         }
-
-    //         total
-    //     })
-    // }
-
     fn list_files_flat(&self, dir: QString) -> QStringList {
+        let Some(afc_arc) = self.afc_client("list files") else {
+            return QStringList::default();
+        };
         let dir_str = dir.to_string();
-        let afc_arc = self.afc.clone();
         let entries = run_sync(async move {
             let mut afc = afc_arc.lock().await;
             let names = match afc.list_dir(&dir_str).await {
@@ -271,8 +309,10 @@ impl AfcServices {
     }
 
     fn start_video_stream(&self, file_path: QString) -> QString {
+        let Some(afc) = self.afc_client("start a video stream") else {
+            return QString::default();
+        };
         let path_str = file_path.to_string();
-        let afc = self.afc.clone();
         let udid = self.udid.clone();
         let stream_udid = udid.clone();
 
@@ -301,6 +341,9 @@ impl AfcServices {
     }
 
     fn release_video_stream(&self, url: QString) {
+        if self.afc_client("release a video stream").is_none() {
+            return;
+        }
         let udid = self.udid.clone();
         let url_str = url.to_string();
 
@@ -329,8 +372,10 @@ impl AfcServices {
     }
 
     fn delete_path(&self, path: QString) -> bool {
+        let Some(afc_arc) = self.afc_client("delete a path") else {
+            return false;
+        };
         let path_str = path.to_string();
-        let afc_arc = self.afc.clone();
 
         run_sync(async move {
             let mut afc = afc_arc.lock().await;
@@ -344,6 +389,66 @@ impl AfcServices {
             }
         })
     }
+}
+
+fn image_mime_type(path: &str) -> &'static str {
+    let extension = std::path::Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    match extension.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "bmp" => "image/bmp",
+        "webp" => "image/webp",
+        "tif" | "tiff" => "image/tiff",
+        _ => "application/octet-stream",
+    }
+}
+
+fn validate_deletion_path(path: &str) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() || trimmed == "/" || trimmed == "." || trimmed == ".." {
+        return Err(format!("Refusing to delete unsafe path {trimmed:?}"));
+    }
+
+    if std::path::Path::new(trimmed)
+        .components()
+        .any(|component| component == Component::ParentDir)
+    {
+        return Err(format!(
+            "Refusing to delete path containing '..': {trimmed}"
+        ));
+    }
+
+    Ok(())
+}
+
+fn file_info_to_qvariant_map(info: FileInfo) -> QVariantMap {
+    let mut map = QVariantMap::default();
+    qvariantmap_insert!(map, "size", info.size as i64);
+    qvariantmap_insert!(map, "blocks", info.blocks as i64);
+    qvariantmap_insert!(
+        map,
+        "creation",
+        QString::from(info.creation.format("%Y-%m-%d %H:%M:%S%.3f").to_string())
+    );
+    qvariantmap_insert!(
+        map,
+        "modified",
+        QString::from(info.modified.format("%Y-%m-%d %H:%M:%S%.3f").to_string())
+    );
+    qvariantmap_insert!(map, "hardLinks", QString::from(info.st_nlink));
+    qvariantmap_insert!(map, "type", QString::from(info.st_ifmt));
+    qvariantmap_insert!(
+        map,
+        "linkTarget",
+        QString::from(info.st_link_target.unwrap_or_default())
+    );
+    map
 }
 
 impl Drop for AfcServices {
