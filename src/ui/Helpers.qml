@@ -141,6 +141,58 @@ QtObject {
         return messageBox(parent, qsTr("Information"), message);
     }
 
+    function showFileInfo(parentWindow, afcClient, filePath, displayName) {
+        var component = Qt.createComponent("FileInfoDialog.qml")
+        if (component.status !== Component.Ready) {
+            console.error("Failed to create file information dialog:", component.errorString())
+            return null
+        }
+
+        var dialog = component.createObject(parentWindow.contentItem, {
+            "afcClient": afcClient,
+            "filePath": filePath,
+            "displayName": displayName
+        })
+        if (dialog === null) {
+            console.error("Failed to instantiate file information dialog:", component.errorString())
+            return null
+        }
+
+        dialog.closed.connect(function() {
+            dialog.destroy()
+        })
+        dialog.open()
+        dialog.load()
+        return dialog
+    }
+
+    function showDeleteConfirmation(parentWindow, fileCount, folderCount, onConfirmed) {
+        var component = Qt.createComponent("DeleteConfirmationDialog.qml")
+        if (component.status !== Component.Ready) {
+            console.error("Failed to create deletion confirmation dialog:", component.errorString())
+            return null
+        }
+
+        var dialog = component.createObject(parentWindow.contentItem, {
+            "fileCount": fileCount,
+            "folderCount": folderCount
+        })
+        if (dialog === null) {
+            console.error("Failed to instantiate deletion confirmation dialog:", component.errorString())
+            return null
+        }
+
+        dialog.confirmed.connect(function() {
+            if (onConfirmed)
+                onConfirmed()
+        })
+        dialog.closed.connect(function() {
+            dialog.destroy()
+        })
+        dialog.open()
+        return dialog
+    }
+
 
     function toFileUrl(path) {
         if (Qt.platform.os === "windows")

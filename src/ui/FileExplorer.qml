@@ -15,11 +15,21 @@ Item {
     property bool useAfc2: false
 
     property bool favEnabled: true
+    property bool allowDirectoryExport: true
     property string rootPath: "/"
 
     property string currentPath: "/"
     property bool loading: false
     property string errorMessage: ""
+    property bool refreshAfterLoad: false
+    property var pendingImportJobs: ({})
+    property bool deleting: false
+    property string pendingDeleteRequestId: ""
+    property int selectedCount: 0
+    property int selectedFileCount: 0
+    property int selectedFolderCount: 0
+
+    readonly property bool busy: loading || deleting
 
     property var backStack: []
     property var forwardStack: []
@@ -48,6 +58,46 @@ Item {
         }
         setLoading(true)
         afcClient.check_is_dir_and_list(currentPath)
+    }
+
+    function requestRefresh() {
+        if (loading) {
+            refreshAfterLoad = true
+            return
+        }
+
+        refresh()
+    }
+
+    function finishDirectoryLoad() {
+        loading = false
+
+        if (!refreshAfterLoad)
+            return
+
+        refreshAfterLoad = false
+        Qt.callLater(function() {
+            if (root.afcClient)
+                root.refresh()
+        })
+    }
+
+    function importContextKey() {
+        if (afcClient && afcClient.bundle_id)
+            return udid + "|house-arrest|" + afcClient.bundle_id
+
+        return udid + (useAfc2 ? "|afc2" : "|afc")
+    }
+
+    function hasPendingImportFor(destinationPath, contextKey) {
+        for (var jobId in pendingImportJobs) {
+            var job = pendingImportJobs[jobId]
+            if (job.destinationPath === destinationPath
+                    && job.contextKey === contextKey)
+                return true
+        }
+
+        return false
     }
 
     function navigateToPath(path, pushHistory) {
@@ -115,10 +165,11 @@ Item {
                 console.log("Opening preview for", path)
                 console.log("afcClient defined?", !!afcClient)
                 console.log("root.udid:", root.udid)
-                const win = comp.createObject(null, {
+                const win = comp.createObject(root, {
                     filePath: path,
                     udid: root.udid,
-                    afcClient: root.afcClient
+                    afcClient: root.afcClient,
+                    useAfc2: root.useAfc2
                 })
                 if (win !== null) {
                     win.show()
@@ -135,79 +186,92 @@ Item {
         errorMessage = qsTr("Open is not implemented for this file type yet.")
     }
 
-    function deleteSelected() {
-        if (!afcClient) return
-        if (selectedPaths.length === 0) return
-
-        setLoading(true)
-        var ok = true
-        for (var i = 0; i < selectedPaths.length; i++) {
-            var p = selectedPaths[i]
-            var r = afcClient.delete_path(p)
-            if (!r) ok = false
-        }
-
-        selectedPaths = []
-        if (!ok) {
-            setLoading(false)
-            errorMessage = qsTr("Failed to delete one or more items.")
-            return
-        }
-        refresh()
-    }
-
     ListModel { id: entriesModel }
 
-    property var selectedPaths: []
-
-    function isSelected(path) { return selectedPaths.indexOf(path) !== -1 }
-    function multiSelectModifierPressed(modifiers) {
-        if (Qt.platform.os === "osx" || Qt.platform.os === "darwin")
-            return (modifiers & Qt.MetaModifier) !== 0
-
-        return (modifiers & Qt.ControlModifier) !== 0
-    }
-
-    function toggleSelectedPath(path) {
-        var idx = selectedPaths.indexOf(path)
-        if (idx === -1) selectedPaths = selectedPaths.concat([path])
-        else selectedPaths = selectedPaths.slice(0, idx).concat(selectedPaths.slice(idx + 1))
-        updateActionEnabled()
-    }
-
-    function selectPath(path, modifiers) {
-        if (multiSelectModifierPressed(modifiers)) {
-            toggleSelectedPath(path)
+    function setEntrySelected(index, selected) {
+        if (index < 0 || index >= entriesModel.count)
             return
+        entriesModel.setProperty(index, "selected", selected)
+    }
+
+    function updateSelectionCounts() {
+        var files = 0
+        var folders = 0
+        for (var index = 0; index < entriesModel.count; ++index) {
+            var entry = entriesModel.get(index)
+            if (!entry.selected)
+                continue
+            if (entry.isDir)
+                ++folders
+            else
+                ++files
         }
 
-        selectedPaths = [path]
-        updateActionEnabled()
+        selectedFileCount = files
+        selectedFolderCount = folders
+        selectedCount = files + folders
     }
 
-    function updateActionEnabled() {
-        exportBtn.enabled = selectedPaths.length > 0
-        deleteBtn.enabled = selectedPaths.length > 0
+    function selectedPaths() {
+        var paths = []
+        for (var index = 0; index < entriesModel.count; ++index) {
+            var entry = entriesModel.get(index)
+            if (entry.selected)
+                paths.push(entry.path)
+        }
+        return paths
+    }
+
+    function requestDeleteSelected() {
+        if (!afcClient || deleting || selectedCount === 0)
+            return
+
+        const paths = selectedPaths()
+        const recursiveDirectoriesConfirmed = selectedFolderCount > 0
+        App.Helpers.showDeleteConfirmation(
+            root.Window.window,
+            selectedFileCount,
+            selectedFolderCount,
+            function() {
+                root.startDelete(paths, recursiveDirectoriesConfirmed)
+            }
+        )
+    }
+
+    function startDelete(paths, recursiveDirectoriesConfirmed) {
+        if (!afcClient || deleting || paths.length === 0)
+            return
+
+        pendingDeleteRequestId = QmlUtils.generate_uuid()
+        deleting = true
+        errorMessage = ""
+        afcClient.delete_paths(
+            pendingDeleteRequestId,
+            paths,
+            recursiveDirectoriesConfirmed
+        )
     }
 
     function startExport(destinationDir) {
-        if (!ioManager || !root.udid || selectedPaths.length === 0)
+        const paths = selectedPaths()
+        if (!ioManager || !root.udid || paths.length === 0)
             return
 
         const jobId = QmlUtils.generate_uuid()
+        const isHouseArrest = !!(afcClient && afcClient.bundle_id)
         App.StatusWindow.addProcess(
             jobId,
-            qsTr("Exporting Files"),
+            isHouseArrest ? qsTr("Exporting Files from %1").arg(afcClient.bundle_id) : qsTr("Exporting Files"),
             qsTr("Export"),
-            selectedPaths.length,
+            paths.length,
             destinationDir
         )
-        if (afcClient && afcClient.bundle_id)
-            ioManager.start_export_with_hause_arrest_afc(root.udid, jobId, selectedPaths, destinationDir, afcClient.bundle_id)
+        if (isHouseArrest)
+            ioManager.start_export_with_hause_arrest_afc(root.udid, jobId, paths, destinationDir, afcClient.bundle_id, allowDirectoryExport)
         else if (root.useAfc2)
-            ioManager.start_export_with_afc2(root.udid, jobId, selectedPaths, destinationDir)
+            ioManager.start_export_with_afc2(root.udid, jobId, paths, destinationDir, allowDirectoryExport)
         else
-            ioManager.start_export(root.udid, jobId, selectedPaths, destinationDir)
+            ioManager.start_export(root.udid, jobId, paths, destinationDir, allowDirectoryExport)
     }
 
     function startImport(localPaths) {
@@ -215,19 +279,47 @@ Item {
             return
 
         const jobId = QmlUtils.generate_uuid()
+        const destinationPath = normalizePath(currentPath)
+        pendingImportJobs[String(jobId)] = {
+            "destinationPath": destinationPath,
+            "contextKey": importContextKey()
+        }
+        const isHouseArrest = !!(afcClient && afcClient.bundle_id)
         App.StatusWindow.addProcess(
             jobId,
-            qsTr("Importing Files"),
+            isHouseArrest ? qsTr("Importing Files to %1").arg(afcClient.bundle_id) : qsTr("Importing Files"),
             qsTr("Import"),
             localPaths.length,
-            currentPath
+            destinationPath
         )
-        if (afcClient && afcClient.bundle_id)
-            ioManager.start_import_with_hause_arrest_afc(root.udid, jobId, localPaths, currentPath, afcClient.bundle_id)
+        if (isHouseArrest)
+            ioManager.start_import_with_hause_arrest_afc(root.udid, jobId, localPaths, destinationPath, afcClient.bundle_id)
         else if (root.useAfc2)
-            ioManager.start_import_with_afc2(root.udid, jobId, localPaths, currentPath)
+            ioManager.start_import_with_afc2(root.udid, jobId, localPaths, destinationPath)
         else
-            ioManager.start_import(root.udid, jobId, localPaths, currentPath)
+            ioManager.start_import(root.udid, jobId, localPaths, destinationPath)
+    }
+
+    Connections {
+        target: ioManager
+        enabled: !!ioManager
+
+        function onImport_job_finished(jobId, cancelled, successfulItems, failedItems, totalBytes) {
+            const key = String(jobId)
+            const job = root.pendingImportJobs[key]
+            if (job === undefined)
+                return
+
+            delete root.pendingImportJobs[key]
+
+            if (job.contextKey !== root.importContextKey()
+                    || job.destinationPath !== root.normalizePath(root.currentPath))
+                return
+
+            // Coalesce concurrent imports targeting the currently displayed directory.
+            if (!root.hasPendingImportFor(job.destinationPath, job.contextKey))
+                root.requestRefresh()
+        }
     }
 
     Connections {
@@ -235,11 +327,12 @@ Item {
         enabled: !!afcClient
 
         function onCheck_is_dir_and_list_finished(success, entries) {
+            selectionLayer.reset()
             entriesModel.clear()
 
             if (!success) {
-                root.loading = false
                 root.errorMessage = qsTr("Failed to load directory.")
+                root.finishDirectoryLoad()
                 return
             }
 
@@ -257,32 +350,70 @@ Item {
                 var iconSource = isDir
                     ? "qrc:/resources/icons/material-symbols_folder.svg"
                     : "qrc:/resources/icons/ic_baseline-insert-drive-file.svg"
-                var item = { "name": name, "isDir": isDir, "iconSource": iconSource }
+                var item = {
+                    "name": name,
+                    "path": root.fullPath(name),
+                    "isDir": isDir,
+                    "selected": false,
+                    "iconSource": iconSource
+                }
                 if (isDir) dirs.push(item); else files.push(item)
             }
 
             for (var d = 0; d < dirs.length; d++) entriesModel.append(dirs[d])
             for (var f = 0; f < files.length; f++) entriesModel.append(files[f])
 
-            root.loading = false
             root.errorMessage = ""
-            root.selectedPaths = []
-            root.updateActionEnabled()
+            root.updateSelectionCounts()
             root.updateNavigationEnabled()
+            root.finishDirectoryLoad()
+        }
+
+        function onDeletePathsFinished(requestId, successfulItems, failedItems, firstError) {
+            if (requestId !== root.pendingDeleteRequestId)
+                return
+
+            root.pendingDeleteRequestId = ""
+            root.deleting = false
+            selectionLayer.clearSelection()
+            root.refresh()
+
+            const messageParent = root.Window.window.contentItem
+            if (failedItems === 0) {
+                App.Helpers.showInfo(
+                    messageParent,
+                    qsTr("%1 item(s) were deleted successfully.").arg(successfulItems)
+                )
+            } else if (successfulItems > 0) {
+                var partialMessage = qsTr("%1 item(s) were deleted. %2 item(s) could not be deleted.")
+                    .arg(successfulItems).arg(failedItems)
+                if (firstError)
+                    partialMessage += "\n\n" + firstError
+                App.Helpers.showWarning(messageParent, partialMessage)
+            } else {
+                var failureMessage = qsTr("The selected items could not be deleted.")
+                if (firstError)
+                    failureMessage += "\n\n" + firstError
+                App.Helpers.showError(messageParent, failureMessage)
+            }
         }
 
     }
 
     onAfcClientChanged: {
+        refreshAfterLoad = false
+        deleting = false
+        pendingDeleteRequestId = ""
         backStack = []
         forwardStack = []
-        selectedPaths = []
+        selectionLayer.reset()
+        entriesModel.clear()
+        updateSelectionCounts()
         currentPath = normalizePath(rootPath)
         addressBar.text = currentPath
         if (afcClient) refresh()
         else errorMessage = qsTr("AFC client is not available.")
         updateNavigationEnabled()
-        updateActionEnabled()
     }
 
     ColumnLayout {
@@ -334,7 +465,7 @@ Item {
                 ExplorerToolButton {
                     iconSource: "qrc:/resources/icons/ic_outline-refresh.svg"
                     tooltip: qsTr("Refresh")
-                    enabled: !!root.afcClient && !root.loading
+                    enabled: !!root.afcClient && !root.busy
                     onClicked: root.refresh()
                 }
 
@@ -351,7 +482,7 @@ Item {
 
                 ExplorerToolButton {
                     id: importBtn
-                    enabled: !!root.afcClient
+                    enabled: !!root.afcClient && !root.busy
                     iconSource: "qrc:/resources/icons/lets-icons_import.svg"
                     tooltip: qsTr("Import")
                     onClicked: importDialog.open()
@@ -359,7 +490,7 @@ Item {
 
                 ExplorerToolButton {
                     id: exportBtn
-                    enabled: false
+                    enabled: root.selectedCount > 0 && !root.busy
                     iconSource: "qrc:/resources/icons/ph_export.svg"
                     tooltip: qsTr("Export")
                     onClicked: exportDialog.open()
@@ -367,10 +498,10 @@ Item {
 
                 ExplorerToolButton {
                     id: deleteBtn
-                    enabled: false
+                    enabled: root.selectedCount > 0 && !root.busy
                     iconSource: "qrc:/resources/icons/material-symbols_delete.svg"
                     tooltip: qsTr("Delete")
-                    onClicked: confirmDelete.open()
+                    onClicked: root.requestDeleteSelected()
                 }
 
                 ExplorerToolButton {
@@ -396,7 +527,7 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             autoSwitchContent: false
-            viewState: root.loading
+            viewState: root.busy
                 ? StateView.State.Loading
                 : root.errorMessage.length > 0 ? StateView.State.Error : StateView.State.Content
             errorText: root.errorMessage
@@ -428,8 +559,8 @@ Item {
 
                         property string entryName: model.name
                         property bool entryIsDir: model.isDir
-                        property string entryPath: root.fullPath(entryName)
-                        property bool entrySelected: root.isSelected(entryPath)
+                        property string entryPath: model.path
+                        property bool entrySelected: model.selected
 
                         RowLayout {
                             anchors.fill: parent
@@ -470,17 +601,32 @@ Item {
 
                             onClicked: (mouse) => {
                                 if (mouse.button === Qt.RightButton) {
+                                    if (!row.entrySelected)
+                                        selectionLayer.selectOnly(index)
                                     contextMenu.entryName = row.entryName
                                     contextMenu.entryIsDir = row.entryIsDir
                                     contextMenu.entryPath = row.entryPath
-                                    contextMenu.open()
+                                    contextMenu.entryIndex = index
+                                    contextMenu.popup(mouseArea, Qt.point(mouse.x, mouse.y))
                                     return
                                 }
-                                // Single click selects one item; platform modifier toggles multi-select.
-                                root.selectPath(row.entryPath, mouse.modifiers)
                             }
                         }
                     }
+                }
+
+                FileExplorerSelection {
+                    id: selectionLayer
+
+                    anchors.fill: listView
+                    z: 2
+                    visible: !root.busy
+                    targetView: listView
+                    itemCount: entriesModel.count
+                    rowHeight: 44
+                    isItemSelected: (index) => entriesModel.get(index).selected
+                    setItemSelected: (index, selected) => root.setEntrySelected(index, selected)
+                    onSelectionUpdated: root.updateSelectionCounts()
                 }
 
                 Label {
@@ -496,6 +642,7 @@ Item {
                     property string entryName: ""
                     property string entryPath: ""
                     property bool entryIsDir: false
+                    property int entryIndex: -1
 
                     MenuItem {
                         text: qsTr("Open")
@@ -510,9 +657,6 @@ Item {
                     MenuItem {
                         text: qsTr("Export")
                         onTriggered: {
-                            if (!root.isSelected(contextMenu.entryPath))
-                                root.selectedPaths = [contextMenu.entryPath]
-                            root.updateActionEnabled()
                             exportDialog.open()
                         }
                     }
@@ -520,13 +664,20 @@ Item {
                     MenuSeparator {}
 
                     MenuItem {
+                        text: qsTr("Get Info")
+                        onTriggered: App.Helpers.showFileInfo(
+                            root.Window.window,
+                            root.afcClient,
+                            contextMenu.entryPath,
+                            contextMenu.entryName
+                        )
+                    }
+
+                    MenuSeparator {}
+
+                    MenuItem {
                         text: qsTr("Delete")
-                        onTriggered: {
-                            if (!root.isSelected(contextMenu.entryPath))
-                                root.selectedPaths = [contextMenu.entryPath]
-                            root.updateActionEnabled()
-                            confirmDelete.open()
-                        }
+                        onTriggered: root.requestDeleteSelected()
                     }
                 }
             }
@@ -555,25 +706,6 @@ Item {
             favAlias.text = ""
         }
         onRejected: favAlias.text = ""
-    }
-
-    Dialog {
-        id: confirmDelete
-        modal: true
-        title: qsTr("Confirm Deletion")
-        standardButtons: Dialog.Yes | Dialog.No
-
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 10
-            Text {
-                text: qsTr("Are you sure you want to delete the selected item(s)?")
-                wrapMode: Text.WordWrap
-            }
-            Text { text: qsTr("Count: ") + root.selectedPaths.length; color: App.Theme.textMuted }
-        }
-
-        onAccepted: root.deleteSelected()
     }
 
     FolderDialog {
