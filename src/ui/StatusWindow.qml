@@ -15,6 +15,9 @@ DefaultWindow {
     width: 300
     height: 300
     visible: false
+    autoVisible: false
+    autoDestroy: false
+    fitsAppBarWindows: true
     property var statusBarParentWindow: null
     property var statusBarOpener: null
 
@@ -29,38 +32,6 @@ DefaultWindow {
             StatusWindowController.uninstall()
     }
 
-    Component.onCompleted : {
-        // TODO: remove
-        // processesList.append({
-        //     "processId": "test-process-001",
-        //     "title": "Exporting Project Files",
-        //     "type": "Export",
-        //     "status": "Running",
-        //     "currentFile": "Copying: /documents/report.pdf",
-        //     "totalBytes": 10485760,
-        //     "transferredBytes": 5242880,
-        //     "totalItems": 42,
-        //     "completedItems": 23,
-        //     "failedItems": 2,
-        //     "destinationPath": "/Users/username/Downloads/Exports",
-        //     "onComplete": null
-        // })
-
-        // processesList.append({
-        //     "processId": "test-process-001",
-        //     "title": "Exporting Project Files",
-        //     "type": "Export",
-        //     "status": "Running",
-        //     "currentFile": "Copying: /documents/report.pdf",
-        //     "totalBytes": 10485760,
-        //     "transferredBytes": 5242880,
-        //     "totalItems": 42,
-        //     "completedItems": 23,
-        //     "failedItems": 2,
-        //     "destinationPath": "/Users/username/Downloads/Exports",
-        //     "onComplete": null
-        // })
-    }
 
     Connections {
         target: ioManager
