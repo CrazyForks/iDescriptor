@@ -71,7 +71,7 @@ ToolWindow {
     }
 
     Component.onCompleted: {
-        root.backend = serviceFactory.create_transfer_speed_tester(root.udid)
+        root.backend = serviceFactory.create_transfer_speed_tester(root.udid, root.device.connectionId)
     }
 
     onClosing: {

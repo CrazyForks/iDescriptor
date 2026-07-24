@@ -83,6 +83,7 @@ pub fn matches_media_filter(path: &str, filter: GalleryMediaFilter) -> bool {
 pub struct Query {
     base: qt_base_class!(trait QObject),
     udid: String,
+    connection_id: u64,
     ios_version: u32,
     albums: qt_property!(QVariantList; NOTIFY albumsChanged),
     albumsChanged: qt_signal!(),
@@ -130,13 +131,14 @@ fn new_state(init: bool, err: &str, backend: &str) -> QVariantMap {
 }
 
 impl Query {
-    pub fn with_device_attr(udid: QString, ios_version: u32) -> Self {
+    pub fn with_device_attr(udid: QString, connection_id: u64, ios_version: u32) -> Self {
         let state = new_state(false, "", "");
 
         let mut def = Self::default();
         def.state = state;
         def.ios_version = ios_version;
         def.udid = udid.to_string();
+        def.connection_id = connection_id;
         def
     }
 
@@ -153,12 +155,16 @@ impl Query {
         self.is_init = true;
         let udid_clone = self.udid.clone();
         let udid_clone_for_fallback = self.udid.clone();
+        let connection_id = self.connection_id;
         let ios_version = self.ios_version;
         let qt_thread = self.qt_thread();
 
         RUNTIME.spawn(async move {
             let res: anyhow::Result<Arc<dyn GalleryProvider>> = (async {
-                let afc_arc = device_ctx::get_device(udid_clone).await?.afc;
+                let afc_arc = device_ctx::get_device_for_connection_opt(udid_clone, connection_id)
+                    .await
+                    .ok_or_else(|| anyhow::anyhow!("device connection is no longer current"))?
+                    .afc;
                 if use_sqlite_backend {
                     let prov = build_sqlite_provider(afc_arc, ios_version).await?;
                     let gallery_size = prov.query_gallery_size().await.unwrap_or(0);
@@ -207,8 +213,15 @@ impl Query {
                     */
                     if use_sqlite_backend {
                         let fs_res: anyhow::Result<Arc<dyn GalleryProvider>> = async {
-                            let afc_arc =
-                                device_ctx::get_device(udid_clone_for_fallback).await?.afc;
+                            let afc_arc = device_ctx::get_device_for_connection_opt(
+                                udid_clone_for_fallback,
+                                connection_id,
+                            )
+                            .await
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("device connection is no longer current")
+                            })?
+                            .afc;
                             let prov = build_fs_provider(afc_arc).await?;
                             prov.read_albums().await?;
                             Ok(prov)

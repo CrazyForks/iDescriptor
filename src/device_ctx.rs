@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use tracing::field::debug;
 
 use crate::{image_cache, media_streamer::MediaStreamSession};
 
@@ -64,6 +63,7 @@ impl iOSVersion {
 
 #[derive(Clone)]
 pub struct DeviceServices {
+    pub connection_id: u64,
     pub afc: Arc<Mutex<AfcClient>>,
     pub afc2: Option<Arc<Mutex<AfcClient>>>,
     pub diag: Arc<Mutex<DiagnosticsRelayClient>>,
@@ -92,50 +92,101 @@ pub async fn get_device_opt(udid: impl Into<String>) -> Option<DeviceServices> {
     APP_DEVICE_STATE.lock().await.get(&udid_str).cloned()
 }
 
-pub async fn clean_device_from_app_state(udid: &str) {
-    let svc = APP_DEVICE_STATE.lock().await.remove(udid);
+pub async fn get_device_for_connection_opt(
+    udid: impl Into<String>,
+    connection_id: u64,
+) -> Option<DeviceServices> {
+    let udid = udid.into();
+    APP_DEVICE_STATE
+        .lock()
+        .await
+        .get(&udid)
+        .filter(|device| device.connection_id == connection_id)
+        .cloned()
+}
+
+async fn clean_removed_device(udid: &str, svc: DeviceServices, abort_heartbeat: bool) {
+    if abort_heartbeat {
+        if let Some(task) = &svc.heartbeat_task {
+            task.abort();
+        }
+    }
+
+    let sessions = {
+        let mut streams = svc.video_streams.lock().await;
+        streams
+            .drain()
+            .map(|(_, session)| session)
+            .collect::<Vec<_>>()
+    };
+    for mut session in sessions {
+        session.shutdown().await;
+    }
+
+    image_cache::clear_for_udid(udid);
+}
+
+pub async fn clean_device_from_app_state_if_current(
+    udid: &str,
+    connection_id: u64,
+    abort_heartbeat: bool,
+) -> bool {
+    let svc = {
+        let mut state = APP_DEVICE_STATE.lock().await;
+        match state.get(udid) {
+            Some(device) if device.connection_id == connection_id => state.remove(udid),
+            _ => None,
+        }
+    };
+
     if let Some(svc) = svc {
-        if let Some(t) = &svc.heartbeat_task {
-            t.abort();
-        }
-
-        let sessions = {
-            let mut streams = svc.video_streams.lock().await;
-            streams
-                .drain()
-                .map(|(_, session)| session)
-                .collect::<Vec<_>>()
-        };
-        for mut session in sessions {
-            session.shutdown().await;
-        }
-
-        image_cache::clear_for_udid(udid);
-
-        println!("Removed device with UDID {}", udid);
+        clean_removed_device(udid, svc, abort_heartbeat).await;
+        println!(
+            "Removed device with UDID {} connection {}",
+            udid, connection_id
+        );
+        true
     } else {
-        eprintln!("Attempted to remove non-existent device with UDID {}", udid);
+        log::debug!(
+            "Ignored stale removal for UDID {} connection {}",
+            udid,
+            connection_id
+        );
+        false
     }
 }
 
-/// Inserts a device into the global state and returns whether an existing connection
-/// for the same UDID was replaced.
-pub async fn insert_device(udid: impl Into<String>, services: DeviceServices) -> bool {
+pub enum InsertDeviceResult {
+    Inserted,
+    Replaced(u64),
+    Rejected,
+}
+
+/// Inserts a complete device connection. Older initializations are rejected so they
+/// cannot replace a newer connection that finished first.
+pub async fn insert_device(
+    udid: impl Into<String>,
+    services: DeviceServices,
+) -> InsertDeviceResult {
     let udid = udid.into();
     let mut state = APP_DEVICE_STATE.lock().await;
+    if state
+        .get(&udid)
+        .is_some_and(|current| current.connection_id > services.connection_id)
+    {
+        return InsertDeviceResult::Rejected;
+    }
+
     if let Some(mut old) = state.insert(udid.clone(), services) {
+        let old_connection_id = old.connection_id;
         if let Some(task) = old.heartbeat_task.take() {
             task.abort();
         }
-        eprintln!("Replaced existing device connection - UDID {}", udid);
-        return true;
+        eprintln!(
+            "Replaced existing device connection - UDID {} connection {}",
+            udid, old_connection_id
+        );
+        return InsertDeviceResult::Replaced(old_connection_id);
     }
-    false
-}
-
-pub async fn insert_heartbeat_task(udid: impl Into<String>, task: Arc<JoinHandle<()>>) {
-    let mut state = APP_DEVICE_STATE.lock().await;
-    if let Some(svc) = state.get_mut(&udid.into()) {
-        svc.heartbeat_task = Some(task);
-    }
+    InsertDeviceResult::Inserted
 }
