@@ -81,6 +81,17 @@ Item {
     }
 
     function openInstallPopup(bundleId, appName) {
+        const isLoggedIn = apps.state.email.length > 0
+        if (!isLoggedIn) {
+            if (Qt.platform.os === "windows") {
+                // showWarning from FluWindow 
+                showWarning(qsTr("You must be signed in to install apps."),3000)
+            } else {
+                loginDialog.open()
+            }
+            return
+        }
+
         root.bundleId = bundleId
         root.appName = appName
         Qt.callLater(() => {
@@ -89,6 +100,16 @@ Item {
     }
 
     function openGetIpaPopup(bundleId, appName) {
+        const isLoggedIn = apps.state.email.length > 0
+        if (!isLoggedIn) {
+            if (Qt.platform.os === "windows") {
+                // showWarning from FluWindow 
+                showWarning(qsTr("You must be signed in to download IPA files."),3000)
+            } else {
+                loginDialog.open()
+            }
+            return
+        }
         root.bundleId = bundleId
         root.appName = appName
         Qt.callLater(() => {
@@ -150,7 +171,6 @@ Item {
         xhr.open("GET", sponsorsUrl)
         xhr.onreadystatechange = function() {
             if (xhr.readyState !== XMLHttpRequest.DONE) return
-            console.log(xhr.status, xhr.responseText)
             if (xhr.status === 200) {
                 try {
                     var rootObj = JSON.parse(xhr.responseText)
@@ -189,7 +209,7 @@ Item {
             return
         }
 
-        apps.init(false)
+        apps.init(true)
     }
 
     Connections {
