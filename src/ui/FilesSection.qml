@@ -67,7 +67,7 @@ Item {
             return
         }
 
-        root.afc2Client = serviceFactory.create_afc_client(root.udid, true)
+        root.afc2Client = serviceFactory.create_afc_client(root.udid, root.device.connectionId, true)
         root.afc2Available = Boolean(root.afc2Client)
         root.loading = false
         root.updateState()

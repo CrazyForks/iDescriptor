@@ -143,7 +143,7 @@ Item {
         root.fileExplorerLoading = true;
         root.fileExplorerError = "";
 
-        serviceFactory.create_hause_arrest_afc_client(root.udid, bundleId);
+        serviceFactory.create_hause_arrest_afc_client(root.udid, root.device.connectionId, bundleId);
     }
 
     anchors.fill: parent
@@ -162,8 +162,9 @@ Item {
     Connections {
         target: serviceFactory
 
-        function onHouseArrestAfcClientCreated(client, udid, bundleId) {
-            if (udid !== root.udid || bundleId !== root.selectedBundleId)
+        function onHouseArrestAfcClientCreated(client, udid, connectionId, bundleId) {
+            if (udid !== root.udid || connectionId !== root.device.connectionId
+                    || bundleId !== root.selectedBundleId)
                 return ;
 
             root.tabsDisabled = false;

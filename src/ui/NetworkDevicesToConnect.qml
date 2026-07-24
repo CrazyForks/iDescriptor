@@ -201,7 +201,7 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 10
+        anchors.margins: 6
         spacing: 10
 
         Label {
@@ -217,8 +217,6 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            //FIXMEl: need a better way to limit the size
-            Layout.maximumHeight: 400
             Layout.maximumWidth: 600
 
             ColumnLayout {

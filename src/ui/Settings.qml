@@ -18,7 +18,7 @@ DefaultWindow {
     visible: false
     modality: Qt.ApplicationModal
     autoDestroy: false
-    color: palette.window
+    autoVisible: false
 
     /* Windows only*/
     showMaximize: false

@@ -253,16 +253,9 @@ AnimatedDialog {
 
             contentItem: ColumnLayout {
                 anchors.fill: parent
-                spacing: 12
+                spacing: 10
 
                 Item { Layout.fillHeight: true }
-
-                Text {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: "\uf8ff"
-                    color: App.Theme.icon
-                    font.pixelSize: 28
-                }
 
                 Text {
                     Layout.fillWidth: true

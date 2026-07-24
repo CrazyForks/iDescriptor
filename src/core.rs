@@ -18,6 +18,7 @@ use url::form_urlencoded::parse;
 use ::log::{debug, info, trace, warn};
 use std::f64::INFINITY;
 use std::future::Future;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 use std::{any, thread};
@@ -31,7 +32,8 @@ use tokio::task::JoinHandle;
 use core::pin::Pin;
 
 use crate::device_ctx::{
-    DeviceServices, clean_device_from_app_state, iOSVersion, insert_device, insert_heartbeat_task,
+    DeviceServices, InsertDeviceResult, clean_device_from_app_state_if_current, iOSVersion,
+    insert_device,
 };
 use crate::{
     APP_LABEL, EV_CONNECTED, EV_DISCONNECTED, EV_FAIL, EV_PAIRING_PENDING, POSSIBLE_ROOT, RUNTIME,
@@ -44,6 +46,41 @@ use plist::{Dictionary, Value};
 use qmetaobject::prelude::*;
 
 const WIRELESS_INIT_TIMEOUT: Duration = Duration::from_secs(20);
+static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
+
+fn next_connection_id() -> u64 {
+    NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed)
+}
+
+fn connection_event_info(connection_id: u64) -> QVariantMap {
+    let mut info = QVariantMap::default();
+    qvariantmap_insert!(
+        info,
+        "connection_id",
+        QString::from(connection_id.to_string())
+    );
+    info
+}
+
+struct InitializedDevice {
+    udid: String,
+    info: QVariantMap,
+    heartbeat_start: Option<oneshot::Sender<()>>,
+}
+
+fn emit_initialized_device(qt_thread: QtThread<Core>, initialized: InitializedDevice) {
+    let InitializedDevice {
+        udid,
+        info,
+        heartbeat_start,
+    } = initialized;
+    qt_thread.queue(move |core_qobj| {
+        core_qobj.deviceEvent(EV_CONNECTED, QString::from(udid), info);
+    });
+    if let Some(start) = heartbeat_start {
+        let _ = start.send(());
+    }
+}
 
 #[allow(non_snake_case)]
 #[derive(Default, QObject, QtThreading)]
@@ -55,7 +92,7 @@ pub struct Core {
     exit_recovery_mode: qt_method!(fn(&mut self, ecid: QString) -> bool),
     // mac address will only be available if the pairing file was read successfully, otherwise it will be empty
     customInitFailed: qt_signal!(ip: QString, mac_address: QString, error: QString),
-    remove_device: qt_method!(fn(&mut self, udid: QString)),
+    remove_device: qt_method!(fn(&mut self, udid: QString, connection_id: QString)),
     deviceEvent: qt_signal!(eventType : u32, udid : QString , info : QVariantMap),
     recoveryDeviceEvent: qt_signal!(eventType : u32, id : QString , info : QVariantMap),
     initFailed: qt_signal!(mac_address : QString),
@@ -81,7 +118,8 @@ impl Core {
         thread::spawn(move || {
             let rt = Builder::new_current_thread().enable_all().build().unwrap();
             rt.block_on(async move {
-                let mut device_map: HashMap<u32, String> = HashMap::new();
+                let mut device_map: HashMap<u32, (String, u64, JoinHandle<()>)> =
+                    HashMap::new();
 
                 loop {
                     match UsbmuxdConnection::default().await {
@@ -97,10 +135,10 @@ impl Core {
 
                                             let udid = d.udid.clone();
                                             let device_id = d.device_id;
-                                            device_map.insert(device_id, udid.clone());
+                                            let connection_id = next_connection_id();
 
                                             let qt_thread = qt_t.clone();
-                                            RUNTIME.spawn(async move {
+                                            let init_task = RUNTIME.spawn(async move {
                                                 let pair_record_exists = {
                                                     let mut u2 =
                                                         match UsbmuxdConnection::default().await {
@@ -117,14 +155,24 @@ impl Core {
 
                                                 // we may not even need to check if pair record exists
                                                 if pair_record_exists {
-                                                    emit_connected(qt_thread.clone(), udid).await;
+                                                    emit_connected(
+                                                        qt_thread.clone(),
+                                                        udid,
+                                                        connection_id,
+                                                    )
+                                                    .await;
                                                     return;
                                                 }
 
 
                                                 match handle_pairing(qt_thread.clone(), udid.clone()).await {
                                                     Ok(_) => {
-                                                        emit_connected(qt_thread.clone(), udid).await;
+                                                        emit_connected(
+                                                            qt_thread.clone(),
+                                                            udid,
+                                                            connection_id,
+                                                        )
+                                                        .await;
                                                     }
                                                     Err(e) => {
                                                         eprintln!("Pairing failed for device {}: {e:?}", udid);
@@ -133,21 +181,35 @@ impl Core {
                                                 }
 
                                             });
+                                            if let Some((_, _, old_init_task)) = device_map.insert(
+                                                device_id,
+                                                (d.udid, connection_id, init_task),
+                                            ) {
+                                                old_init_task.abort();
+                                            }
                                         }
                                         /* DISCONNECTED */
                                         Ok(UsbmuxdListenEvent::Disconnected(device_id)) => {
-                                            if let Some(udid) = device_map.remove(&device_id) {
-                                                clean_device_from_app_state(&udid).await;
-
-                                                let qt_thread = qt_t.clone();
-                                                qt_thread
-                                                    .queue(move |core_qobj| {
+                                            if let Some((udid, connection_id, init_task)) =
+                                                device_map.remove(&device_id)
+                                            {
+                                                init_task.abort();
+                                                if clean_device_from_app_state_if_current(
+                                                    &udid,
+                                                    connection_id,
+                                                    true,
+                                                )
+                                                .await
+                                                {
+                                                    let qt_thread = qt_t.clone();
+                                                    qt_thread.queue(move |core_qobj| {
                                                         core_qobj.deviceEvent(
                                                             EV_DISCONNECTED,
                                                             QString::from(udid),
-                                                            QVariantMap::default(),
+                                                            connection_event_info(connection_id),
                                                         );
                                                     });
+                                                }
                                             }
                                         }
                                         Err(e) => {
@@ -256,15 +318,13 @@ impl Core {
             .await;
 
             match result {
-                Ok(Ok((udid, info))) => {
+                Ok(Ok(initialized)) => {
                     info!(
                         "Successfully initialized wireless device mac={} ip={} udid={}",
-                        mac_address_owned, ip_owned, udid
+                        mac_address_owned, ip_owned, initialized.udid
                     );
                     // emit event with info
-                    qt_thread.queue(move |core_qobj| {
-                        core_qobj.deviceEvent(EV_CONNECTED, QString::from(udid), info);
-                    });
+                    emit_initialized_device(qt_thread, initialized);
                 }
                 Ok(Err(error)) => {
                     warn!(
@@ -338,8 +398,9 @@ impl Core {
             };
 
             let qt_t_clone = qt_thread.clone();
+            let connection_id = next_connection_id();
             let result = tokio::select! {
-                res = init_idescriptor_device(t, qt_t_clone) => res,
+                res = init_idescriptor_device(t, qt_t_clone, connection_id) => res,
                 /* timeout */
                 _ = tokio::time::sleep(tokio::time::Duration::from_secs(20)) => {
                     eprintln!("Timeout collecting device info for wireless device ip: {ip_owned}");
@@ -348,11 +409,9 @@ impl Core {
             };
 
             match result {
-                Ok((udid, info)) => {
+                Ok(initialized) => {
                     // emit event with info
-                    qt_thread.queue(move |core_qobj| {
-                        core_qobj.deviceEvent(EV_CONNECTED, QString::from(udid), info);
-                    });
+                    emit_initialized_device(qt_thread, initialized);
                 }
                 //pairing file doesn't belong to the device
                 Err(IdeviceError::InvalidHostID) => {
@@ -381,10 +440,14 @@ impl Core {
         });
     }
 
-    fn remove_device(&mut self, udid: QString) {
+    fn remove_device(&mut self, udid: QString, connection_id: QString) {
         let udid_str = udid.to_string();
+        let Ok(connection_id) = connection_id.to_string().parse::<u64>() else {
+            warn!("Ignoring remove_device with invalid connection ID for {udid_str}");
+            return;
+        };
         RUNTIME.spawn(async move {
-            clean_device_from_app_state(&udid_str).await;
+            clean_device_from_app_state_if_current(&udid_str, connection_id, true).await;
         });
     }
 }
@@ -623,7 +686,7 @@ fn emit_pairing_failed(
     });
 }
 
-async fn emit_connected(qt_thread: QtThread<Core>, udid: String) {
+async fn emit_connected(qt_thread: QtThread<Core>, udid: String, connection_id: u64) {
     // one init retry after successful pairing
     let mut retried_after_pair = false;
 
@@ -642,17 +705,10 @@ async fn emit_connected(qt_thread: QtThread<Core>, udid: String) {
 
         let qt_t_clone = qt_thread.clone();
 
-        match init_idescriptor_device(provider, qt_t_clone).await {
-            Ok((udid_for_event, info_for_event)) => {
+        match init_idescriptor_device(provider, qt_t_clone, connection_id).await {
+            Ok(initialized) => {
                 println!("Emitting connected");
-
-                qt_thread.queue(move |core_qobj| {
-                    core_qobj.deviceEvent(
-                        EV_CONNECTED,
-                        QString::from(udid_for_event),
-                        info_for_event,
-                    );
-                });
+                emit_initialized_device(qt_thread, initialized);
                 return;
             }
             Err(e) if is_pairing_related_error(&e) && !retried_after_pair => {
@@ -806,7 +862,7 @@ async fn init_wireless_device_from_candidates(
     addr: IpAddr,
     requested_mac: &str,
     qt_thread: QtThread<Core>,
-) -> anyhow::Result<(String, QVariantMap)> {
+) -> anyhow::Result<InitializedDevice> {
     let normalized_requested_mac = normalize_mac_address(requested_mac);
     if normalized_requested_mac.len() != 12 {
         return Err(anyhow!(
@@ -847,13 +903,14 @@ async fn init_wireless_device_from_candidates(
             scope_id: None,
         };
 
-        match init_idescriptor_device(provider, qt_thread.clone()).await {
-            Ok((udid, info)) => {
+        let connection_id = next_connection_id();
+        match init_idescriptor_device(provider, qt_thread.clone(), connection_id).await {
+            Ok(initialized) => {
                 info!(
                     "Successfully initialized wireless device target_ip={} requested_mac={} candidate_mac={} candidate_udid={} path={}",
-                    addr, requested_mac, candidate_mac_normalized, udid, candidate.path,
+                    addr, requested_mac, candidate_mac_normalized, initialized.udid, candidate.path,
                 );
-                return Ok((udid, info));
+                return Ok(initialized);
             }
             Err(IdeviceError::InvalidHostID) => {
                 warn!(
@@ -886,7 +943,8 @@ async fn init_idescriptor_device<
 >(
     provider: T,
     qt_thread: QtThread<Core>,
-) -> Result<(String, QVariantMap), IdeviceError> {
+    connection_id: u64,
+) -> Result<InitializedDevice, IdeviceError> {
     let provider_name = type_name::<T>();
     let is_wireless = provider_name == "idevice::provider::TcpProvider";
 
@@ -965,7 +1023,7 @@ async fn init_idescriptor_device<
         }
     };
 
-    let info = collect_info(
+    let mut info = collect_info(
         def_vals_dict,
         &mut afc_client,
         &mut lc,
@@ -975,59 +1033,73 @@ async fn init_idescriptor_device<
     .await?;
 
     eprintln!("init_idescriptor_device: Storing device services.");
+    let (heartbeat_task, heartbeat_start) = if is_wireless {
+        let Some(hb_client) = hb else {
+            eprintln!(
+                "init_idescriptor_device: Heartbeat client is None, cannot spawn heartbeat task."
+            );
+            return Err(IdeviceError::Heartbeat(idevice::HeartbeatError::Unknown));
+        };
+
+        eprintln!("init_idescriptor_device: Spawning paused heartbeat task.");
+        let (start_tx, start_rx) = oneshot::channel();
+        let task = spawn_heartbeat_task(
+            hb_client,
+            qt_thread.clone(),
+            udid.clone(),
+            connection_id,
+            start_rx,
+        )
+        .await
+        .map_err(|()| IdeviceError::Heartbeat(idevice::HeartbeatError::Unknown))?;
+        (Some(task), Some(start_tx))
+    } else {
+        (None, None)
+    };
+
     let device_services = DeviceServices {
+        connection_id,
         afc: Arc::new(Mutex::new(afc_client)),
         afc2,
         diag: Arc::new(Mutex::new(diag_relay)),
-        heartbeat_task: None,
+        heartbeat_task,
         video_streams: Arc::new(Mutex::new(HashMap::new())),
         provider: Arc::new(Mutex::new(Box::new(provider))),
         lockdown: Arc::new(Mutex::new(lc)),
         ios_version: iOSVersion::from_str(&ios_version),
     };
 
-    let udid_for_task = udid.clone();
-
-    // Existing QML service objects own clients for the previous connection. Remove the
-    // old logical device before the caller emits the normal connected event so those
-    // objects are discarded and recreated from the newly inserted services.
-    if insert_device(udid.clone(), device_services).await {
-        let replaced_udid = udid.clone();
-        qt_thread.queue(move |core_qobj| {
-            core_qobj.deviceEvent(
-                EV_DISCONNECTED,
-                QString::from(replaced_udid),
-                QVariantMap::default(),
-            );
-        });
-    }
-
-    if is_wireless {
-        match hb {
-            Some(hb_client) => {
-                eprintln!("init_idescriptor_device: Spawning heartbeat task.");
-                match spawn_heartbeat_task(hb_client, qt_thread, udid_for_task).await {
-                    Ok(task) => {
-                        insert_heartbeat_task(udid.clone(), task).await;
-                    }
-                    Err(()) => {
-                        eprintln!("init_idescriptor_device: Failed to spawn heartbeat task.");
-                        return Err(IdeviceError::Heartbeat(idevice::HeartbeatError::Unknown));
-                    }
-                }
-            }
-            None => {
-                eprintln!(
-                    "init_idescriptor_device: Heartbeat client is None, cannot spawn heartbeat task."
+    match insert_device(udid.clone(), device_services).await {
+        InsertDeviceResult::Inserted => {}
+        InsertDeviceResult::Replaced(replaced_connection_id) => {
+            let replaced_udid = udid.clone();
+            qt_thread.queue(move |core_qobj| {
+                core_qobj.deviceEvent(
+                    EV_DISCONNECTED,
+                    QString::from(replaced_udid),
+                    connection_event_info(replaced_connection_id),
                 );
-                return Err(IdeviceError::Heartbeat(idevice::HeartbeatError::Unknown));
-            }
+            });
+        }
+        InsertDeviceResult::Rejected => {
+            return Err(IdeviceError::InternalError(format!(
+                "stale connection initialization rejected for {udid} connection {connection_id}"
+            )));
         }
     }
 
+    qvariantmap_insert!(
+        info,
+        "connection_id",
+        QString::from(connection_id.to_string())
+    );
     eprintln!("init_idescriptor_device: Device has been initialized.");
 
-    Ok((udid, info))
+    Ok(InitializedDevice {
+        udid,
+        info,
+        heartbeat_start,
+    })
 }
 
 async fn collect_info(
@@ -1318,9 +1390,15 @@ async fn spawn_heartbeat_task(
     mut hb_client: heartbeat::HeartbeatClient,
     qt_thread: QtThread<Core>,
     udid: String,
+    connection_id: u64,
+    start_rx: oneshot::Receiver<()>,
 ) -> Result<Arc<JoinHandle<()>>, ()> {
     let udid_for_hb = udid.clone();
     Ok(Arc::new(RUNTIME.spawn(async move {
+        if start_rx.await.is_err() {
+            debug!("heartbeat: start cancelled for {udid_for_hb} connection {connection_id}");
+            return;
+        }
         eprintln!("heartbeat: starting heartbeat task ");
         let mut interval = 15u64;
         let mut fails = 0;
@@ -1346,18 +1424,25 @@ async fn spawn_heartbeat_task(
 
                     if fails >= 3 {
                         eprintln!("heartbeat: too many failures for  giving up");
-                        clean_device_from_app_state(&udid_for_hb).await;
-
-                        let udid_for_event = udid_for_hb.clone();
-                        let _ = qt_thread.queue(move |core_qobj| {
-                            core_qobj.deviceEvent(
-                                EV_DISCONNECTED,
-                                QString::from(udid_for_event),
-                                QVariantMap::default(),
-                            );
-                        });
+                        if clean_device_from_app_state_if_current(
+                            &udid_for_hb,
+                            connection_id,
+                            false,
+                        )
+                        .await
+                        {
+                            let udid_for_event = udid_for_hb.clone();
+                            let _ = qt_thread.queue(move |core_qobj| {
+                                core_qobj.deviceEvent(
+                                    EV_DISCONNECTED,
+                                    QString::from(udid_for_event),
+                                    connection_event_info(connection_id),
+                                );
+                            });
+                        }
                         break;
                     }
+                    tokio::time::sleep(Duration::from_millis(500 * fails)).await;
                     continue;
                 }
             }
@@ -1377,19 +1462,22 @@ async fn spawn_heartbeat_task(
                 };
                 if fails >= 3 {
                     eprintln!("heartbeat: too many failures for , giving up");
-                    clean_device_from_app_state(&udid_for_hb).await;
-
-                    let udid_for_event = udid_for_hb.clone();
-                    let _ = qt_thread.queue(move |core_qobj| {
-                        core_qobj.deviceEvent(
-                            EV_DISCONNECTED,
-                            QString::from(udid_for_event),
-                            QVariantMap::default(),
-                        );
-                    });
+                    if clean_device_from_app_state_if_current(&udid_for_hb, connection_id, false)
+                        .await
+                    {
+                        let udid_for_event = udid_for_hb.clone();
+                        let _ = qt_thread.queue(move |core_qobj| {
+                            core_qobj.deviceEvent(
+                                EV_DISCONNECTED,
+                                QString::from(udid_for_event),
+                                connection_event_info(connection_id),
+                            );
+                        });
+                    }
                     break;
                 }
 
+                tokio::time::sleep(Duration::from_millis(500 * fails)).await;
                 continue;
             }
             interval += 5;

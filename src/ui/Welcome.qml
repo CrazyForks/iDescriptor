@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Controls.impl
+import QtQuick.Dialogs
 import "." as App
 
 Item {
@@ -20,27 +22,31 @@ Item {
         anchors.margins: 10
         spacing: 0
 
-        Text {
-            id: title
-            Layout.fillWidth: true
-            text: qsTr("Welcome to iDescriptor")
-            horizontalAlignment: Text.AlignHCenter
-            font.pixelSize: 28
-            font.weight: Font.DemiBold
-            wrapMode: Text.WordWrap
-            color: palette.text
+        RowLayout {
+            spacing: 5
+            Layout.alignment: Qt.AlignHCenter
+
+            Text {
+                id: title
+                text: qsTr("Welcome to iDescriptor")
+                font.pixelSize: 28
+                font.weight: Font.DemiBold
+                wrapMode: Text.WordWrap
+                color: palette.text
+            }
+
+            IconImage {
+                id: welcomeLogo
+                Layout.preferredWidth: 50
+                Layout.preferredHeight: 50
+                color: palette.text
+                source: "qrc:/resources/icons/plain-icon.svg"
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                mipmap: true
+            }
         }
 
-        Image {
-            id: welcomeLogo
-            Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: 34
-            Layout.preferredHeight: 34
-            source: "qrc:/resources/icons/plain-icon.png"
-            fillMode: Image.PreserveAspectFit
-            smooth: true
-            mipmap: true
-        }
 
         Item { Layout.preferredHeight: 6 }
 
@@ -61,7 +67,7 @@ Item {
             id: imageAndWirelessDevicesLayout
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.minimumHeight: 180
+            Layout.minimumHeight: 280
             spacing: 24
 
             Item {
@@ -70,14 +76,14 @@ Item {
 
             Item {
                 id: connectImageSlot
-                readonly property real imageAspectRatio: 191 / 428
+                readonly property real imageAspectRatio: 1 / 1
 
                 Layout.alignment: Qt.AlignVCenter
                 Layout.fillHeight: true
-                Layout.minimumWidth: 120
-                Layout.preferredWidth: Math.min(220, Math.max(120, imageAndWirelessDevicesLayout.height
+                Layout.minimumWidth: 150
+                Layout.preferredWidth: Math.min(280, Math.max(150, imageAndWirelessDevicesLayout.height
                                                                   * connectImageSlot.imageAspectRatio))
-                Layout.maximumWidth: 220
+                Layout.maximumWidth: 280
 
                 Image {
                     id: connectImage
@@ -145,7 +151,6 @@ Item {
                     }
                 }
 
-                Item { Layout.preferredHeight: 20 }
             }
 
             Item {
@@ -167,31 +172,67 @@ Item {
 
         Item { Layout.preferredHeight: 10 }
 
-        Text {
-            id: githubLink
-            Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Found an issue? Report it on GitHub")
-            color: root.linkColor
-            font.pixelSize: 12
-            font.weight: Font.DemiBold
-            wrapMode: Text.NoWrap
+        Loader {
+            id: diagnosticsLoader
+            active: Qt.platform.os !== "osx"
+            source: active ? "Diagnose.qml" : ""
+            Layout.preferredWidth: 0
+            Layout.preferredHeight: 0
+            onLoaded: item.cardVisible = false
+        }
 
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: Qt.openUrlExternally(CONSTANTS.REPO_URL)
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
+            spacing: 10
+
+            Text {
+                id: githubLink
+                text: qsTr("Found an issue? Report it on GitHub")
+                color: root.linkColor
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+                wrapMode: Text.NoWrap
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Qt.openUrlExternally(CONSTANTS.REPO_URL)
+                }
+            }
+
+            Rectangle {
+                visible: diagnosticsLoader.active
+                Layout.preferredWidth: 1
+                Layout.preferredHeight: 18
+                color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.2)
+            }
+
+            Label {
+                visible: diagnosticsLoader.active
+                text: diagnosticsLoader.item
+                      ? diagnosticsLoader.item.diagnoseState.summary
+                            || qsTr("Checking required dependencies...")
+                      : qsTr("Checking required dependencies...")
+                color: diagnosticsLoader.item
+                       ? diagnosticsLoader.item.colorForKind(
+                             diagnosticsLoader.item.diagnoseState.summaryKind)
+                       : palette.text
+                font.pixelSize: 11
+                elide: Text.ElideRight
+                Layout.maximumWidth: 280
+            }
+
+            Button {
+                visible: diagnosticsLoader.active
+                text: qsTr("View Diagnostics")
+                flat: true
+                onClicked: {
+                    if (diagnosticsLoader.item)
+                        diagnosticsLoader.item.openDiagnostics()
+                }
             }
         }
 
-        Item { Layout.preferredHeight: 10 }
-
-        Loader {
-            Layout.alignment: Qt.AlignHCenter
-            visible: Qt.platform.os !== "osx"
-            active: visible
-            source: active ? "Diagnose.qml" : ""
-            Layout.preferredWidth: item ? item.implicitWidth : 520
-            Layout.preferredHeight: item ? item.implicitHeight : 0
-        }
+        Item { Layout.preferredHeight: 6 }
     }
 }

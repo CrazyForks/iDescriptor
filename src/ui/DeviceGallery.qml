@@ -24,7 +24,7 @@ Item {
 
     Component.onCompleted: {
         console.log("DeviceGallery.qml: Component.onCompleted")
-        query = serviceFactory.create_query_backend(root.udid, info.ios_version_major)
+        query = serviceFactory.create_query_backend(root.udid, device.connectionId, info.ios_version_major)
         if (query) {
             query.init(settingsManager.use_sqlite_gallery_backend());
         } else {

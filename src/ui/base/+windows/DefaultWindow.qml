@@ -9,7 +9,7 @@ FluWindow {
     launchMode: FluWindowType.Standard
     property bool is_complete: false
     property string _effect: ""
-    property bool setupMacOSWindow: false
+    property bool setupMacOSWindowStyle: false
 
 
     function applyEffect(effect) {

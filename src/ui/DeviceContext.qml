@@ -19,6 +19,7 @@ QtObject {
     // Record<UDID, attempt token>
     property var wifiEnableAttempts: ({})
     property int wifiEnableAttemptToken: 0
+    property bool gcScheduled: false
 
     signal deviceRemoved(string udid)
     signal deviceAdded(string udid, string mac)
@@ -26,6 +27,21 @@ QtObject {
     signal initStarted(string mac)
     signal noPairingFileForWirelessDevice(string mac)
     signal pairingFailed(string udid)
+
+    /* 
+       schedule garbage collection otherwise
+       things get cleaned up after a long time 
+    */
+    function scheduleGc() {
+        if (root.gcScheduled)
+            return
+
+        root.gcScheduled = true
+        Qt.callLater(function() {
+            root.gcScheduled = false
+            gc()
+        })
+    }
 
     function init() {
         /* core is a global obj set from rust side*/
@@ -284,13 +300,8 @@ QtObject {
             const device = devices.get(i)
             if (device.udid === udid) {
                 devices.remove(i)
-                core.remove_device(udid)
-                // force garbage collection
-                // this may not work due to rust side being async,
-                // but no harm in trying
-                Helpers.setTimeout(()=> {
-                    gc()
-                },1000)
+                core.remove_device(udid, device.connectionId)
+                root.scheduleGc()
                 break
             }
         }
@@ -308,9 +319,37 @@ QtObject {
             switch (eventType) {
                 /* Device added */
                 case 1:
+                    const addedConnectionId = String(info.connection_id || "")
+                    if (!addedConnectionId) {
+                        console.warn("Ignoring connected event without a connection ID:", udid)
+                        break
+                    }
+
+                    const service_manager = serviceFactory.create_service_manager(
+                        udid, addedConnectionId, info.ios_version_major)
+                    const afcClient = serviceFactory.create_afc_client(
+                        udid, addedConnectionId, false)
+                    if (!service_manager || !afcClient) {
+                        console.warn("Ignoring stale connected event:", udid, addedConnectionId)
+                        break
+                    }
+                    const sb_client = serviceFactory.create_springboard_services_client(
+                        udid, addedConnectionId)
+
+                    const currentDevice = root.getDevice(udid)
+                    if (currentDevice && currentDevice.connectionId === addedConnectionId)
+                        break
+
+                    for (let i = 0; i < devices.count; ++i) {
+                        const existingDevice = devices.get(i)
+                        if (existingDevice.udid === udid) {
+                            devices.remove(i)
+                            root.scheduleGc()
+                            break
+                        }
+                    }
+
                     root.removePendingDevice(udid, false)
-                    const service_manager = serviceFactory.create_service_manager(udid, info.ios_version_major)
-                    const sb_client = serviceFactory.create_springboard_services_client(udid)
                     const text = `${info.marketing_name} / ${udid.slice(0,10)}...`
                     const mac = info["WiFiAddress"]
                     const wirelessAttempt = info.is_wireless
@@ -318,13 +357,14 @@ QtObject {
                     devices.append(
                         {
                             udid: udid,
+                            connectionId: addedConnectionId,
                             info: info,
                             text,
                             service_manager,
                             sb_client,
                             // default to info section
                             currentSection: 0,
-                            afcClient: serviceFactory.create_afc_client(udid, false)
+                            afcClient
                         }
                     )
                     root.deviceAdded(udid, mac)
@@ -335,21 +375,35 @@ QtObject {
                     break;
                 /* Device removed */
                 case 2:
-                    delete root.wifiEnableAttempts[udid]
+                    const removedConnectionId = String(info.connection_id || "")
+                    if (!removedConnectionId) {
+                        console.warn("Ignoring disconnected event without a connection ID:", udid)
+                        break
+                    }
                     let removedMac = ""
                     let removedDeviceWasWireless = false
+                    let removedMatchingDevice = false
                     const removedDeviceWasSelected = root.currentDeviceUdid === udid
 
                     // FIXME: find an O(1) solution
                     for (let i = 0; i < devices.count; i++) {
                         const device = devices.get(i)
                         if (device.udid === udid) {
+                            if (device.connectionId !== removedConnectionId) {
+                                console.log("Ignoring stale disconnected event:", udid,
+                                            removedConnectionId, "current:", device.connectionId)
+                                break
+                            }
                             removedMac = device.info["WiFiAddress"] || ""
                             removedDeviceWasWireless = !!device.info.is_wireless
                             devices.remove(i)
+                            removedMatchingDevice = true
                             break
                         }
                     }
+                    if (!removedMatchingDevice)
+                        break
+                    delete root.wifiEnableAttempts[udid]
                     if (root.currentDeviceUdid === udid)
                         root.currentDeviceUdid = ""
                     root.removePendingDevice(udid, false)
@@ -363,6 +417,7 @@ QtObject {
                             )
                         })
                     }
+                    root.scheduleGc()
                     break;
                 /* Pending device added */
                 case 3:
@@ -390,9 +445,6 @@ QtObject {
                 default:
 
             }
-            /* force garbage collection otherwise
-            things get cleaned up after a long time */
-            gc();
         }
 
 
@@ -425,11 +477,9 @@ QtObject {
                     if (root.currentRecoveryDeviceId === id)
                         root.currentRecoveryDeviceId = ""
                     root.selectFallbackDevice()
+                    root.scheduleGc()
                     break;
             }
-            /* force garbage collection otherwise
-            things get cleaned up after a long time */
-            gc();
         }
 
         function onInitFailed(macAddress) {
