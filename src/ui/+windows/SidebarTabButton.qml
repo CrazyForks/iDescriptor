@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 import QtQuick.Layouts
 import QtQuick.Window
 import FluentUI
@@ -106,7 +107,9 @@ Item {
                     text: root.displayTitle
                     elide: Text.ElideRight
                 }
+
             }
+
 
             Menu {
                 id: contextMenu
@@ -126,6 +129,22 @@ Item {
                     contextMenu.open()
                 }
             }
+        }
+
+        IconImage {
+            anchors.right: parent.right
+            anchors.rightMargin: 2
+            anchors.top: parent.top
+            // anchors.verticalCenter: parent.verticalCenter
+            visible: root.wireless
+            enabled: false
+            z: toggleButton.z + 1
+            source: "qrc:/resources/icons/qlementine-icons_wireless-1-16.svg"
+            color: palette.text
+            sourceSize.width: 14
+            sourceSize.height: 14
+            width: 14
+            height: 14
         }
 
         FluIconButton {
