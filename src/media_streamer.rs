@@ -22,12 +22,6 @@ use crate::RUNTIME;
 
 const STREAM_CHUNK_SIZE: usize = 256 * 1024;
 const STREAM_CHANNEL_CAPACITY: usize = 2;
-// FFmpeg may keep an open-ended request alive while issuing a second range
-// request (for example, to find a MOV moov atom near the end of the file).
-// AFC operations on a client are serialized, so letting the first request own
-// the client until EOF can deadlock the second request. Keep open-ended ranges
-// finite, as the original media server did, so FFmpeg can advance in chunks.
-const MAX_OPEN_ENDED_RANGE_BYTES: u64 = 1024 * 1024;
 
 #[derive(Clone)]
 struct MediaStreamState {
@@ -128,15 +122,7 @@ fn resolve_range(value: Option<&HeaderValue>, file_size: u64) -> Result<RangeDec
         return Err(());
     }
 
-    let value = value.to_str().map_err(|_| ())?;
-    let is_open_ended = value.split_once('=').is_some_and(|(unit, range)| {
-        unit.eq_ignore_ascii_case("bytes")
-            && !range.contains(',')
-            && range
-                .split_once('-')
-                .is_some_and(|(_, end)| end.trim().is_empty())
-    });
-    let ranges = parse_range_header(value)
+    let ranges = parse_range_header(value.to_str().map_err(|_| ())?)
         .map_err(|_| ())?
         .validate(file_size)
         .map_err(|_| ())?;
@@ -147,17 +133,7 @@ fn resolve_range(value: Option<&HeaderValue>, file_size: u64) -> Result<RangeDec
         return Ok(RangeDecision::Full);
     }
 
-    let range = ranges[0].clone();
-    let range_length = range.end().saturating_sub(*range.start()).saturating_add(1);
-    if is_open_ended && range_length > MAX_OPEN_ENDED_RANGE_BYTES {
-        let end = range
-            .start()
-            .saturating_add(MAX_OPEN_ENDED_RANGE_BYTES - 1)
-            .min(*range.end());
-        return Ok(RangeDecision::Partial(*range.start()..=end));
-    }
-
-    Ok(RangeDecision::Partial(range))
+    Ok(RangeDecision::Partial(ranges[0].clone()))
 }
 
 async fn handle_media_request(
@@ -385,12 +361,10 @@ mod tests {
     }
 
     #[test]
-    fn caps_large_open_ended_range() {
+    fn preserves_large_open_ended_range() {
         assert_eq!(
             resolve_range(Some(&header("bytes=1024-")), 10 * 1024 * 1024),
-            Ok(RangeDecision::Partial(
-                1024..=(1024 + MAX_OPEN_ENDED_RANGE_BYTES - 1)
-            ))
+            Ok(RangeDecision::Partial(1024..=(10 * 1024 * 1024 - 1)))
         );
     }
 
