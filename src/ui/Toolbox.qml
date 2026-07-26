@@ -26,9 +26,10 @@ Item {
 
     AnimatedDialog {
         id: confirmActionDialog
+        parent: Overlay.overlay
         modal: true
         focus: true
-        anchors.centerIn: parent
+        anchors.centerIn: Overlay.overlay
         title: ""
         standardButtons: Dialog.Yes | Dialog.No
 
