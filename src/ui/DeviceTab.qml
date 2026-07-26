@@ -29,68 +29,83 @@ Item {
             Layout.fillHeight: true
             spacing: 0
 
-            ColumnLayout {
-                Layout.fillHeight : true
-                Layout.preferredWidth: 185
-                Repeater {
-                    model: App.DeviceContext.devices
-                    delegate: Item {
-                        Layout.preferredHeight: button.implicitHeight
-                        Layout.preferredWidth: 170
-                        Layout.alignment: Qt.AlignHCenter
-                        readonly property var info: model.info
-                        SidebarTabButton {
-                            id : button
-                            anchors.fill: parent
-                            currentSection: model.currentSection
-                            title: info.product_type
-                            iconPath: info.placeholder_path
-                            udid: info["UniqueDeviceID"]
-                            wireless: info.is_wireless
-                            onSectionChanged: {
-                                if (model.currentSection !== sectionIndex)
-                                    model.currentSection = sectionIndex
+            ScrollView {
+                id: deviceSidebarScroll
 
-                                App.DeviceContext.selectConnectedDevice(info["UniqueDeviceID"])
+                Layout.fillHeight: true
+                Layout.preferredWidth: 185
+                clip: true
+                contentWidth: availableWidth
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                ColumnLayout {
+                    width: deviceSidebarScroll.availableWidth
+                    height: Math.max(implicitHeight, deviceSidebarScroll.availableHeight)
+
+                    Repeater {
+                        model: App.DeviceContext.devices
+                        delegate: Item {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: deviceButton.implicitHeight
+                            Layout.leftMargin: 7
+                            Layout.rightMargin: 7
+                            readonly property var info: model.info
+                            SidebarTabButton {
+                                id : deviceButton
+                                anchors.fill: parent
+                                currentSection: model.currentSection
+                                title: info.product_type
+                                iconPath: info.placeholder_path
+                                udid: info["UniqueDeviceID"]
+                                wireless: info.is_wireless
+                                onSectionChanged: {
+                                    if (model.currentSection !== sectionIndex)
+                                        model.currentSection = sectionIndex
+
+                                    App.DeviceContext.selectConnectedDevice(info["UniqueDeviceID"])
+                                }
                             }
                         }
                     }
-                }
-                Repeater {
-                    model: App.DeviceContext.pendingDevices
-                    delegate: Item {
-                        Layout.preferredHeight: button.implicitHeight
-                        Layout.preferredWidth: 175
-                        Layout.alignment: Qt.AlignHCenter
 
-                        PendingDeviceSidebar {
-                            id: button
-                            anchors.fill: parent
-                            udid: model.udid
+                    Repeater {
+                        model: App.DeviceContext.pendingDevices
+                        delegate: Item {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: pendingButton.implicitHeight
+                            Layout.leftMargin: 5
+                            Layout.rightMargin: 5
+
+                            PendingDeviceSidebar {
+                                id: pendingButton
+                                anchors.fill: parent
+                                udid: model.udid
+                            }
                         }
                     }
-                }
-                Repeater {
-                    model: App.DeviceContext.recoveryDevices
-                    delegate: Item {
-                        Layout.preferredHeight: button.implicitHeight
-                        Layout.preferredWidth: 185
-                        Layout.alignment: Qt.AlignHCenter
-                        readonly property var info: model.info
-                        RecoveryDeviceSidebar {
-                            id: button
-                            anchors.fill: parent
-                            title: model.text
-                            deviceId: model.id
-                            mode: info.mode
+
+                    Repeater {
+                        model: App.DeviceContext.recoveryDevices
+                        delegate: Item {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: recoveryButton.implicitHeight
+                            readonly property var info: model.info
+                            RecoveryDeviceSidebar {
+                                id: recoveryButton
+                                anchors.fill: parent
+                                title: model.text
+                                deviceId: model.id
+                                mode: info.mode
+                            }
                         }
                     }
-                }
-                // spacer taker
-                Item {
-                    Layout.fillHeight : true
-                }
 
+                    // spacer taker
+                    Item {
+                        Layout.fillHeight : true
+                    }
+                }
             }
 
 
