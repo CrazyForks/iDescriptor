@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Window
-// import QtQuick.Controls
 import FluentUI
+import "../../"
 
 FluLauncher {
     id: app
@@ -54,7 +54,7 @@ FluLauncher {
         }else{
             FluRouter.navigate("/")
         }
-        // Updater.checkAutomatically()
+        Updater.checkAutomatically()
     }
 
 }
