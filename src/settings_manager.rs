@@ -96,10 +96,8 @@ pub struct SettingsManager {
     set_upgrade_to_wireless_on_disconnect: qt_method!(fn(&self, enabled: bool)),
     unmount_ifuse_on_exit: qt_method!(fn(&self) -> bool),
     set_unmount_ifuse_on_exit: qt_method!(fn(&self, enabled: bool)),
-    use_unsecure_backend: qt_method!(fn(&self) -> bool),
-    set_use_unsecure_backend: qt_method!(fn(&self, enabled: bool)),
-    use_sqlite_gallery_backend: qt_method!(fn(&self) -> bool),
-    set_use_sqlite_gallery_backend: qt_method!(fn(&self, enabled: bool)),
+    gallery_backend: qt_method!(fn(&self) -> i32),
+    set_gallery_backend: qt_method!(fn(&self, backend: i32)),
     theme: qt_method!(fn(&self) -> QString),
     set_theme: qt_method!(fn(&self, theme: QString)),
     window_effect: qt_method!(fn(&self) -> QString),
@@ -121,8 +119,6 @@ pub struct SettingsManager {
     current_version: qt_method!(fn(&self) -> QString),
     app_version: qt_method!(fn(&self) -> QString),
     set_app_version: qt_method!(fn(&self, version: QString)),
-    icon_size_base_multiplier: qt_method!(fn(&self) -> f64),
-    set_icon_size_base_multiplier: qt_method!(fn(&self, multiplier: f64)),
     airplay_fps: qt_method!(fn(&self) -> i32),
     set_airplay_fps: qt_method!(fn(&self, fps: i32)),
     airplay_no_hold: qt_method!(fn(&self) -> bool),
@@ -445,20 +441,12 @@ impl SettingsManager {
         write_bool("unmountiFuseOnExit", enabled);
     }
 
-    fn use_unsecure_backend(&self) -> bool {
-        read_bool("useUnsecureBackend-ipatool", false)
+    fn gallery_backend(&self) -> i32 {
+        read_i32("galleryBackend", 1).clamp(0, 2)
     }
 
-    fn set_use_unsecure_backend(&self, enabled: bool) {
-        write_bool("useUnsecureBackend-ipatool", enabled);
-    }
-
-    fn use_sqlite_gallery_backend(&self) -> bool {
-        read_bool("useSqliteGalleryBackend", true)
-    }
-
-    fn set_use_sqlite_gallery_backend(&self, enabled: bool) {
-        write_bool("useSqliteGalleryBackend", enabled);
+    fn set_gallery_backend(&self, backend: i32) {
+        write_i32("galleryBackend", backend.clamp(0, 2));
     }
 
     fn theme(&self) -> QString {
@@ -554,15 +542,13 @@ impl SettingsManager {
         self.set_auto_enable_wifi_connections(true);
         self.set_upgrade_to_wireless_on_disconnect(true);
         self.set_unmount_ifuse_on_exit(false);
-        self.set_use_unsecure_backend(false);
-        self.set_use_sqlite_gallery_backend(true);
+        self.set_gallery_backend(1);
         self.set_theme(QString::from("System Default"));
         self.set_window_effect(QString::from("normal"));
         self.set_language(default_language());
         self.set_connection_timeout(30);
         self.set_show_keychain_dialog(true);
         self.set_default_jailbroken_root_password(QString::from("alpine"));
-        self.set_icon_size_base_multiplier(1.0);
         self.set_airplay_fps(60);
         self.set_airplay_no_hold(true);
         self.set_wireless_file_server_port(8080);
@@ -582,14 +568,6 @@ impl SettingsManager {
 
     fn set_app_version(&self, version: QString) {
         write_string("__APP_VERSION__", version);
-    }
-
-    fn icon_size_base_multiplier(&self) -> f64 {
-        read_f64("iconSizeBaseMultiplier", 1.0)
-    }
-
-    fn set_icon_size_base_multiplier(&self, multiplier: f64) {
-        write_f64("iconSizeBaseMultiplier", multiplier);
     }
 
     fn airplay_fps(&self) -> i32 {
@@ -744,6 +722,13 @@ fn read_bool(key: &str, default_value: bool) -> bool {
     })
 }
 
+fn has_setting(key: &str) -> bool {
+    let key = QString::from(key);
+    cpp!(unsafe [key as "QString"] -> bool as "bool" {
+        return settings_manager_settings().contains(key);
+    })
+}
+
 pub fn airplay_uxplay_args() -> Vec<String> {
     let fps = read_i32("airplayFps", 60).clamp(1, 255);
     let mut args = vec!["uxplay".to_string(), "-fps".to_string(), fps.to_string()];
@@ -783,22 +768,6 @@ fn read_i32(key: &str, default_value: i32) -> i32 {
 fn write_i32(key: &str, value: i32) {
     let key = QString::from(key);
     cpp!(unsafe [key as "QString", value as "int"] {
-        auto &settings = settings_manager_settings();
-        settings.setValue(key, value);
-        settings.sync();
-    });
-}
-
-fn read_f64(key: &str, default_value: f64) -> f64 {
-    let key = QString::from(key);
-    cpp!(unsafe [key as "QString", default_value as "double"] -> f64 as "double" {
-        return settings_manager_settings().value(key, default_value).toDouble();
-    })
-}
-
-fn write_f64(key: &str, value: f64) {
-    let key = QString::from(key);
-    cpp!(unsafe [key as "QString", value as "double"] {
         auto &settings = settings_manager_settings();
         settings.setValue(key, value);
         settings.sync();

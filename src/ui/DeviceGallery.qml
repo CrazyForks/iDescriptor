@@ -26,7 +26,7 @@ Item {
         console.log("DeviceGallery.qml: Component.onCompleted")
         query = serviceFactory.create_query_backend(root.udid, device.connectionId, info.ios_version_major)
         if (query) {
-            query.init(settingsManager.use_sqlite_gallery_backend());
+            query.init(settingsManager.gallery_backend());
         } else {
             root.gallerySizeQueried(0)
             // FIXME:show error

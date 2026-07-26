@@ -136,6 +136,7 @@ pub static GALLERY_TOTAL_SIZE_QUERY: &str =
 
 pub static FS_GALLERY_PROVIDER_NAME: &str = "FS";
 pub static SQLITE_GALLERY_PROVIDER_NAME: &str = "SQLite";
+pub static SQLITE_VFS_GALLERY_PROVIDER_NAME: &str = "SQLite VFS";
 pub static PHOTOS_SQLITE_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite";
 pub static PHOTOS_SQLITE_SHM_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite-shm";
 pub static PHOTOS_SQLITE_WAL_REMOTE_PATH: &str = "/PhotoData/Photos.sqlite-wal";

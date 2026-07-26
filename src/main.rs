@@ -39,6 +39,7 @@ pub mod diagnose;
 pub mod gallery;
 pub mod gallery_fs_provider;
 pub mod gallery_sqlite_provider;
+pub mod gallery_sqlite_vfs;
 #[cfg(not(target_os = "macos"))]
 pub mod ifuse;
 #[cfg(target_os = "linux")]

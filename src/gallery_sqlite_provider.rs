@@ -4,17 +4,20 @@ use crate::constants::{
     PHOTOS_SQLITE_REMOTE_PATH, PHOTOS_SQLITE_SHM_REMOTE_PATH, PHOTOS_SQLITE_WAL_REMOTE_PATH,
     RECENTLY_DELETED_ALBUM_ID, RECENTLY_DELETED_ALBUM_QUERY, RECENTLY_DELETED_QUERY,
     RECENTS_ALBUM_ID, RECENTS_ALBUM_QUERY, RECENTS_QUERY, SQLITE_GALLERY_PROVIDER_NAME,
+    SQLITE_VFS_GALLERY_PROVIDER_NAME,
 };
 use crate::gallery::{
     GalleryAlbum, GalleryFuture, GalleryMediaFilter, GalleryProvider, export_afc_file,
     matches_media_filter,
 };
+use crate::gallery_sqlite_vfs::{GalleryVfsRegistration, open_gallery_vfs_connection};
 use crate::utils::TempDirGuard;
 use ::log::{debug, info, warn};
 use anyhow::{Context, anyhow};
 use idevice::IdeviceError;
 use idevice::afc::AfcClient;
 use idevice::afc::errors::AfcError;
+use idevice::provider::IdeviceProvider;
 use rusqlite::{Connection, OptionalExtension};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -62,16 +65,27 @@ type SnapshotMetadata = HashMap<SnapshotFile, Option<RemoteFileMetadata>>;
 
 struct SqliteProviderState {
     connection: Option<Connection>,
+    vfs_registration: Option<GalleryVfsRegistration>,
     assets_table_name: String,
     assets_table_album_column: String,
     committed_metadata: SnapshotMetadata,
+}
+
+#[derive(Clone)]
+enum SqliteProviderSource {
+    Snapshot {
+        temp_dir: PathBuf,
+    },
+    Vfs {
+        provider: Arc<Mutex<Box<dyn IdeviceProvider>>>,
+    },
 }
 
 pub struct SqliteGalleryProvider {
     state: Arc<Mutex<SqliteProviderState>>,
     refresh_lock: Arc<Mutex<()>>,
     afc: Arc<Mutex<AfcClient>>,
-    temp_dir: PathBuf,
+    source: SqliteProviderSource,
     ios_version: u32,
     name: String,
 }
@@ -92,12 +106,14 @@ impl GalleryProvider for SqliteGalleryProvider {
                 .connection
                 .as_ref()
                 .context("SQLite gallery connection is closed")?;
-            read_albums_from_connection(
-                conn,
-                ios_ver,
-                &state.assets_table_name,
-                &state.assets_table_album_column,
-            )
+            tokio::task::block_in_place(|| {
+                read_albums_from_connection(
+                    conn,
+                    ios_ver,
+                    &state.assets_table_name,
+                    &state.assets_table_album_column,
+                )
+            })
         })
     }
 
@@ -105,11 +121,49 @@ impl GalleryProvider for SqliteGalleryProvider {
         let state = self.state.clone();
         let refresh_lock = self.refresh_lock.clone();
         let afc = self.afc.clone();
-        let temp_dir = self.temp_dir.clone();
+        let source = self.source.clone();
         let ios_version = self.ios_version;
 
         Box::pin(async move {
             let _refresh_guard = refresh_lock.lock().await;
+            if let SqliteProviderSource::Vfs { provider } = source {
+                let mut state = state.lock().await;
+                tokio::task::block_in_place(|| close_connection(&mut state))?;
+                state.vfs_registration = None;
+
+                let (connection, registration) = open_gallery_vfs_connection(afc, provider).await?;
+                let prepared = tokio::task::block_in_place(|| {
+                    (|| -> anyhow::Result<_> {
+                        let (assets_table_name, assets_table_album_column) =
+                            validate_vfs_connection(&connection)?;
+                        let albums = read_albums_from_connection(
+                            &connection,
+                            ios_version,
+                            &assets_table_name,
+                            &assets_table_album_column,
+                        )?;
+                        Ok((assets_table_name, assets_table_album_column, albums))
+                    })()
+                });
+                let (assets_table_name, assets_table_album_column, albums) = match prepared {
+                    Ok(prepared) => prepared,
+                    Err(error) => {
+                        drop(connection);
+                        drop(registration);
+                        return Err(error);
+                    }
+                };
+
+                state.connection = Some(connection);
+                state.vfs_registration = Some(registration);
+                state.assets_table_name = assets_table_name;
+                state.assets_table_album_column = assets_table_album_column;
+                return Ok(albums);
+            }
+
+            let SqliteProviderSource::Snapshot { temp_dir } = source else {
+                unreachable!();
+            };
             let remote_metadata = {
                 let mut afc = afc.lock().await;
                 read_remote_snapshot_metadata(&mut afc).await?
@@ -166,6 +220,7 @@ impl GalleryProvider for SqliteGalleryProvider {
             )?;
 
             state.connection = Some(connection);
+            state.vfs_registration = None;
             state.assets_table_name = assets_table_name;
             state.assets_table_album_column = assets_table_album_column;
             state.committed_metadata = remote_metadata;
@@ -203,7 +258,9 @@ impl GalleryProvider for SqliteGalleryProvider {
                 .connection
                 .as_ref()
                 .context("SQLite gallery connection is closed")?;
-            let total_size: i64 = conn.query_row(GALLERY_TOTAL_SIZE_QUERY, [], |r| r.get(0))?;
+            let total_size: i64 = tokio::task::block_in_place(|| {
+                conn.query_row(GALLERY_TOTAL_SIZE_QUERY, [], |r| r.get(0))
+            })?;
             u64::try_from(total_size).context("Gallery size cannot be negative")
         })
     }
@@ -213,10 +270,13 @@ impl Drop for SqliteGalleryProvider {
     fn drop(&mut self) {
         if let Ok(mut state) = self.state.try_lock() {
             let _ = close_connection(&mut state);
+            state.vfs_registration = None;
         }
 
-        if let Err(e) = std::fs::remove_dir_all(&self.temp_dir) {
-            println!("Failed to remove temp gallery database dir: {}", e);
+        if let SqliteProviderSource::Snapshot { temp_dir } = &self.source {
+            if let Err(e) = std::fs::remove_dir_all(temp_dir) {
+                println!("Failed to remove temp gallery database dir: {}", e);
+            }
         }
     }
 }
@@ -264,15 +324,49 @@ pub async fn build_sqlite_provider(
     Ok(Arc::new(SqliteGalleryProvider {
         state: Arc::new(Mutex::new(SqliteProviderState {
             connection: Some(connection),
+            vfs_registration: None,
             assets_table_name,
             assets_table_album_column,
             committed_metadata: remote_metadata,
         })),
         refresh_lock: Arc::new(Mutex::new(())),
         afc,
-        temp_dir,
+        source: SqliteProviderSource::Snapshot { temp_dir },
         ios_version,
         name: SQLITE_GALLERY_PROVIDER_NAME.into(),
+    }))
+}
+
+pub async fn build_sqlite_vfs_provider(
+    afc: Arc<Mutex<AfcClient>>,
+    provider: Arc<Mutex<Box<dyn IdeviceProvider>>>,
+    ios_version: u32,
+) -> anyhow::Result<Arc<dyn GalleryProvider>> {
+    let (connection, registration) =
+        open_gallery_vfs_connection(afc.clone(), provider.clone()).await?;
+    let (assets_table_name, assets_table_album_column) =
+        match tokio::task::block_in_place(|| validate_vfs_connection(&connection)) {
+            Ok(schema) => schema,
+            Err(error) => {
+                drop(connection);
+                drop(registration);
+                return Err(error);
+            }
+        };
+
+    Ok(Arc::new(SqliteGalleryProvider {
+        state: Arc::new(Mutex::new(SqliteProviderState {
+            connection: Some(connection),
+            vfs_registration: Some(registration),
+            assets_table_name,
+            assets_table_album_column,
+            committed_metadata: SnapshotMetadata::new(),
+        })),
+        refresh_lock: Arc::new(Mutex::new(())),
+        afc,
+        source: SqliteProviderSource::Vfs { provider },
+        ios_version,
+        name: SQLITE_VFS_GALLERY_PROVIDER_NAME.into(),
     }))
 }
 
@@ -348,6 +442,16 @@ fn open_and_validate_connection(path: &Path) -> anyhow::Result<(Connection, Stri
 
     let (assets_table_name, assets_table_album_column) = discover_assets_table(&connection)?;
     Ok((connection, assets_table_name, assets_table_album_column))
+}
+
+fn validate_vfs_connection(connection: &Connection) -> anyhow::Result<(String, String)> {
+    // TODO: do we need this?
+    // connection
+    //     .query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| {
+    //         row.get::<_, i64>(0)
+    //     })
+    //     .context("Failed to read the gallery schema through the AFC VFS")?;
+    discover_assets_table(connection)
 }
 
 fn discover_assets_table(connection: &Connection) -> anyhow::Result<(String, String)> {
@@ -434,37 +538,39 @@ async fn query_sqlite_album(
     most_recent_first: bool,
 ) -> anyhow::Result<Vec<String>> {
     let state = state.lock().await;
-    let connection = state
-        .connection
-        .as_ref()
-        .context("SQLite gallery connection is closed")?;
-    let mut paths = Vec::new();
-    let query = format!(
-        "{} ORDER BY ZASSET.Z_PK {}",
-        ALBUM_CONTENTS_QUERY_TEMPLATE
-            .replace("{table}", &state.assets_table_name)
-            .replace("{album}", &state.assets_table_album_column),
-        sqlite_order_direction(most_recent_first),
-    );
-    debug!("Executing query: {}", query);
-    debug!("With album id: {}", id);
-    let mut stmt = connection.prepare(&query)?;
+    tokio::task::block_in_place(|| {
+        let connection = state
+            .connection
+            .as_ref()
+            .context("SQLite gallery connection is closed")?;
+        let mut paths = Vec::new();
+        let query = format!(
+            "{} ORDER BY ZASSET.Z_PK {}",
+            ALBUM_CONTENTS_QUERY_TEMPLATE
+                .replace("{table}", &state.assets_table_name)
+                .replace("{album}", &state.assets_table_album_column),
+            sqlite_order_direction(most_recent_first),
+        );
+        debug!("Executing query: {}", query);
+        debug!("With album id: {}", id);
+        let mut stmt = connection.prepare(&query)?;
 
-    let row_iter = stmt.query_map([id], |r| {
-        let fdir: String = r.get(0)?;
-        let fname: String = r.get(1)?;
-        Ok((fdir, fname))
-    })?;
+        let row_iter = stmt.query_map([id], |r| {
+            let fdir: String = r.get(0)?;
+            let fname: String = r.get(1)?;
+            Ok((fdir, fname))
+        })?;
 
-    for item in row_iter {
-        let (fdir, fname) = item?;
-        let path = join_device_path(&fdir, &fname);
-        if matches_media_filter(&path, media_filter) {
-            paths.push(path);
+        for item in row_iter {
+            let (fdir, fname) = item?;
+            let path = join_device_path(&fdir, &fname);
+            if matches_media_filter(&path, media_filter) {
+                paths.push(path);
+            }
         }
-    }
 
-    Ok(paths)
+        Ok(paths)
+    })
 }
 
 fn sqlite_order_direction(most_recent_first: bool) -> &'static str {
@@ -487,31 +593,33 @@ async fn query_favs_album(
     most_recent_first: bool,
 ) -> anyhow::Result<Vec<String>> {
     let state = state.lock().await;
-    let connection = state
-        .connection
-        .as_ref()
-        .context("SQLite gallery connection is closed")?;
-    let mut paths = Vec::new();
+    tokio::task::block_in_place(|| {
+        let connection = state
+            .connection
+            .as_ref()
+            .context("SQLite gallery connection is closed")?;
+        let mut paths = Vec::new();
 
-    //favs album
-    let query = sqlite_ordered_query(FAVS_QUERY, most_recent_first);
-    let mut favs_stmt = connection.prepare(&query)?;
+        //favs album
+        let query = sqlite_ordered_query(FAVS_QUERY, most_recent_first);
+        let mut favs_stmt = connection.prepare(&query)?;
 
-    let favs_iter = favs_stmt.query_map([], |r| {
-        let fname: String = r.get(0)?;
-        let fdir: String = r.get(1)?;
-        Ok((fname, fdir))
-    })?;
+        let favs_iter = favs_stmt.query_map([], |r| {
+            let fname: String = r.get(0)?;
+            let fdir: String = r.get(1)?;
+            Ok((fname, fdir))
+        })?;
 
-    for fav_item in favs_iter {
-        let (fname, fdir) = fav_item?;
-        let path = join_device_path(&fdir, &fname);
-        if matches_media_filter(&path, media_filter) {
-            paths.push(path);
+        for fav_item in favs_iter {
+            let (fname, fdir) = fav_item?;
+            let path = join_device_path(&fdir, &fname);
+            if matches_media_filter(&path, media_filter) {
+                paths.push(path);
+            }
         }
-    }
 
-    Ok(paths)
+        Ok(paths)
+    })
 }
 
 async fn query_recents_album(
@@ -520,31 +628,33 @@ async fn query_recents_album(
     most_recent_first: bool,
 ) -> anyhow::Result<Vec<String>> {
     let state = state.lock().await;
-    let connection = state
-        .connection
-        .as_ref()
-        .context("SQLite gallery connection is closed")?;
-    let mut paths = Vec::new();
+    tokio::task::block_in_place(|| {
+        let connection = state
+            .connection
+            .as_ref()
+            .context("SQLite gallery connection is closed")?;
+        let mut paths = Vec::new();
 
-    //recents album
-    let query = sqlite_ordered_query(RECENTS_QUERY, most_recent_first);
-    let mut recents_stmt = connection.prepare(&query)?;
+        //recents album
+        let query = sqlite_ordered_query(RECENTS_QUERY, most_recent_first);
+        let mut recents_stmt = connection.prepare(&query)?;
 
-    let recents_iter = recents_stmt.query_map([], |r| {
-        let fname: String = r.get(0)?;
-        let fdir: String = r.get(1)?;
-        Ok((fname, fdir))
-    })?;
+        let recents_iter = recents_stmt.query_map([], |r| {
+            let fname: String = r.get(0)?;
+            let fdir: String = r.get(1)?;
+            Ok((fname, fdir))
+        })?;
 
-    for recent_item in recents_iter {
-        let (fname, fdir) = recent_item?;
-        let path = join_device_path(&fdir, &fname);
-        if matches_media_filter(&path, media_filter) {
-            paths.push(path);
+        for recent_item in recents_iter {
+            let (fname, fdir) = recent_item?;
+            let path = join_device_path(&fdir, &fname);
+            if matches_media_filter(&path, media_filter) {
+                paths.push(path);
+            }
         }
-    }
 
-    Ok(paths)
+        Ok(paths)
+    })
 }
 
 async fn query_recently_deleted_album(
@@ -553,31 +663,33 @@ async fn query_recently_deleted_album(
     most_recent_first: bool,
 ) -> anyhow::Result<Vec<String>> {
     let state = state.lock().await;
-    let connection = state
-        .connection
-        .as_ref()
-        .context("SQLite gallery connection is closed")?;
-    let mut paths = Vec::new();
+    tokio::task::block_in_place(|| {
+        let connection = state
+            .connection
+            .as_ref()
+            .context("SQLite gallery connection is closed")?;
+        let mut paths = Vec::new();
 
-    //recently deleted album
-    let query = sqlite_ordered_query(RECENTLY_DELETED_QUERY, most_recent_first);
-    let mut recently_deleted_stmt = connection.prepare(&query)?;
+        //recently deleted album
+        let query = sqlite_ordered_query(RECENTLY_DELETED_QUERY, most_recent_first);
+        let mut recently_deleted_stmt = connection.prepare(&query)?;
 
-    let recently_deleted_iter = recently_deleted_stmt.query_map([], |r| {
-        let fname: String = r.get(0)?;
-        let fdir: String = r.get(1)?;
-        Ok((fname, fdir))
-    })?;
+        let recently_deleted_iter = recently_deleted_stmt.query_map([], |r| {
+            let fname: String = r.get(0)?;
+            let fdir: String = r.get(1)?;
+            Ok((fname, fdir))
+        })?;
 
-    for deleted_item in recently_deleted_iter {
-        let (fname, fdir) = deleted_item?;
-        let path = join_device_path(&fdir, &fname);
-        if matches_media_filter(&path, media_filter) {
-            paths.push(path);
+        for deleted_item in recently_deleted_iter {
+            let (fname, fdir) = deleted_item?;
+            let path = join_device_path(&fdir, &fname);
+            if matches_media_filter(&path, media_filter) {
+                paths.push(path);
+            }
         }
-    }
 
-    Ok(paths)
+        Ok(paths)
+    })
 }
 
 fn join_device_path(dir: &str, file_name: &str) -> String {

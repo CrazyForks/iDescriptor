@@ -4,11 +4,11 @@ use qttypes::{QStringList, QVariantList, QVariantMap};
 use crate::constants::FS_GALLERY_PROVIDER_NAME;
 use crate::device_ctx;
 use crate::gallery_fs_provider::build_fs_provider;
-use crate::gallery_sqlite_provider::build_sqlite_provider;
+use crate::gallery_sqlite_provider::{build_sqlite_provider, build_sqlite_vfs_provider};
 use crate::qt_threading::QtThreading;
 use crate::utils::{MediaFileType, create_album_info, media_file_type};
 use crate::{RUNTIME, qvariantmap_insert};
-use ::log::debug;
+use ::log::{debug, info, warn};
 use idevice::afc::AfcClient;
 use idevice::afc::opcode::AfcFopenMode;
 use macros::QtThreading;
@@ -16,6 +16,7 @@ use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub type GalleryFuture<T> = Pin<Box<dyn Future<Output = anyhow::Result<T>> + Send>>;
@@ -31,6 +32,24 @@ pub trait GalleryProvider: Send + Sync {
     ) -> GalleryFuture<Vec<String>>;
     fn query_gallery_size(&self) -> GalleryFuture<u64>;
     fn name(&self) -> String;
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum GalleryBackend {
+    Fs,
+    #[default]
+    Sqlite,
+    SqliteVfs,
+}
+
+impl GalleryBackend {
+    fn from_i32(value: i32) -> Self {
+        match value {
+            0 => Self::Fs,
+            2 => Self::SqliteVfs,
+            _ => Self::Sqlite,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -95,7 +114,7 @@ pub struct Query {
     reloading: qt_property!(bool; NOTIFY reloadingChanged),
     reloadingChanged: qt_signal!(),
 
-    init: qt_method!(fn(&mut self, use_sqlite_backend: bool)),
+    init: qt_method!(fn(&mut self, gallery_backend: i32)),
     reload: qt_method!(fn(&mut self)),
     read_albums: qt_method!(fn(&mut self)),
     query_album: qt_method!(fn(&mut self, id: i32, media_filter: i32, most_recent_first: bool)),
@@ -117,8 +136,9 @@ pub struct Query {
     gallerySizeQueried: qt_signal!(size: u64),
     reloadFinished: qt_signal!(success: bool, revision: i32, error: QString),
     is_init: bool,
-    use_sqlite_backend: bool,
+    gallery_backend: GalleryBackend,
     revision: i32,
+    gallery_load_started_at: Option<Instant>,
 }
 
 fn new_state(init: bool, err: &str, backend: &str) -> QVariantMap {
@@ -142,17 +162,20 @@ impl Query {
         def
     }
 
-    fn init(&mut self, use_sqlite_backend: bool) {
+    fn init(&mut self, gallery_backend: i32) {
         if self.is_init {
             debug!("Query: already initialized, skipping init");
             return;
         }
+        let gallery_backend = GalleryBackend::from_i32(gallery_backend);
         debug!(
-            "Query: initializing with udid={} ios_version={} use_sqlite_backend={}",
-            self.udid, self.ios_version, use_sqlite_backend
+            "Query: initializing with udid={} ios_version={} gallery_backend={gallery_backend:?}",
+            self.udid, self.ios_version
         );
-        self.use_sqlite_backend = use_sqlite_backend;
+        self.gallery_backend = gallery_backend;
         self.is_init = true;
+        self.gallery_load_started_at = Some(Instant::now());
+        let gallery_load_started_at = self.gallery_load_started_at;
         let udid_clone = self.udid.clone();
         let udid_clone_for_fallback = self.udid.clone();
         let connection_id = self.connection_id;
@@ -161,38 +184,51 @@ impl Query {
 
         RUNTIME.spawn(async move {
             let res: anyhow::Result<Arc<dyn GalleryProvider>> = (async {
-                let afc_arc = device_ctx::get_device_for_connection_opt(udid_clone, connection_id)
+                let device = device_ctx::get_device_for_connection_opt(udid_clone, connection_id)
                     .await
-                    .ok_or_else(|| anyhow::anyhow!("device connection is no longer current"))?
-                    .afc;
-                if use_sqlite_backend {
-                    let prov = build_sqlite_provider(afc_arc, ios_version).await?;
-                    let gallery_size = prov.query_gallery_size().await.unwrap_or(0);
-                    //fire this immediately so that the diskusage.qml can stop loading as soon as possible
-                    qt_thread.queue(move |s| {
-                        s.gallerySizeQueried(gallery_size);
-                    });
-                    prov.read_albums().await?;
-                    Ok(prov)
-                } else {
+                    .ok_or_else(|| anyhow::anyhow!("device connection is no longer current"))?;
+                let prov = match gallery_backend {
+                    GalleryBackend::Fs => build_fs_provider(device.afc).await?,
+                    GalleryBackend::Sqlite => {
+                        build_sqlite_provider(device.afc, ios_version).await?
+                    }
+                    GalleryBackend::SqliteVfs => {
+                        build_sqlite_vfs_provider(device.afc, device.provider, ios_version).await?
+                    }
+                };
+
+                if gallery_backend == GalleryBackend::Fs {
                     //FIXME:untill there is a better way to query the gallery size for fs backend, we will just return 0
                     // let gallery_size = prov.query_gallery_size().await?;
                     qt_thread.queue(move |s| {
                         s.gallerySizeQueried(0);
                     });
-                    let prov = build_fs_provider(afc_arc).await?;
                     /*
                         Better not do this for fs backend
                         as this will most likely succeed
                     */
                     // prov.read_albums().await?;
-                    Ok(prov)
+                } else {
+                    // let gallery_size = prov.query_gallery_size().await.unwrap_or(0);
+                    //fire this immediately so that the diskusage.qml can stop loading as soon as possible
+                    qt_thread.queue(move |s| {
+                        s.gallerySizeQueried(0);
+                    });
+                    prov.read_albums().await?;
                 }
+                Ok(prov)
             })
             .await;
 
             match res {
                 Ok(provider) => {
+                    info!(
+                        "Gallery provider ready for albums page: backend={} elapsed={:?}",
+                        provider.name(),
+                        gallery_load_started_at
+                            .map(|started_at| started_at.elapsed())
+                            .unwrap_or_default()
+                    );
                     qt_thread.queue(move |s| {
                         println!("Gallery provider initialized successfully");
                         let state = new_state(true, "", &provider.name());
@@ -202,6 +238,12 @@ impl Query {
                     });
                 }
                 Err(e) => {
+                    warn!(
+                        "Gallery provider initialization failed after {:?}: {e}",
+                        gallery_load_started_at
+                            .map(|started_at| started_at.elapsed())
+                            .unwrap_or_default()
+                    );
                     println!("Gallery provider initialization failed: {}", e.to_string());
                     qt_thread.queue(move |s| {
                         s.gallerySizeQueried(0);
@@ -211,7 +253,7 @@ impl Query {
                         fallback to fs if sqlite fails to query properly
                         currently iOS 15....26 support is good
                     */
-                    if use_sqlite_backend {
+                    if gallery_backend != GalleryBackend::Fs {
                         let fs_res: anyhow::Result<Arc<dyn GalleryProvider>> = async {
                             let afc_arc = device_ctx::get_device_for_connection_opt(
                                 udid_clone_for_fallback,
@@ -280,8 +322,23 @@ impl Query {
         self.stateChanged();
 
         let q_thread = self.qt_thread();
+        let started_at = Instant::now();
         RUNTIME.spawn(async move {
             let result = provider.reload().await;
+            match &result {
+                Ok((provider_albums, failed_albums_count)) => info!(
+                    "Gallery albums page reloaded: backend={} albums={} failed_albums={} elapsed={:?}",
+                    provider.name(),
+                    provider_albums.len(),
+                    failed_albums_count,
+                    started_at.elapsed()
+                ),
+                Err(error) => warn!(
+                    "Gallery albums page reload failed: backend={} elapsed={:?} error={error}",
+                    provider.name(),
+                    started_at.elapsed()
+                ),
+            }
             q_thread.queue(move |query| {
                 // saturating_add is probably overkill
                 let next_revision = query.revision.saturating_add(1);
@@ -326,11 +383,24 @@ impl Query {
                 return;
             }
         };
+        let backend_name = provider.name();
+        let read_started_at = Instant::now();
+        let gallery_load_started_at = self.gallery_load_started_at;
 
         RUNTIME.spawn(async move {
             let mut albums = QVariantList::default();
             match provider.read_albums().await {
                 Ok((provider_albums, failed_albums_count)) => {
+                    info!(
+                        "Gallery albums page loaded: backend={} albums={} failed_albums={} read_elapsed={:?} total_elapsed={:?}",
+                        backend_name,
+                        provider_albums.len(),
+                        failed_albums_count,
+                        read_started_at.elapsed(),
+                        gallery_load_started_at
+                            .map(|started_at| started_at.elapsed())
+                            .unwrap_or_default()
+                    );
                     albums = albums_to_variant_list(provider_albums);
 
                     q_thread.queue(move |q_self| {
@@ -344,6 +414,14 @@ impl Query {
                     })
                 }
                 Err(e) => {
+                    warn!(
+                        "Gallery albums page load failed: backend={} read_elapsed={:?} total_elapsed={:?} error={e}",
+                        backend_name,
+                        read_started_at.elapsed(),
+                        gallery_load_started_at
+                            .map(|started_at| started_at.elapsed())
+                            .unwrap_or_default()
+                    );
                     q_thread.queue(move |q_self| {
                         println!("Error reading albums {}", e);
                         q_self.state[QString::from("err")] =

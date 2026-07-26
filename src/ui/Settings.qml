@@ -19,6 +19,7 @@ DefaultWindow {
     modality: Qt.ApplicationModal
     autoDestroy: false
     autoVisible: false
+    color: palette.window
 
     /* Windows only*/
     showMaximize: false
@@ -43,11 +44,9 @@ DefaultWindow {
     property bool auto_connect_wireless_devices: true
     property bool upgrade_to_wireless_on_disconnect: true
     property int connection_timeout: 30
-    property bool use_unsecure_backend: false
-    property bool use_sqlite_gallery_backend: true
+    property int gallery_backend: 1
     property string window_effect: "normal"
     property string default_jailbroken_root_password: "alpine"
-    property real icon_size_base_multiplier: 1.0
     property int airplay_fps: 60
     property bool airplay_no_hold: true
     property bool airplay_use_legacy_ports: true
@@ -87,6 +86,13 @@ DefaultWindow {
         return "en"
     }
 
+    function normalizeGalleryBackend(value) {
+        const parsedBackend = Number(value)
+        if (parsedBackend === 0 || parsedBackend === 2)
+            return parsedBackend
+        return 1
+    }
+
     function applyLanguage() {
         if (typeof QmlUtils !== "undefined" && QmlUtils && typeof QmlUtils.set_language === "function")
             QmlUtils.set_language(language)
@@ -107,11 +113,9 @@ DefaultWindow {
         auto_connect_wireless_devices = backendValue("auto_connect_wireless_devices", true)
         upgrade_to_wireless_on_disconnect = backendValue("upgrade_to_wireless_on_disconnect", true)
         connection_timeout = backendValue("connection_timeout", 30)
-        use_unsecure_backend = backendValue("use_unsecure_backend", false)
-        use_sqlite_gallery_backend = backendValue("use_sqlite_gallery_backend", true)
+        gallery_backend = normalizeGalleryBackend(backendValue("gallery_backend", 1))
         window_effect = backendValue("window_effect", "normal")
         default_jailbroken_root_password = backendValue("default_jailbroken_root_password", "alpine")
-        icon_size_base_multiplier = backendValue("icon_size_base_multiplier", 1.0)
         airplay_fps = backendValue("airplay_fps", 60)
         airplay_no_hold = backendValue("airplay_no_hold", true)
         airplay_use_legacy_ports = backendValue("airplay_use_legacy_ports", true)
@@ -137,11 +141,9 @@ DefaultWindow {
         callBackend("set_auto_connect_wireless_devices", auto_connect_wireless_devices)
         callBackend("set_upgrade_to_wireless_on_disconnect", upgrade_to_wireless_on_disconnect)
         callBackend("set_connection_timeout", connection_timeout)
-        callBackend("set_use_unsecure_backend", use_unsecure_backend)
-        callBackend("set_use_sqlite_gallery_backend", use_sqlite_gallery_backend)
+        callBackend("set_gallery_backend", gallery_backend)
         callBackend("set_window_effect", window_effect)
         callBackend("set_default_jailbroken_root_password", default_jailbroken_root_password)
-        callBackend("set_icon_size_base_multiplier", icon_size_base_multiplier)
         callBackend("set_airplay_fps", airplay_fps)
         callBackend("set_airplay_no_hold", airplay_no_hold)
         callBackend("set_airplay_use_legacy_ports", airplay_use_legacy_ports)
@@ -205,21 +207,6 @@ DefaultWindow {
     MessageDialog {
         id: appliedDialog
         title: qsTr("Settings")
-    }
-
-    MessageDialog {
-        id: insecureBackendDialog
-        title: qsTr("Warning")
-        text: qsTr("Enabling this will not encrypt your Apple account, which is a security risk. Are you sure you want to enable this?")
-        buttons: MessageDialog.Yes | MessageDialog.No
-        onButtonClicked: function(button, role) {
-            if (button === MessageDialog.Yes) {
-                root.use_unsecure_backend = true
-                root.markDirty(true)
-            } else {
-                root.use_unsecure_backend = false
-            }
-        }
     }
 
     MessageDialog {
@@ -330,22 +317,36 @@ DefaultWindow {
                             Layout.preferredWidth: 175
                         }
 
-                        SpinBox {
-                            from: 1024
-                            to: 65535
-                            value: root.wireless_file_server_port
+                        TextField {
+                            Layout.preferredWidth: 110
+                            text: String(root.wireless_file_server_port)
+                            selectByMouse: true
+                            inputMethodHints: Qt.ImhDigitsOnly
+                            validator: IntValidator {
+                                bottom: 1024
+                                top: 65535
+                            }
                             ToolTip.visible: hovered
                             ToolTip.text: qsTr("The starting port for the wireless file server. If this port is unavailable, it will try the next 10 ports.")
-                            onValueModified: {
-                                root.wireless_file_server_port = value
-                                root.markDirty(false)
+                            onEditingFinished: {
+                                const port = Number(text)
+                                if (acceptableInput && Number.isInteger(port)) {
+                                    if (root.wireless_file_server_port !== port) {
+                                        root.wireless_file_server_port = port
+                                        root.markDirty(false)
+                                    }
+                                } else {
+                                    text = String(root.wireless_file_server_port)
+                                }
                             }
                         }
 
                         Item { Layout.fillWidth: true }
                     }
 
-                    CheckBox {
+                    Switch {
+                        Layout.fillWidth: true
+                        LayoutMirroring.enabled: true
                         visible: Qt.platform.os !== "osx" && Qt.platform.os !== "darwin"
                         text: qsTr("Unmount iFuse drives on exit")
                         checked: root.unmount_ifuse_on_exit
@@ -355,7 +356,9 @@ DefaultWindow {
                         }
                     }
 
-                    CheckBox {
+                    Switch {
+                        Layout.fillWidth: true
+                        LayoutMirroring.enabled: true
                         text: qsTr("Automatically check for updates")
                         checked: root.auto_check_updates
                         onToggled: {
@@ -364,23 +367,29 @@ DefaultWindow {
                         }
                     }
 
-                    CheckBox {
-                        text: qsTr("Automatically enable Wi-Fi connections")
-                        checked: root.auto_enable_wifi_connections
-                        onToggled: {
-                            root.auto_enable_wifi_connections = checked
-                            root.markDirty(false)
-                        }
-                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
 
-                    CheckBox {
-                        text: qsTr("Use SQLite gallery backend")
-                        checked: root.use_sqlite_gallery_backend
-                        ToolTip.visible: hovered
-                        ToolTip.text: qsTr("Use the Photos database for gallery albums. Disable this to scan the DCIM folders directly.")
-                        onToggled: {
-                            root.use_sqlite_gallery_backend = checked
-                            root.markDirty(false)
+                        Label {
+                            text: qsTr("Gallery backend")
+                            Layout.preferredWidth: 175
+                        }
+
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: [
+                                qsTr("Filesystem (AFC)"),
+                                qsTr("SQLite"),
+                                qsTr("SQLite through VFS")
+                            ]
+                            currentIndex: root.normalizeGalleryBackend(root.gallery_backend)
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Choose how gallery albums are loaded from the device.")
+                            onActivated: function(index) {
+                                root.gallery_backend = root.normalizeGalleryBackend(index)
+                                root.markDirty(false)
+                            }
                         }
                     }
 
@@ -465,7 +474,9 @@ DefaultWindow {
                 SettingsSection {
                     title: qsTr("Device Connection")
 
-                    CheckBox {
+                    Switch {
+                        Layout.fillWidth: true
+                        LayoutMirroring.enabled: true
                         text: qsTr("Auto-raise main window on device connection")
                         checked: root.auto_raise_window
                         onToggled: {
@@ -474,7 +485,9 @@ DefaultWindow {
                         }
                     }
 
-                    CheckBox {
+                    Switch {
+                        Layout.fillWidth: true
+                        LayoutMirroring.enabled: true
                         text: qsTr("Switch to newly connected device")
                         checked: root.switch_to_new_device
                         onToggled: {
@@ -483,7 +496,20 @@ DefaultWindow {
                         }
                     }
 
-                    CheckBox {
+                    Switch {
+                        Layout.fillWidth: true
+                        LayoutMirroring.enabled: true
+                        text: qsTr("Automatically enable Wi-Fi connections")
+                        checked: root.auto_enable_wifi_connections
+                        onToggled: {
+                            root.auto_enable_wifi_connections = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        LayoutMirroring.enabled: true
                         text: qsTr("Automatically connect to wireless devices")
                         checked: root.auto_connect_wireless_devices
                         onToggled: {
@@ -492,7 +518,9 @@ DefaultWindow {
                         }
                     }
 
-                    CheckBox {
+                    Switch {
+                        Layout.fillWidth: true
+                        LayoutMirroring.enabled: true
                         text: qsTr("Upgrade to wireless on disconnect")
                         checked: root.upgrade_to_wireless_on_disconnect
                         ToolTip.visible: hovered
@@ -525,25 +553,6 @@ DefaultWindow {
                         }
 
                         Item { Layout.fillWidth: true }
-                    }
-                }
-
-                SettingsSection {
-                    title: qsTr("Security")
-
-                    CheckBox {
-                        text: qsTr("Use unsecure backend for app store (ipatool)")
-                        checked: root.use_unsecure_backend
-                        ToolTip.visible: hovered
-                        ToolTip.text: qsTr("Enabling this may put your Apple account at risk but you do not have to deal with Apple keychain.")
-                        onToggled: {
-                            if (checked && !root.use_unsecure_backend) {
-                                insecureBackendDialog.open()
-                            } else {
-                                root.use_unsecure_backend = checked
-                                root.markDirty(true)
-                            }
-                        }
                     }
                 }
 
@@ -601,7 +610,9 @@ DefaultWindow {
                         Item { Layout.fillWidth: true }
                     }
 
-                    CheckBox {
+                    Switch {
+                        Layout.fillWidth: true
+                        LayoutMirroring.enabled: true
                         text: qsTr("Allow New Connections to Take Over")
                         checked: root.airplay_no_hold
                         onToggled: {
@@ -610,7 +621,9 @@ DefaultWindow {
                         }
                     }
 
-                    CheckBox {
+                    Switch {
+                        Layout.fillWidth: true
+                        LayoutMirroring.enabled: true
                         visible: Qt.platform.os === "linux"
                         text: qsTr("Use legacy ports")
                         checked: root.airplay_use_legacy_ports
@@ -622,7 +635,9 @@ DefaultWindow {
                         }
                     }
 
-                    CheckBox {
+                    Switch {
+                        Layout.fillWidth: true
+                        LayoutMirroring.enabled: true
                         visible: Qt.platform.os === "linux"
                         text: qsTr("Show V4L2 Button on AirPlay Widget")
                         checked: root.show_v4l2
@@ -630,38 +645,6 @@ DefaultWindow {
                             root.show_v4l2 = checked
                             root.markDirty(false)
                         }
-                    }
-                }
-
-                SettingsSection {
-                    title: qsTr("Miscellaneous")
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 10
-
-                        Label {
-                            text: qsTr("Icon Size Base Multiplier")
-                            Layout.preferredWidth: 175
-                        }
-
-                        SpinBox {
-                            id: iconMultiplierSpin
-                            from: 10
-                            to: 50
-                            stepSize: 1
-                            value: Math.round(root.icon_size_base_multiplier * 10)
-                            textFromValue: function(value, locale) { return (value / 10).toFixed(1) + "x" }
-                            valueFromText: function(text, locale) { return Math.round(Number(text.replace("x", "")) * 10) || 10 }
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Adjust the base multiplier for icon sizes. Requires restart to take effect.")
-                            onValueModified: {
-                                root.icon_size_base_multiplier = value / 10
-                                root.markDirty(true)
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
                     }
                 }
 

@@ -25,6 +25,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 local-ip-address = "0.6.13"
 qrcode = { version = "0.14.1", default-features = false, features = ["image"] }
 rusqlite = { version = "0.39.0", features = ["bundled"] }
+sqlite-vfs = "0.2.0"
 filetime = "0.2.27"
 priority-queue = "2.7.0"
 anyhow = "1.0.102"

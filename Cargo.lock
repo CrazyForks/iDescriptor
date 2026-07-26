@@ -1726,6 +1726,7 @@ dependencies = [
  "reqwest 0.13.4",
  "rusqlite",
  "serde_json",
+ "sqlite-vfs",
  "ssh2",
  "tokio",
  "tokio-util",
@@ -3622,6 +3623,16 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der",
+]
+
+[[package]]
+name = "sqlite-vfs"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0258972cbfaa18f42f8be285c4d237c719a6844d48471c9461cc8556fc9df38"
+dependencies = [
+ "log",
+ "time",
 ]
 
 [[package]]
