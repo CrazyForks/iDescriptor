@@ -50,7 +50,7 @@ DefaultWindow {
     visible: true
     width: Screen.width
     height: Screen.height
-    visibility: Window.FullScreen
+    visibility: Window.Maximized
     color: "#0b0b0d"
 
     function formatDuration(milliseconds) {
