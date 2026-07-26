@@ -209,10 +209,10 @@ impl Query {
                     */
                     // prov.read_albums().await?;
                 } else {
-                    // let gallery_size = prov.query_gallery_size().await.unwrap_or(0);
+                    let gallery_size = prov.query_gallery_size().await.unwrap_or(0);
                     //fire this immediately so that the diskusage.qml can stop loading as soon as possible
                     qt_thread.queue(move |s| {
-                        s.gallerySizeQueried(0);
+                        s.gallerySizeQueried(gallery_size);
                     });
                     prov.read_albums().await?;
                 }
