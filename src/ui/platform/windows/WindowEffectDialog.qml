@@ -51,13 +51,13 @@ AnimatedDialog {
                         effect: "acrylic",
                         label: qsTr("Acrylic"),
                         // TODO: Replace this placeholder with the final acrylic desktop preview.
-                        image: "qrc:/resources/repo/win-11-mica-dark.png"
+                        image: "qrc:/resources/windows/window.acrylic.png"
                     },
                     {
                         effect: "normal",
                         label: qsTr("Normal"),
                         // TODO: Replace this placeholder with the final normal desktop preview.
-                        image: "qrc:/resources/repo/win-11-mica-light.png"
+                        image: "qrc:/resources/windows/window.normal.png"
                     }
                 ]
 

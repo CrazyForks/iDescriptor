@@ -6,10 +6,13 @@ import "./base"
 Item {
     id: root
 
-    implicitWidth: 520
     implicitHeight: card.implicitHeight
 
     property var diagnoseState: DiagnoseImpl.state
+
+    function openDiagnostics() {
+        diagnosticsDialog.open()
+    }
 
     function colorForKind(kind) {
         if (kind === "ok")
@@ -212,47 +215,6 @@ Item {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    Rectangle {
-        id: card
-        width: root.implicitWidth
-        implicitHeight: 72
-        color: "transparent"
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 16
-            anchors.rightMargin: 12
-            spacing: 12
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 3
-
-                Text {
-                    Layout.fillWidth: true
-                    text: qsTr("Dependency Check")
-                    color: "white"
-                    font.pixelSize: 14
-                    font.weight: Font.DemiBold
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    Layout.fillWidth: true
-                    text: root.diagnoseState.summary || qsTr("Checking system dependencies...")
-                    color: root.colorForKind(root.diagnoseState.summaryKind)
-                    font.pixelSize: 12
-                    elide: Text.ElideRight
-                }
-            }
-
-            Button {
-                text: qsTr("View Diagnostics")
-                onClicked: diagnosticsDialog.open()
             }
         }
     }

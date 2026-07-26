@@ -85,26 +85,16 @@ Item {
             }
         }
 
-        Button {
-            opacity: root.hasPrivateValue ? 1 : 0
-            enabled: root.hasPrivateValue
+        IconToolButton {
             Layout.preferredWidth: 24
             Layout.preferredHeight: 24
-            icon.source: root.hidden
-                         ? "qrc:/resources/icons/clarity_eye-hide-line.svg"
-                         : "qrc:/resources/icons/clarity_eye_line.svg"
-            icon.width: 16
-            icon.height: 16
-
-            HoverHandler {
-                cursorShape: Qt.PointingHandCursor
-            }
+            icon.color: palette.text
+            icon.source: !root.hidden
+                         ? "qrc:/resources/icons/clarity_eye-line.svg"
+                         : "qrc:/resources/icons/clarity_eye-hide-line.svg"
+            iconSize: 16
 
             onClicked: root.hidden = !root.hidden
-
-            background: Rectangle {
-                color: "transparent"
-            }
         }
     }
 

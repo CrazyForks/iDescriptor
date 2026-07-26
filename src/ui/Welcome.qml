@@ -115,6 +115,7 @@ Item {
                     icon.source: "qrc:/resources/icons/ic_baseline-insert-drive-file.svg"
                     icon.width: 16
                     icon.height: 16
+                    icon.color: palette.text
                     onClicked: customPairingDialog.open()
 
                     background: Rectangle {
@@ -226,10 +227,7 @@ Item {
                 visible: diagnosticsLoader.active
                 text: qsTr("View Diagnostics")
                 flat: true
-                onClicked: {
-                    if (diagnosticsLoader.item)
-                        diagnosticsLoader.item.openDiagnostics()
-                }
+                onClicked: diagnosticsLoader.item.openDiagnostics()
             }
         }
 

@@ -4,7 +4,7 @@ qrc!(pub rsrc,
     "/" {
         "resources/icons/bxs_terminal.svg",
         "resources/icons/clarity_eye-hide-line.svg",
-        "resources/icons/clarity_eye_line.svg",
+        "resources/icons/clarity_eye-line.svg",
         "resources/icons/clarity_hard-disk-solid-alerted.svg",
         "resources/icons/fluent_filmstrip-play-20-regular.svg",
         "resources/icons/globe_network.svg",
@@ -112,8 +112,7 @@ qrc!(pub macos_rsrc,
 #[cfg(target_os = "windows")]
 qrc!(pub windows_rsrc,
     "/" {
-        // TODO: Replace these placeholder previews with final normal/acrylic desktop images.
-        "resources/repo/win-11-mica-light.png",
-        "resources/repo/win-11-mica-dark.png",
+        "resources/windows/window.acrylic.png",
+        "resources/windows/window.normal.png",
     }
 );

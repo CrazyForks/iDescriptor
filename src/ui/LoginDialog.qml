@@ -369,7 +369,7 @@ AnimatedDialog {
                             enabled: passwordField.enabled
                             icon.source: dialog.passwordVisible
                                          ? "qrc:/resources/icons/clarity_eye-hide-line.svg"
-                                         : "qrc:/resources/icons/clarity_eye_line.svg"
+                                         : "qrc:/resources/icons/clarity_eye-line.svg"
                             icon.width: 17
                             icon.height: 17
                             icon.color: App.Theme.icon
