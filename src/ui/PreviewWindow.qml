@@ -15,6 +15,8 @@ DefaultWindow {
     property var afcClient: null
     property bool useAfc2: false
     property int row: 999999
+    property var navigationPaths: []
+    property int navigationIndex: -1
     property int thumbVersion: 0
     property real imageZoom: 1.0
     property string streamUrl: ""
@@ -25,6 +27,9 @@ DefaultWindow {
 
     readonly property bool isVideo: App.Helpers.is_video_file(filePath)
     readonly property bool usesHouseArrest: !!afcClient && !!afcClient.bundle_id
+    readonly property bool canNavigatePrevious: navigationIndex > 0
+    readonly property bool canNavigateNext: navigationIndex >= 0
+                                                && navigationIndex < navigationPaths.length - 1
     readonly property string fileName: {
         const parts = root.filePath.split("/")
         return parts.length > 0 ? parts[parts.length - 1] : root.filePath
@@ -89,15 +94,18 @@ DefaultWindow {
     }
 
     function cleanupVideoStream() {
-        if (root.streamReleased || root.streamUrl.length === 0)
-            return
+        const urlToRelease = !root.streamReleased ? root.streamUrl : ""
 
         player.stop()
-        if (root.afcClient && typeof root.afcClient.release_video_stream === "function")
-            root.afcClient.release_video_stream(root.streamUrl)
-
+        player.source = ""
         root.streamReleased = true
         root.streamUrl = ""
+
+        if (urlToRelease.length > 0
+                && root.afcClient
+                && typeof root.afcClient.release_video_stream === "function") {
+            root.afcClient.release_video_stream(urlToRelease)
+        }
     }
 
     function loadImage() {
@@ -126,6 +134,38 @@ DefaultWindow {
             player.pause()
         else
             player.play()
+    }
+
+    function navigateTo(index) {
+        if (index < 0 || index >= root.navigationPaths.length
+                || index === root.navigationIndex) {
+            return
+        }
+
+        root.cleanupVideoStream()
+        root.errorMessage = ""
+        root.houseArrestImageSource = ""
+        root.imageZoom = 1
+        root.thumbVersion = 0
+
+        root.navigationIndex = index
+        root.row = index
+        root.filePath = root.navigationPaths[index]
+
+        if (root.isVideo)
+            root.startVideoStream()
+        else
+            root.loadImage()
+    }
+
+    function showPrevious() {
+        if (root.canNavigatePrevious)
+            root.navigateTo(root.navigationIndex - 1)
+    }
+
+    function showNext() {
+        if (root.canNavigateNext)
+            root.navigateTo(root.navigationIndex + 1)
     }
 
     Component.onCompleted: {
@@ -317,6 +357,28 @@ DefaultWindow {
                     onClicked: root.retryPreview()
                 }
             }
+        }
+
+        NavigationButton {
+            anchors.left: parent.left
+            anchors.leftMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.navigationPaths.length > 1
+            enabled: root.canNavigatePrevious
+            iconRotation: 90
+            tooltip: qsTr("Previous")
+            onClicked: root.showPrevious()
+        }
+
+        NavigationButton {
+            anchors.right: parent.right
+            anchors.rightMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.navigationPaths.length > 1
+            enabled: root.canNavigateNext
+            iconRotation: -90
+            tooltip: qsTr("Next")
+            onClicked: root.showNext()
         }
     }
 
@@ -555,6 +617,39 @@ DefaultWindow {
         ToolTip.text: control.tooltip
     }
 
+    component NavigationButton: Button {
+        id: navigationControl
+        property real iconRotation: 0
+        property string tooltip: ""
+
+        width: 46
+        height: 46
+        z: 10
+
+        contentItem: IconImage {
+            source: "qrc:/resources/icons/material-symbols_keyboard-arrow-down.svg"
+            sourceSize.width: 24
+            sourceSize.height: 24
+            rotation: navigationControl.iconRotation
+            color: navigationControl.enabled ? App.Theme.text : App.Theme.textMuted
+        }
+
+        background: Rectangle {
+            radius: 15
+            color: navigationControl.down
+                   ? App.Theme.pressed
+                   : navigationControl.hovered
+                     ? App.Theme.hover
+                     : root.chromeSurface
+            border.color: root.chromeBorder
+            border.width: 1
+        }
+
+        ToolTip.visible: navigationControl.hovered
+                             && navigationControl.tooltip.length > 0
+        ToolTip.text: navigationControl.tooltip
+    }
+
     Shortcut {
         sequences: [StandardKey.Cancel]
         onActivated: root.close()
@@ -564,5 +659,17 @@ DefaultWindow {
         sequence: "Space"
         enabled: root.isVideo && root.streamUrl.length > 0
         onActivated: root.togglePlayback()
+    }
+
+    Shortcut {
+        sequence: "Left"
+        enabled: root.canNavigatePrevious
+        onActivated: root.showPrevious()
+    }
+
+    Shortcut {
+        sequence: "Right"
+        enabled: root.canNavigateNext
+        onActivated: root.showNext()
     }
 }

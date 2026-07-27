@@ -19,6 +19,8 @@ Item {
     property var pendingExportPaths: []
     property string pendingExportTitle: ""
     property string errorMessage: ""
+    readonly property int preferredTileSize: 178
+    readonly property int tileSpacing: 4
 
     signal goBack()
 
@@ -211,9 +213,9 @@ Item {
                 }
 
                 Button {
-                    text: qsTr("Export Selected")
+                    text: qsTr("Export Selected (%1)").arg(root.selectedFileCount)
                     enabled: root.selectedFileCount > 0
-                    onClicked: root.chooseExportDestination(root.selectedFilePaths(), qsTr("Exporting Selected Files"))
+                    onClicked: root.chooseExportDestination(root.selectedFilePaths(), qsTr("Exporting Selected Items"))
                 }
 
                 Button {
@@ -231,8 +233,15 @@ Item {
                 GridView {
                     id: gallery
                     anchors.fill: parent
-                    cellWidth: 250
-                    cellHeight: 250
+                    anchors.margins: 8
+                    readonly property int columnCount: Math.max(
+                        2,
+                        Math.floor((width + root.tileSpacing)
+                                   / (root.preferredTileSize + root.tileSpacing)))
+                    readonly property real tileSize:
+                        Math.floor(width / columnCount) - root.tileSpacing
+                    cellWidth: tileSize + root.tileSpacing
+                    cellHeight: tileSize + root.tileSpacing
                     clip: true
                     model: albumContentsModel
                     ScrollBar.vertical: ScrollBar {
@@ -241,22 +250,28 @@ Item {
                     }
 
                     delegate: ItemDelegate {
-                        width: 250
-                        height: 250
+                        width: gallery.tileSize
+                        height: gallery.tileSize
                         highlighted: selected
                         background: Rectangle {
                             color: "transparent"
                         }
                         MouseArea {
+                            id: tileMouseArea
                             anchors.fill: parent
+                            hoverEnabled: true
                             onDoubleClicked: {
                                 const comp = Qt.createComponent("PreviewWindow.qml")
 
                                 if (comp.status === Component.Ready) {
+                                    const navigationPaths = root.currentFilePaths()
                                     const win = comp.createObject(root,{
                                         filePath,
                                         udid : root.udid,
-                                        afcClient: root.device.afcClient
+                                        afcClient: root.device.afcClient,
+                                        row: index,
+                                        navigationPaths,
+                                        navigationIndex: index
                                     })
                                     if (win !== null) {
                                         win.show()
@@ -281,33 +296,69 @@ Item {
                             cache: false
                             anchors.fill: parent
                             source: "image://thumb/" + encodeURIComponent(filePath)
-                                    + "?udid=" + encodeURIComponent(root.udid)
+                                    + "?udid=" + root.udid
                                     + "&afc2=false&index=" + index
                                     + "&v=" + thumbVersion
-                            fillMode: Image.PreserveAspectFit
+                            fillMode: Image.PreserveAspectCrop
                             sourceSize.width: 240 * Screen.devicePixelRatio
                             sourceSize.height: 240 * Screen.devicePixelRatio
                         }
 
-                        Text {
+                        Rectangle {
                             anchors.bottom: parent.bottom
                             anchors.left: parent.left
                             anchors.right: parent.right
-                            text: fileName
-                            font.pixelSize: 10
-                            color: "white"
-                            elide: Text.ElideMiddle
+                            height: 40
+                            visible: tileMouseArea.containsMouse
+                            z: 2
+                            gradient: Gradient {
+                                GradientStop { position: 0; color: "transparent" }
+                                GradientStop { position: 1; color: "#B0000000" }
+                            }
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                anchors.margins: 6
+                                text: filePath
+                                font.pixelSize: 10
+                                color: "white"
+                                elide: Text.ElideMiddle
+                            }
                         }
                     }
                 }
 
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 6
+                    visible: !root.loading
+                             && !query.reloading
+                             && albumContentsModel.count === 0
+
+                    Label {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: qsTr("No Photos or Videos")
+                        font.pixelSize: 20
+                        font.weight: Font.DemiBold
+                        color: palette.text
+                    }
+
+                    Label {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: qsTr("This album is empty.")
+                        color: palette.mid
+                    }
+                }
+
                 RubberBandSelection {
-                    anchors.fill: parent
+                    anchors.fill: gallery
                     anchors.rightMargin: galleryScrollBar.visible ? galleryScrollBar.width : 0
                     targetView: gallery
                     itemCount: albumContentsModel.count
-                    selectableItemWidth: 250
-                    selectableItemHeight: 250
+                    selectableItemWidth: gallery.cellWidth
+                    selectableItemHeight: gallery.cellHeight
                     isItemSelected: (index) => albumContentsModel.get(index).selected
                     setItemSelected: (index, selected) => albumContentsModel.setProperty(index, "selected", selected)
                     onSelectionUpdated: root.updateSelectedFileCount()
