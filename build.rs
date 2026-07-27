@@ -28,17 +28,23 @@ fn main() {
     let qt_version = env::var("DEP_QT_VERSION").unwrap();
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let flatpak_build = env::var_os("CARGO_FEATURE_FLATPAK").is_some();
+    let appimage_build = target_os == "linux" && env::var_os("CARGO_FEATURE_APPIMAGE").is_some();
 
     // compile_translations(&qt_library_path);
 
     // ------------------------------------------------------------------
     // Build cpp_bridge via CMake
     // ------------------------------------------------------------------
-    let out = cmake::Config::new("src/native")
+    let mut cmake_config = cmake::Config::new("src/native");
+    cmake_config
         .build_target("cpp_bridge")
         .define("CMAKE_BUILD_TYPE", "Debug")
         .define("CMAKE_PREFIX_PATH", &qt_library_path)
-        .build();
+        .define(
+            "IDESCRIPTOR_APPIMAGE_BUILD",
+            if appimage_build { "ON" } else { "OFF" },
+        );
+    let out = cmake_config.build();
 
     let build_dir = out.join("build");
 

@@ -3,6 +3,7 @@ project(cpp_bridge CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(IDESCRIPTOR_APPIMAGE_BUILD "Build iDescriptor for AppImage" OFF)
 
 # ---------------------------------------------------------------------------
 # Package manager hints
@@ -75,6 +76,9 @@ endif()
 # uxplay
 # ---------------------------------------------------------------------------
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/uxplay uxplay_build)
+if(IDESCRIPTOR_APPIMAGE_BUILD)
+    target_compile_definitions(uxplay PRIVATE IDESCRIPTOR_APPIMAGE_BUILD=1)
+endif()
 
 # ---------------------------------------------------------------------------
 # Sources — per-platform
