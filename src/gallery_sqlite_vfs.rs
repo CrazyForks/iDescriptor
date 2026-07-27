@@ -43,11 +43,16 @@ struct RemoteMetadata {
 
 struct RemoteDatabase {
     file: Arc<Mutex<Option<OwnedFileDescriptor>>>,
+    //FIXME: remove if not needed
+    #[allow(dead_code)]
     metadata_afc: Arc<Mutex<AfcClient>>,
     expected: RemoteMetadata,
     cache: StdMutex<LruCache<u64, Arc<Vec<u8>>>>,
 }
-
+/*
+  vfs is still experimental and doesn't provide much benefit over local copy of the Photos.sqlite file,
+  other than not having to copy the entire Photos.sqlite file to local storage
+*/
 struct GalleryVfsDatabase {
     main: RemoteDatabase,
     wal: Option<Arc<Vec<u8>>>,
