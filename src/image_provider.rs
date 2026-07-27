@@ -4,6 +4,7 @@ use url::form_urlencoded;
 
 use crate::qquickimageprovider_imp::*;
 
+#[allow(dead_code)]
 #[derive(Default, Clone)]
 struct QSizeRef {
     inner: QSize,
@@ -87,7 +88,7 @@ impl QQuickImageProvider for ImageProvider {
             );
         }
 
-        self.loader.pinned().clone().borrow_mut().request_thumbnail(
+        self.loader.pinned().borrow().request_thumbnail(
             QString::from(udid),
             QString::from(path),
             afc2,
