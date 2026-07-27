@@ -1,9 +1,49 @@
 use crate::{RUNTIME, qt_threading::QtThreading, qvariantmap_insert};
 use anyhow::{Context, Result, anyhow, bail};
+#[cfg(all(target_os = "linux", feature = "flatpak"))]
+use cpp::cpp;
 use log::{error, warn};
 use macros::QtThreading;
 use qmetaobject::prelude::*;
 use qttypes::{QVariantList, QVariantMap};
+
+cpp::cpp! {{
+    #ifdef IDESCRIPTOR_FLATPAK
+    #include <QDBusConnection>
+    #include <QDBusConnectionInterface>
+    #include <QDBusReply>
+    #include <QDebug>
+
+    static bool idescriptor_is_avahi_available()
+    {
+        QDBusConnection bus = QDBusConnection::systemBus();
+
+        if (!bus.isConnected()) {
+            qWarning() << "Cannot connect to the D-Bus system bus";
+            return false;
+        }
+
+        QDBusConnectionInterface *interface = bus.interface();
+        QDBusReply<bool> reply =
+            interface->isServiceRegistered(QStringLiteral("org.freedesktop.Avahi"));
+
+        if (!reply.isValid()) {
+            qWarning() << "Failed to query Avahi service registration:"
+                       << reply.error().message();
+            return false;
+        }
+
+        return reply.value();
+    }
+    #else
+    // have to define this because
+    // cpp_build scans cpp! blocks even when the Rust call is feature-gated.
+    static bool idescriptor_is_avahi_available()
+    {
+        return false;
+    }
+    #endif
+}}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Availability {
@@ -213,11 +253,9 @@ fn items_to_variant_list(items: Vec<DependencyStatus>) -> QVariantList {
             QString::from(status_kind(item.availability))
         );
         qvariantmap_insert!(map, "actionText", QString::from(item.action_text));
-        qvariantmap_insert!(
-            map,
-            "actionVisible",
-            item.availability != Availability::Available
-        );
+        let action_visible = item.availability != Availability::Available
+            && !(cfg!(all(target_os = "linux", feature = "flatpak")) && item.id == "avahi");
+        qvariantmap_insert!(map, "actionVisible", action_visible);
         list.push(QVariant::from(map));
     }
     list
@@ -281,42 +319,64 @@ async fn install_dependency(dependency_id: &str) -> Result<String> {
 
 #[cfg(target_os = "linux")]
 async fn check_linux_dependencies() -> Result<Vec<DependencyStatus>> {
+    #[cfg(feature = "flatpak")]
+    let avahi = match tokio::task::spawn_blocking(|| {
+        cpp!(unsafe [] -> bool as "bool" {
+            return idescriptor_is_avahi_available();
+        })
+    })
+    .await
+    {
+        Ok(true) => Availability::Available,
+        Ok(false) => Availability::AvailableButNotRunning,
+        Err(err) => {
+            warn!("failed to check Avahi over D-Bus: {err}");
+            Availability::UnableToCheck
+        }
+    };
+
+    #[cfg(not(feature = "flatpak"))]
     let avahi = linux_service_status("avahi-daemon.service", &["avahi-browse", "avahi-daemon"])
         .await
         .unwrap_or_else(|err| {
             warn!("failed to check avahi: {err:#}");
             Availability::UnableToCheck
         });
+
+    #[cfg(not(feature = "flatpak"))]
     let udev_rules = check_udev_rules_installed().await.unwrap_or_else(|err| {
         warn!("failed to check udev rules: {err:#}");
         Availability::UnableToCheck
     });
 
-    Ok(vec![
-        DependencyStatus {
-            id: "avahi",
-            name: "Avahi Daemon",
-            description: "Required for AirPlay and wireless device discovery.",
-            optional: false,
-            availability: avahi,
-            action_text: if avahi == Availability::AvailableButNotRunning {
-                "Start"
-            } else {
-                "Install"
-            },
+    #[allow(unused_mut)]
+    let mut dependencies = vec![DependencyStatus {
+        id: "avahi",
+        name: "Avahi Daemon",
+        description: "Required for AirPlay and wireless device discovery.",
+        optional: false,
+        availability: avahi,
+        action_text: if avahi == Availability::AvailableButNotRunning {
+            "Start"
+        } else {
+            "Install"
         },
-        DependencyStatus {
-            id: "udev_rules",
-            name: "UDEV rules",
-            description: "Required for Linux iOS device permissions and recovery workflows.",
-            optional: false,
-            availability: udev_rules,
-            action_text: "View Instructions",
-        },
-    ])
+    }];
+
+    #[cfg(not(feature = "flatpak"))]
+    dependencies.push(DependencyStatus {
+        id: "udev_rules",
+        name: "UDEV rules",
+        description: "Required for Linux iOS device permissions and recovery workflows.",
+        optional: false,
+        availability: udev_rules,
+        action_text: "View Instructions",
+    });
+
+    Ok(dependencies)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(feature = "flatpak")))]
 async fn check_udev_rules_installed() -> Result<Availability> {
     use std::time::Duration;
 
@@ -365,7 +425,7 @@ async fn check_udev_rules_installed() -> Result<Availability> {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(feature = "flatpak")))]
 async fn linux_service_status(service: &str, binaries: &[&str]) -> Result<Availability> {
     if command_success("systemctl", &["is-active", "--quiet", service]).await {
         return Ok(Availability::Available);
@@ -383,6 +443,10 @@ async fn install_linux_dependency(dependency_id: &str) -> Result<String> {
     match dependency_id {
         "udev_rules" => Ok("Install the iDescriptor udev rules at /etc/udev/rules.d/99-idevice.rules, reload udev, and add your user to the idevice group. Then sign out and back in before refreshing diagnostics.".to_string()),
         "avahi" => {
+            if cfg!(feature = "flatpak") {
+                bail!("Starting host services is not available in the Flatpak build");
+            }
+
             if executable_in_path("systemctl") && executable_in_path("pkexec") {
                 tokio::process::Command::new("pkexec")
                     .args(["systemctl", "enable", "--now", "avahi-daemon.service"])

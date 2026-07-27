@@ -27,6 +27,7 @@ fn main() {
     let qt_library_path = env::var("DEP_QT_LIBRARY_PATH").unwrap();
     let qt_version = env::var("DEP_QT_VERSION").unwrap();
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let flatpak_build = env::var_os("CARGO_FEATURE_FLATPAK").is_some();
 
     // compile_translations(&qt_library_path);
 
@@ -62,6 +63,9 @@ fn main() {
     // cpp_build — compiles the cpp! macros in src/main.rs
     // ------------------------------------------------------------------
     let mut config = cpp_build::Config::new();
+    // GCC 16 diagnoses a SFINAE pattern used by the Qt headers. This is
+    // third-party compatibility noise, so suppress it only when supported.
+    config.flag_if_supported("-Wno-sfinae-incomplete");
 
     for f in env::var("DEP_QT_COMPILE_FLAGS")
         .unwrap()
@@ -81,6 +85,11 @@ fn main() {
     public_include("QtQuick");
     public_include("QtQml");
     public_include("QtQuickControls2");
+    public_include("QtWidgets");
+    if target_os == "linux" && flatpak_build {
+        public_include("QtDBus");
+        config.define("IDESCRIPTOR_FLATPAK", None);
+    }
 
     let mut private_include = |name: &str| {
         if target_os == "macos" {
@@ -182,6 +191,9 @@ fn main() {
         pkg_config::Config::new()
             .probe("avahi-compat-libdns_sd")
             .unwrap();
+        if flatpak_build {
+            pkg_config::Config::new().probe("Qt6DBus").unwrap();
+        }
     }
 
     // FFmpeg
@@ -229,6 +241,8 @@ fn main() {
     }
 }
 
+// TODO: allow dead_code until we decide whether this is the right approach for translations
+#[allow(dead_code)]
 fn compile_translations(qt_library_path: &str) {
     let lrelease = find_lrelease(qt_library_path)
         .unwrap_or_else(|| panic!("lrelease not found for Qt library path {}", qt_library_path));
