@@ -171,7 +171,11 @@ cpp! {{
             ] -> QPixmap as "QPixmap" {
                 let (orig_size, pixmap) = rust_object.borrow().request_pixmap(&id.to_string(), requested_size);
                 if !size.is_null() {
-                    *size = orig_size;
+                    // SAFETY: Qt passes either null or a valid, writable QSize
+                    // pointer for the duration of requestPixmap().
+                    unsafe {
+                        *size = orig_size;
+                    }
                 }
                 pixmap
             });
@@ -204,7 +208,11 @@ cpp! {{
             ] -> QImage as "QImage" {
                 let (orig_size, img) = rust_object.borrow().request_image(&id.to_string(), requested_size);
                 if !size.is_null() {
-                    *size = orig_size;
+                    // SAFETY: Qt passes either null or a valid, writable QSize
+                    // pointer for the duration of requestImage().
+                    unsafe {
+                        *size = orig_size;
+                    }
                 }
                 img
             });
