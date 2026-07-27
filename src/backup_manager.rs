@@ -34,8 +34,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     pin::Pin,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, SystemTime},
 };
 use tokio::task::JoinHandle;
 
@@ -593,7 +592,7 @@ struct iDescriptorBackupDelegate {
     #[allow(dead_code)]
     root: String,
     udid: QString,
-    start_time: Arc<Mutex<Option<Instant>>>,
+    // start_time: Arc<Mutex<Option<Instant>>>,
 }
 
 impl iDescriptorBackupDelegate {
@@ -609,7 +608,7 @@ impl iDescriptorBackupDelegate {
             operation,
             root,
             udid,
-            start_time: Arc::new(Mutex::new(None)),
+            // start_time: Arc::new(Mutex::new(None)),
         }
     }
 }
