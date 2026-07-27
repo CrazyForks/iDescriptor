@@ -44,6 +44,7 @@ jobs:
             automake \
             checkinstall \
             git \
+            ninja-build \
             pkg-config \
             libpugixml-dev \
             libusb-1.0-0-dev \
@@ -58,6 +59,8 @@ jobs:
             libswscale-dev \
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-gl \
+            gstreamer1.0-tools \
             gstreamer1.0-plugins-good \
             gstreamer1.0-plugins-bad \
             gstreamer1.0-plugins-ugly \
@@ -79,9 +82,9 @@ jobs:
             libswscale-dev \
             python3-pip 
 
-      - name: Install latest Meson
+      - name: Install Meson
         run: |
-          python3 -m pip install --user --upgrade meson
+          python3 -m pip install --user "meson==1.11.2"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Setup Rust toolchain
@@ -94,27 +97,35 @@ jobs:
           modules: "qtmultimedia qtlocation qtpositioning qtserialport qt5compat qtshadertools"
           dir: ${{ github.workspace }}
 
-      - name: Build qml6glsink from gst-plugins-good
+      - name: Build qml6glsink for GStreamer 1.20
         shell: bash
         run: |
-          wget https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.20.7.tar.xz
-          tar -xf gst-plugins-good-1.20.7.tar.xz
-          cd gst-plugins-good-1.20.7
+          set -euo pipefail
+
+          archive="gst-plugins-good-1.22.12.tar.xz"
+          wget "https://gstreamer.freedesktop.org/src/gst-plugins-good/${archive}"
+          echo "9c1913f981900bd8867182639b20907b28ed78ef7a222cfbf2d8ba9dab992fa7  ${archive}" | sha256sum --check
+          tar -xf "${archive}"
+          cd gst-plugins-good-1.22.12
+
+          patch -p1 < "${GITHUB_WORKSPACE}/.github/patches/gst-plugins-good-1.22-gstreamer-1.20.patch"
 
           meson setup build-qml6 . \
-          --prefix=/usr \
-          --libdir=lib/$(uname -m)-linux-gnu \
-          --auto-features=disabled \
-          -Dqt6=enabled \
-          -Dqt5=disabled \
-          -Dqt-x11=enabled \
-          -Dtests=disabled \
-          -Dexamples=disabled \
-          -Dnls=disabled
+            --prefix=/usr \
+            --libdir="lib/$(uname -m)-linux-gnu" \
+            --auto-features=disabled \
+            -Dqt6=enabled \
+            -Dqt5=disabled \
+            -Dqt-x11=enabled \
+            -Dtests=disabled \
+            -Dexamples=disabled \
+            -Dnls=disabled
 
           ninja -C build-qml6
+          GST_PLUGIN_PATH_1_0="${PWD}/build-qml6/ext/qt6" \
+            gst-inspect-1.0 qml6glsink >/dev/null
           sudo cp build-qml6/ext/qt6/libgstqml6.so \
-          /usr/lib/$(uname -m)-linux-gnu/gstreamer-1.0/
+            "/usr/lib/$(uname -m)-linux-gnu/gstreamer-1.0/"
 
       - name: Build libimobiledevice suite (versioned tarballs)
         run: |
