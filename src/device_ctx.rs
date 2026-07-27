@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
-use crate::{image_cache, media_streamer::MediaStreamSession};
+use crate::{image_cache, image_loader, media_streamer::MediaStreamSession};
 
 #[derive(Clone)]
 #[allow(non_camel_case_types)]
@@ -106,6 +106,8 @@ pub async fn get_device_for_connection_opt(
 }
 
 async fn clean_removed_device(udid: &str, svc: DeviceServices, abort_heartbeat: bool) {
+    image_loader::cancel_for_udid(udid);
+
     if abort_heartbeat {
         if let Some(task) = &svc.heartbeat_task {
             task.abort();
