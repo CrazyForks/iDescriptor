@@ -42,7 +42,7 @@ Item {
                 App.DeviceContext.showWelcomePage = !App.DeviceContext.showWelcomePage
             }
         }
-        
+
         Item { Layout.fillWidth: true }
 
         Loader {
@@ -103,13 +103,17 @@ Item {
             color: App.Theme.textMuted
             font.pixelSize: 11
         }
+        IconToolButton {
+            icon.source: "qrc:/resources/icons/mdi_github.svg"
+            onClicked: Qt.openUrlExternally(App.Constants.repoUrl)
+        }
 
         IconToolButton {
             id: settingsButton
             icon.source: "qrc:/resources/icons/mingcute_settings-7-line.svg"
             onClicked: App.Settings.open()
         }
-        
+
     }
 
     Component.onCompleted: {

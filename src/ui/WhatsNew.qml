@@ -136,8 +136,7 @@ AnimatedDialog {
                 highlighted: true
                 font.bold: true
                 onClicked: {
-                    // FIXME: add to constants
-                    Qt.openUrlExternally("https://opencollective.com/idescriptor")
+                    Qt.openUrlExternally(App.Constants.openCollectiveUrl)
                     root.close()
                 }
             }

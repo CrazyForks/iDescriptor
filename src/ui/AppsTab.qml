@@ -10,10 +10,6 @@ Item {
     anchors.fill: parent
     clip:true
 
-    //FIXME: change when merged into main
-    readonly property string sponsorsUrl: "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/dev/sponsors.json"
-    readonly property string githubSponsorsUrl: "https://github.com/sponsors/iDescriptor"
-    readonly property string openCollectiveUrl: "https://opencollective.com/idescriptor"
     readonly property bool isMacOS: Qt.platform.os === "osx" || Qt.platform.os === "darwin"
 
     property bool loading: true
@@ -38,8 +34,6 @@ Item {
     SponsorUsDialog {
         id: sponsorUsDialog
         anchors.centerIn: parent
-        githubSponsorsUrl: root.githubSponsorsUrl
-        openCollectiveUrl: root.openCollectiveUrl
     }
 
     InstallAppPopup {
@@ -126,14 +120,6 @@ Item {
 
     function addSponsor(obj) { sponsorModel.append(obj) }
 
-    function pickLastVersionKey(obj) {
-        var keys = Object.keys(obj || {})
-        if (!keys.length) return ""
-        keys.sort()
-        // FIXME: use semantic version matching instead of last key.
-        return keys[keys.length - 1]
-    }
-
     function addSponsors(tierObj, label, color) {
         if (!tierObj || !tierObj.members) return
         for (var i = 0; i < tierObj.members.length; ++i) {
@@ -168,14 +154,13 @@ Item {
         clearCatalog()
 
         var xhr = new XMLHttpRequest()
-        xhr.open("GET", sponsorsUrl)
+        xhr.open("GET", App.Constants.sponsorsUrl)
         xhr.onreadystatechange = function() {
             if (xhr.readyState !== XMLHttpRequest.DONE) return
             if (xhr.status === 200) {
                 try {
                     var rootObj = JSON.parse(xhr.responseText)
-                    // FIXME: don't pick the last version
-                    var key = pickLastVersionKey(rootObj)
+                    var key = App.Helpers.pickMatchingVersionKey(rootObj)
                     var versioned = key ? rootObj[key] : null
                     var sponsors = versioned && versioned.sponsors ? versioned.sponsors : null
 

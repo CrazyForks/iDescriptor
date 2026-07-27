@@ -85,6 +85,61 @@ QtObject {
         return `${size.toFixed(2)} ${root.size_units[unit_index]}`;
     }
 
+    function parseSemanticVersion(version) {
+        const match = String(version || "").match(/^v?(\d+)\.(\d+)\.(\d+)/)
+        if (!match)
+            return null
+
+        return [Number(match[1]), Number(match[2]), Number(match[3])]
+    }
+
+    function compareSemanticVersions(left, right) {
+        for (let index = 0; index < 3; ++index) {
+            if (left[index] !== right[index])
+                return left[index] < right[index] ? -1 : 1
+        }
+        return 0
+    }
+
+    function versionMatchesConstraint(version, constraint) {
+        const match = String(constraint || "").match(/^(>=|<=|>|<|=)?(\d+)\.(\d+)\.(\d+)$/)
+        if (!match)
+            return false
+
+        const requiredVersion = [
+            Number(match[2]),
+            Number(match[3]),
+            Number(match[4])
+        ]
+        const comparison = compareSemanticVersions(version, requiredVersion)
+
+        switch (match[1] || "=") {
+        case ">":
+            return comparison > 0
+        case ">=":
+            return comparison >= 0
+        case "<":
+            return comparison < 0
+        case "<=":
+            return comparison <= 0
+        default:
+            return comparison === 0
+        }
+    }
+
+    function pickMatchingVersionKey(obj) {
+        const version = parseSemanticVersion(settingsManager.current_version())
+        if (!version)
+            return ""
+
+        const keys = Object.keys(obj || {})
+        for (let index = 0; index < keys.length; ++index) {
+            if (versionMatchesConstraint(version, keys[index]))
+                return keys[index]
+        }
+        return ""
+    }
+
     // single-shot connection helper
     // since this does not exist in QML
     function connectOnce(signal, handler) {

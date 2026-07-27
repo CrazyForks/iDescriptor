@@ -8,9 +8,6 @@ import "." as App
 AnimatedDialog {
     id: dialog
 
-    required property string githubSponsorsUrl
-    required property string openCollectiveUrl
-
     modal: true
     focus: true
     standardButtons: Dialog.NoButton
@@ -80,7 +77,7 @@ AnimatedDialog {
             icon.color: App.Theme.textSelected
             font.bold: true
             highlighted: true
-            onClicked: dialog.openSponsorUrl(dialog.githubSponsorsUrl)
+            onClicked: dialog.openSponsorUrl(App.Constants.githubSponsorsUrl)
         }
 
         Button {
@@ -90,7 +87,7 @@ AnimatedDialog {
             icon.source: "qrc:/resources/icons/simple-icons_opencollective.svg"
             icon.color: App.Theme.text
             font.bold: true
-            onClicked: dialog.openSponsorUrl(dialog.openCollectiveUrl)
+            onClicked: dialog.openSponsorUrl(App.Constants.openCollectiveUrl)
         }
 
         Item { Layout.fillHeight: true }

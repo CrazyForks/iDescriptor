@@ -197,7 +197,7 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Qt.openUrlExternally(CONSTANTS.REPO_URL)
+                    onClicked: Qt.openUrlExternally(App.Constants.repoUrl)
                 }
             }
 
