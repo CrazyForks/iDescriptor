@@ -78,11 +78,7 @@ ToolWindow {
             && modelNumber.length > 0
             && accessoryName.length > 0
 
-        // FIXME: hardcoded
-        let actuallyTypeC = true
-        if (root.device && root.device.deviceInfo && root.device.deviceInfo.batteryInfo) {
-            actuallyTypeC = root.device.deviceInfo.batteryInfo.usbConnectionType === "USB_TYPEC"
-        }
+        let actuallyTypeC = info.DIAG_INFO.usb_connection_type == "usb type-c"
         if (isTypeC && !actuallyTypeC) {
             isFakeInfo = true
         } else {
