@@ -37,8 +37,7 @@ DefaultWindow {
     readonly property bool videoLoading: root.isVideo
                                          && root.errorMessage.length === 0
                                          && (root.streamUrl.length === 0
-                                             || player.mediaStatus === MediaPlayer.LoadingMedia
-                                             || player.mediaStatus === MediaPlayer.BufferingMedia)
+                                             || player.mediaStatus === MediaPlayer.LoadingMedia)
     readonly property color chromeSurface: App.Theme.darkMode
                                            ? Qt.rgba(44 / 255, 44 / 255, 46 / 255, 0.9)
                                            : Qt.rgba(1, 1, 1, 0.92)
