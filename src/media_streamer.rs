@@ -42,6 +42,7 @@ pub struct MediaStreamSession {
 }
 
 impl MediaStreamSession {
+    // TODO: expose the URL programmatically localhost:$PORT/idescriptor/media/$VIDEOPATH
     pub async fn start(afc: Arc<Mutex<AfcClient>>, path: String) -> anyhow::Result<(String, Self)> {
         let file_size = {
             let mut afc = afc.lock().await;
