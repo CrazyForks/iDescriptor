@@ -12,6 +12,8 @@ use qmetaobject::prelude::*;
 use qttypes::{QStringList, QVariantMap};
 use std::{collections::HashSet, path::Component, sync::Arc};
 use tokio::sync::Mutex;
+
+#[allow(non_snake_case)]
 #[derive(QObject, Default, QtThreading)]
 pub struct AfcServices {
     base: qt_base_class!(trait QObject),
@@ -262,50 +264,6 @@ impl AfcServices {
                 q.check_is_dir_and_list_finished(success, map);
             });
         });
-    }
-
-    fn list_files_flat(&self, dir: QString) -> QStringList {
-        let Some(afc_arc) = self.afc_client("list files") else {
-            return QStringList::default();
-        };
-        let dir_str = dir.to_string();
-        let entries = run_sync(async move {
-            let mut afc = afc_arc.lock().await;
-            let names = match afc.list_dir(&dir_str).await {
-                Ok(list) => list,
-                Err(e) => {
-                    eprintln!("list_files_flat: list_dir({dir_str}) failed: {e}");
-                    return Vec::new();
-                }
-            };
-
-            let mut files = Vec::new();
-            for name in names {
-                if name == "." || name == ".." {
-                    continue;
-                }
-                let full_path = format!("{}/{}", dir_str, name);
-
-                match afc.get_file_info(full_path.clone()).await {
-                    Ok(info) => {
-                        if info.st_ifmt != "S_IFDIR" {
-                            files.push(full_path);
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("list_files_flat: get_file_info({full_path}) failed: {e}");
-                        continue;
-                    }
-                }
-            }
-            files
-        });
-
-        let mut qlist: QStringList = QStringList::default();
-        for path in entries {
-            qlist.push(QString::from(path));
-        }
-        qlist
     }
 
     fn start_video_stream(&self, file_path: QString) -> QString {
