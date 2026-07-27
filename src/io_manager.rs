@@ -19,7 +19,7 @@ use std::{
 };
 use tokio::{fs, io::AsyncWriteExt};
 
-const DEFAULT_CHUNK_SIZE: usize = 1024 * 1024;
+pub static DEFAULT_CHUNK_SIZE: usize = 1024 * 1024;
 
 #[derive(QObject, Default, QtThreading)]
 pub struct IOManager {
