@@ -6,11 +6,7 @@ use crate::{RUNTIME, device_ctx};
 
 use crate::utils::{empty_qjsvalue, engine_ptr_new_object, vend_app_documents};
 
-use crate::{
-    afc_services::AfcServices,
-    qt_threading::{QtThread, QtThreading},
-    run_sync,
-};
+use crate::{afc_services::AfcServices, qt_threading::QtThreading, run_sync};
 use idevice::IdeviceService;
 use idevice::afc::AfcClient;
 use idevice::{provider::IdeviceProvider, springboardservices::SpringBoardServicesClient};
@@ -32,30 +28,19 @@ pub struct ServiceFactory {
     /* SAFETY: check if engine_ptr.is_null() */
     engine_ptr: Option<*mut c_void>,
     create_afc_client:
-        qt_method!(fn(&self, udid: QString, connection_id: QString, afc2: bool) -> QJSValue),
+        qt_method!(fn(&self, udid: QString, connection_id: u64, afc2: bool) -> QJSValue),
     create_hause_arrest_afc_client:
-        qt_method!(fn(&self, udid: QString, connection_id: QString, bundle_id: QString)),
+        qt_method!(fn(&self, udid: QString, connection_id: u64, bundle_id: QString)),
     create_service_manager:
-        qt_method!(fn(&self, udid: QString, connection_id: QString, ios_version: u32) -> QJSValue),
+        qt_method!(fn(&self, udid: QString, connection_id: u64, ios_version: u32) -> QJSValue),
     create_query_backend:
-        qt_method!(fn(&self, udid: QString, connection_id: QString, ios_version: u32) -> QJSValue),
+        qt_method!(fn(&self, udid: QString, connection_id: u64, ios_version: u32) -> QJSValue),
     create_springboard_services_client:
-        qt_method!(fn(&self, udid: QString, connection_id: QString) -> QJSValue),
+        qt_method!(fn(&self, udid: QString, connection_id: u64) -> QJSValue),
     create_transfer_speed_tester:
-        qt_method!(fn(&self, udid: QString, connection_id: QString) -> QJSValue),
+        qt_method!(fn(&self, udid: QString, connection_id: u64) -> QJSValue),
 
-    houseArrestAfcClientCreated: qt_signal!(client: QJSValue, udid: QString, connection_id: QString, bundle_id: QString),
-}
-
-fn parse_connection_id(connection_id: &QString) -> Option<u64> {
-    connection_id
-        .to_string()
-        .parse::<u64>()
-        .map_err(|error| {
-            log::warn!("Invalid device connection ID {}: {}", connection_id, error);
-            error
-        })
-        .ok()
+    houseArrestAfcClientCreated: qt_signal!(client: QJSValue, udid: QString, connection_id: u64, bundle_id: QString),
 }
 
 impl ServiceFactory {
@@ -66,11 +51,8 @@ impl ServiceFactory {
         }
     }
 
-    fn create_afc_client(&self, udid: QString, connection_id: QString, afc2: bool) -> QJSValue {
+    fn create_afc_client(&self, udid: QString, connection_id: u64, afc2: bool) -> QJSValue {
         let udid_str = udid.to_string();
-        let Some(connection_id) = parse_connection_id(&connection_id) else {
-            return empty_qjsvalue();
-        };
         let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
 
         if engine_ptr.is_null() {
@@ -116,7 +98,7 @@ impl ServiceFactory {
     fn create_hause_arrest_afc_client(
         &self,
         udid: QString,
-        connection_id: QString,
+        connection_id: u64,
         bundle_id: QString,
     ) {
         if self.engine_ptr.is_none_or(|ptr| ptr.is_null()) {
@@ -124,17 +106,13 @@ impl ServiceFactory {
             return;
         }
 
-        let Some(connection_id_value) = parse_connection_id(&connection_id) else {
-            return;
-        };
         let qt_thread = self.qt_thread();
 
         RUNTIME.spawn(async move {
             let afc_result: anyhow::Result<AfcClient> = async {
-                let device =
-                    device_ctx::get_device_for_connection_opt(udid.clone(), connection_id_value)
-                        .await
-                        .ok_or_else(|| anyhow::anyhow!("device connection is no longer current"))?;
+                let device = device_ctx::get_device_for_connection_opt(udid.clone(), connection_id)
+                    .await
+                    .ok_or_else(|| anyhow::anyhow!("device connection is no longer current"))?;
                 let provider = device.provider.lock().await;
 
                 Ok(vend_app_documents(provider.as_ref(), &bundle_id.to_string()).await?)
@@ -197,7 +175,7 @@ impl ServiceFactory {
     fn create_service_manager(
         &self,
         udid: QString,
-        connection_id: QString,
+        connection_id: u64,
         ios_version: u32,
     ) -> QJSValue {
         let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
@@ -206,9 +184,6 @@ impl ServiceFactory {
             return empty_qjsvalue();
         }
         let udid_clone = udid.to_string();
-        let Some(connection_id) = parse_connection_id(&connection_id) else {
-            return empty_qjsvalue();
-        };
         let maybe_device = run_sync(async move {
             device_ctx::get_device_for_connection_opt(udid, connection_id).await
         });
@@ -228,7 +203,7 @@ impl ServiceFactory {
     fn create_query_backend(
         &self,
         udid: QString,
-        connection_id: QString,
+        connection_id: u64,
         ios_version: u32,
     ) -> QJSValue {
         let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
@@ -236,28 +211,18 @@ impl ServiceFactory {
             eprintln!("ServiceFactory: engine_ptr is null");
             return empty_qjsvalue();
         }
-        let Some(connection_id) = parse_connection_id(&connection_id) else {
-            return empty_qjsvalue();
-        };
         let mng = Query::with_device_attr(udid, connection_id, ios_version);
         let obj_ptr = qmetaobject::into_leaked_cpp_ptr(mng);
         engine_ptr_new_object(engine_ptr, obj_ptr)
     }
 
-    fn create_springboard_services_client(
-        &self,
-        udid: QString,
-        connection_id: QString,
-    ) -> QJSValue {
+    fn create_springboard_services_client(&self, udid: QString, connection_id: u64) -> QJSValue {
         let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
         if engine_ptr.is_null() {
             eprintln!("ServiceFactory: engine_ptr is null");
             return empty_qjsvalue();
         }
         let udid_clone = udid.to_string();
-        let Some(connection_id) = parse_connection_id(&connection_id) else {
-            return empty_qjsvalue();
-        };
         let sp_res: anyhow::Result<SpringBoardServicesClient> = run_sync(async move {
             let device = device_ctx::get_device_for_connection_opt(udid, connection_id)
                 .await
@@ -282,7 +247,7 @@ impl ServiceFactory {
         }
     }
 
-    fn create_transfer_speed_tester(&self, udid: QString, connection_id: QString) -> QJSValue {
+    fn create_transfer_speed_tester(&self, udid: QString, connection_id: u64) -> QJSValue {
         let engine_ptr: *mut c_void = self.engine_ptr.unwrap_or(std::ptr::null_mut());
         if engine_ptr.is_null() {
             log::error!("ServiceFactory: engine_ptr is null while creating transfer speed tester");
@@ -290,9 +255,6 @@ impl ServiceFactory {
         }
 
         let udid = udid.to_string();
-        let Some(connection_id) = parse_connection_id(&connection_id) else {
-            return empty_qjsvalue();
-        };
         let device = run_sync({
             let udid = udid.clone();
             async move { device_ctx::get_device_for_connection_opt(udid, connection_id).await }

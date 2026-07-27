@@ -299,8 +299,9 @@ QtObject {
         for (let i = 0; i < devices.count; i++) {
             const device = devices.get(i)
             if (device.udid === udid) {
+                const connectionId = device.connectionId
                 devices.remove(i)
-                core.remove_device(udid, device.connectionId)
+                core.remove_device(udid, connectionId)
                 root.scheduleGc()
                 break
             }
@@ -319,8 +320,8 @@ QtObject {
             switch (eventType) {
                 /* Device added */
                 case 1:
-                    const addedConnectionId = String(info.connection_id || "")
-                    if (!addedConnectionId) {
+                    const addedConnectionId = Number(info.connection_id || 0)
+                    if (!Number.isInteger(addedConnectionId) || addedConnectionId <= 0) {
                         console.warn("Ignoring connected event without a connection ID:", udid)
                         break
                     }
@@ -375,8 +376,8 @@ QtObject {
                     break;
                 /* Device removed */
                 case 2:
-                    const removedConnectionId = String(info.connection_id || "")
-                    if (!removedConnectionId) {
+                    const removedConnectionId = Number(info.connection_id || 0)
+                    if (!Number.isInteger(removedConnectionId) || removedConnectionId <= 0) {
                         console.warn("Ignoring disconnected event without a connection ID:", udid)
                         break
                     }

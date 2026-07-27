@@ -1,6 +1,5 @@
 use anyhow::{Context, anyhow};
 use futures::StreamExt;
-use idevice::afc::opcode::AfcFopenMode;
 use idevice::{
     IdeviceError, IdeviceService,
     afc::AfcClient,
@@ -13,30 +12,24 @@ use idevice::{
 };
 use qmetaobject::{qt_base_class, qt_method};
 use qttypes::QVariantMap;
-use url::form_urlencoded::parse;
 
 use ::log::{debug, info, trace, warn};
-use std::f64::INFINITY;
-use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
-use std::{any, thread};
 use std::{any::type_name, sync::Arc};
 use std::{collections::HashMap, net::IpAddr};
-use tokio::runtime::{Builder, Runtime};
+use tokio::runtime::Builder;
 use tokio::sync::Mutex;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-
-use core::pin::Pin;
 
 use crate::device_ctx::{
     DeviceServices, InsertDeviceResult, clean_device_from_app_state_if_current, iOSVersion,
     insert_device,
 };
 use crate::{
-    APP_LABEL, EV_CONNECTED, EV_DISCONNECTED, EV_FAIL, EV_PAIRING_PENDING, POSSIBLE_ROOT, RUNTIME,
+    APP_LABEL, EV_CONNECTED, EV_DISCONNECTED, EV_FAIL, EV_PAIRING_PENDING, RUNTIME,
     qt_threading::{QtThread, QtThreading},
     utils,
 };
@@ -54,11 +47,7 @@ fn next_connection_id() -> u64 {
 
 fn connection_event_info(connection_id: u64) -> QVariantMap {
     let mut info = QVariantMap::default();
-    qvariantmap_insert!(
-        info,
-        "connection_id",
-        QString::from(connection_id.to_string())
-    );
+    qvariantmap_insert!(info, "connection_id", connection_id);
     info
 }
 
@@ -92,7 +81,7 @@ pub struct Core {
     exit_recovery_mode: qt_method!(fn(&mut self, ecid: QString) -> bool),
     // mac address will only be available if the pairing file was read successfully, otherwise it will be empty
     customInitFailed: qt_signal!(ip: QString, mac_address: QString, error: QString),
-    remove_device: qt_method!(fn(&mut self, udid: QString, connection_id: QString)),
+    remove_device: qt_method!(fn(&mut self, udid: QString, connection_id: u64)),
     deviceEvent: qt_signal!(eventType : u32, udid : QString , info : QVariantMap),
     recoveryDeviceEvent: qt_signal!(eventType : u32, id : QString , info : QVariantMap),
     initFailed: qt_signal!(mac_address : QString),
@@ -440,12 +429,8 @@ impl Core {
         });
     }
 
-    fn remove_device(&mut self, udid: QString, connection_id: QString) {
+    fn remove_device(&mut self, udid: QString, connection_id: u64) {
         let udid_str = udid.to_string();
-        let Ok(connection_id) = connection_id.to_string().parse::<u64>() else {
-            warn!("Ignoring remove_device with invalid connection ID for {udid_str}");
-            return;
-        };
         RUNTIME.spawn(async move {
             clean_device_from_app_state_if_current(&udid_str, connection_id, true).await;
         });
