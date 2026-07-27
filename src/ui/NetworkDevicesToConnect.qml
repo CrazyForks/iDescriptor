@@ -9,7 +9,7 @@ Item {
     id: root
 
     readonly property int statusResetDelay: 2500
-    property var networkDeviceCards : ({})
+    // property var networkDeviceCards : ({})
     ListModel { id: deviceModel }
 
     property string statusText: deviceModel.count === 0 ? qsTr("No network devices found") : qsTr("Found %1 network device(s)").arg(deviceModel.count)
@@ -75,7 +75,7 @@ Item {
             deviceModel.setProperty(i, "buttonEnabled", true)
         }
 
-        if (state !== "idle")
+        if (state !== "idle" && state !== "connecting")
             scheduleStatusReset(i, resetToken)
     }
 
@@ -116,20 +116,29 @@ Item {
     }
 
     function evalDevices() {
-        if (!App.Settings.auto_connect_wireless_devices)
-            return
-
         const devices = NetworkDeviceProvider.getNetworkDevices()
         if (!devices)
             return
 
-        const macAddresses = Object.keys(devices)
-        for (let i = 0; i < macAddresses.length; i++) {
-            const mac = macAddresses[i]
-            const device = devices[mac]
-            const ip = device.address || ""
-            if (mac && ip)
-                App.DeviceContext.tryToConnectToNetworkDevice(mac, ip, false)
+        const keys = Object.keys(devices)
+        for (let i = 0; i < keys.length; ++i)
+            root.handleDeviceAdded(devices[keys[i]], i)
+    }
+
+
+    function handleDeviceAdded(device, index) {
+        var mac = device.macAddress || device.mac || ""
+        if (!mac) return
+
+        var i = root.indexByMac(mac)
+        if (i < 0) {
+            deviceModel.append(root.normalizeDevice(mac, device))
+        }
+
+        if (App.Settings.auto_connect_wireless_devices) {
+            App.Helpers.setTimeout(()=>{
+                App.DeviceContext.tryToConnectToNetworkDevice(mac, device.address, false)
+            }, index * 100)
         }
     }
 
@@ -137,16 +146,7 @@ Item {
         target: NetworkDeviceProvider
 
         function onDeviceAdded(device) {
-            var mac = device.macAddress || device.mac || ""
-            if (!mac) return
-
-            var i = root.indexByMac(mac)
-            if (i >= 0) return
-
-            deviceModel.append(root.normalizeDevice(mac, device))
-            if (App.Settings.auto_connect_wireless_devices) {
-                App.DeviceContext.tryToConnectToNetworkDevice(mac, device.address, false)
-            }
+            root.handleDeviceAdded(device, 1)
         }
 
         function onDeviceRemoved(macAddress) {
@@ -188,6 +188,10 @@ Item {
         function onNoPairingFileForWirelessDevice(macAddress) {
             root.setStatusForMac(macAddress, "noPairing")
         }
+    }
+
+    Component.onCompleted: {
+        root.evalDevices()
     }
 
     //eval interval, every 30 seconds
