@@ -24,11 +24,13 @@ Item {
     property string statusDetail: ""
     property int receivedFileCount: 0
     property bool passcodeRequested: false
-    property bool checkingEncryption: false
-    property bool startAfterEncryption: false
+    property bool backupEncryptionEnabled: false
+    property bool backupEncryptionStatusResolved: false
+    property bool checkingBackupEncryption: false
+    property string backupEncryptionStatusError: ""
     readonly property int maxLogEntries: 500
     readonly property bool inProgress: phase === runningPhase
-    readonly property bool interactionLocked: inProgress || checkingEncryption
+    readonly property bool interactionLocked: inProgress
     readonly property string deviceName: title || qsTr("This Device")
     readonly property string placeholderSource: {
         if (iconPath && iconPath.length > 0)
@@ -54,27 +56,24 @@ Item {
                 MessageDialog.Yes | MessageDialog.No,
                 function(button) {
                     if (button === MessageDialog.Yes)
-                        root.ensureEncryptedBackup()
+                        root.startBackup()
                 })
             return
         }
 
-        root.ensureEncryptedBackup()
+        root.startBackup()
     }
 
-    function ensureEncryptedBackup() {
-        if (!root.backupRoot || backupManager.busy || root.checkingEncryption)
-            return
-
-        root.checkingEncryption = true
-        root.statusDetail = qsTr("Checking backup encryption...")
+    function refreshBackupEncryptionStatus() {
+        root.backupEncryptionStatusResolved = false
+        root.checkingBackupEncryption = true
+        root.backupEncryptionStatusError = ""
         backupManager.get_backup_encryption_status(root.udid)
     }
 
     function manageEncryption() {
-        if (backupManager.busy || root.checkingEncryption)
+        if (backupManager.busy)
             return
-        root.startAfterEncryption = false
         encryptionDialog.open()
     }
 
@@ -170,29 +169,19 @@ Item {
         }
 
         function onBackupEncryptionStatusReady(udid, success, enabled, errorString) {
-            if (udid !== root.udid
-                    || !root.checkingEncryption
-                    || root.startAfterEncryption)
+            if (udid !== root.udid || !root.checkingBackupEncryption)
                 return
 
+            root.checkingBackupEncryption = false
             if (!success) {
-                root.checkingEncryption = false
-                root.phase = root.failedPhase
-                root.statusDetail = errorString
+                root.backupEncryptionStatusError = errorString
                     || qsTr("The device's backup encryption status could not be read.")
                 return
             }
 
-            if (enabled) {
-                root.checkingEncryption = false
-                root.startBackup()
-                return
-            }
-
-            root.startAfterEncryption = true
-            Qt.callLater(function() {
-                encryptionDialog.open()
-            })
+            root.backupEncryptionEnabled = enabled
+            root.backupEncryptionStatusResolved = true
+            root.backupEncryptionStatusError = ""
         }
 
         function onOperationFinished(operation, udid, success, errorCode, errorString) {
@@ -231,24 +220,14 @@ Item {
         backupRoot: root.backupRoot
 
         onEncryptionConfigured: {
-            const shouldStart = root.startAfterEncryption
-            root.startAfterEncryption = false
-            root.checkingEncryption = false
-            if (shouldStart) {
-                root.startBackup()
-            } else {
-                App.Helpers.showInfo(root, qsTr("The encrypted backup password was updated."))
-            }
-        }
-
-        onClosed: {
-            if (root.startAfterEncryption) {
-                root.startAfterEncryption = false
-                root.checkingEncryption = false
-                root.statusDetail = ""
-            }
+            root.backupEncryptionEnabled = true
+            root.backupEncryptionStatusResolved = true
+            root.backupEncryptionStatusError = ""
+            App.Helpers.showInfo(root, qsTr("The encrypted backup password was updated."))
         }
     }
+
+    Component.onCompleted: root.refreshBackupEncryptionStatus()
 
     StateView {
         id: stateView
@@ -327,7 +306,7 @@ Item {
                     labelText: qsTr("Backup Location")
                     location: root.backupRoot
                     changeVisible: !root.interactionLocked && root.phase !== root.completedPhase
-                    changeEnabled: !backupManager.busy && !root.checkingEncryption
+                    changeEnabled: !backupManager.busy
                     onChangeRequested: backupRootDialog.open()
                 }
 
@@ -337,10 +316,45 @@ Item {
                     visible: !root.inProgress && root.phase !== root.completedPhase
 
                     CheckBox {
+                        id: backupEncryptionStatusCheck
+                        text: root.checkingBackupEncryption
+                              ? qsTr("Checking backup encryption…")
+                              : root.backupEncryptionStatusResolved
+                                ? qsTr("Backup encryption enabled")
+                                : qsTr("Backup encryption status unavailable")
+                        tristate: true
+                        checkState: !root.backupEncryptionStatusResolved
+                                    ? Qt.PartiallyChecked
+                                    : root.backupEncryptionEnabled
+                                      ? Qt.Checked
+                                      : Qt.Unchecked
+                        enabled: false
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: backupEncryptionStatusCheck.indicator.width
+                                           + backupEncryptionStatusCheck.spacing
+                        visible: !root.checkingBackupEncryption
+                        text: {
+                            if (root.backupEncryptionStatusError.length > 0)
+                                return root.backupEncryptionStatusError
+                            if (!root.backupEncryptionEnabled)
+                                return qsTr("Use the Manage Encryption button to set up encrypted backups.")
+                            return qsTr("Backups for this device are protected with a password.")
+                        }
+                        color: root.backupEncryptionStatusError.length > 0
+                               ? App.Theme.systemRed
+                               : App.Theme.textMuted
+                        font.pixelSize: 12
+                        wrapMode: Text.WordWrap
+                    }
+
+                    CheckBox {
                         id: forceFullBackupCheck
                         text: qsTr("Force full backup")
                         checked: root.initialForceFullBackup
-                        enabled: !backupManager.busy && !root.checkingEncryption
+                        enabled: !backupManager.busy
                     }
 
                     Label {
@@ -486,7 +500,7 @@ Item {
                 Button {
                     visible: root.phase === root.completedPhase
                     text: qsTr("Show Details")
-                    onClicked: root.detailsRequested(root.udid)
+                    onClicked: root.detailsRequested()
                 }
 
                 Button {
@@ -507,7 +521,7 @@ Item {
                           || root.phase === root.failedPhase
                           || root.phase === root.cancelledPhase
                     text: qsTr("Manage Encryption…")
-                    enabled: !backupManager.busy && !root.checkingEncryption
+                    enabled: !backupManager.busy
                     onClicked: root.manageEncryption()
                 }
 
@@ -519,7 +533,6 @@ Item {
                     highlighted: true
                     enabled: root.backupRoot.length > 0
                              && !backupManager.busy
-                             && !root.checkingEncryption
                     onClicked: root.requestBackup()
                 }
             }

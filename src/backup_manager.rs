@@ -814,12 +814,20 @@ async fn calculate_folder_size(path: PathBuf) -> anyhow::Result<(u64, u64)> {
 async fn query_backup_encryption(udid: &str) -> anyhow::Result<bool> {
     let device = crate::device_ctx::get_device(udid.to_owned()).await?;
     let mut lockdown = device.lockdown.lock().await;
-    match lockdown
+    let result = lockdown
         .get_value(Some("WillEncrypt"), Some("com.apple.mobile.backup"))
-        .await?
-    {
-        plist::Value::Boolean(enabled) => Ok(enabled),
-        value => anyhow::bail!("WillEncrypt returned an unexpected value: {value:?}"),
+        .await;
+    backup_encryption_from_lockdown_result(result)
+}
+
+fn backup_encryption_from_lockdown_result(
+    result: Result<plist::Value, IdeviceError>,
+) -> anyhow::Result<bool> {
+    match result {
+        Ok(plist::Value::Boolean(enabled)) => Ok(enabled),
+        Err(IdeviceError::MissingValue) => Ok(false),
+        Ok(value) => anyhow::bail!("WillEncrypt returned an unexpected value: {value:?}"),
+        Err(err) => Err(err.into()),
     }
 }
 
@@ -1312,9 +1320,6 @@ async fn run_backup(
     root: String,
     force_full: bool,
 ) -> anyhow::Result<()> {
-    if !query_backup_encryption(&udid).await? {
-        anyhow::bail!("Encrypted backups must be enabled before starting a backup.");
-    }
     let device = crate::device_ctx::get_device(udid.clone()).await?;
     let provider_guard = device.provider.lock().await;
     let provider_ref: &dyn IdeviceProvider = provider_guard.as_ref();
