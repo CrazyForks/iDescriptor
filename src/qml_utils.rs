@@ -155,22 +155,22 @@ impl QmlUtils {
     }
 
     fn setup_tool_window(&self, win: QJSValue) {
-        #[cfg(not(target_os = "macos"))]
-        {
+        if !cfg!(target_os = "macos") {
             info!("setup_tool_window: not on macOS, skipping");
             return;
         }
+
         let win_id = crate::utils::get_window_id(win);
 
         crate::platform::macos::apply_tool_frame(win_id);
     }
 
     fn setup_main_window(&self, win: QJSValue) {
-        #[cfg(not(target_os = "macos"))]
-        {
+        if !cfg!(target_os = "macos") {
             info!("setup_main_window: not on macOS, skipping");
             return;
         }
+
         let win_id = crate::utils::get_window_id(win);
 
         crate::platform::macos::apply_main_window(win_id);
