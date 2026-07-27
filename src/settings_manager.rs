@@ -146,12 +146,16 @@ pub struct SettingsManager {
 
 #[allow(non_snake_case)]
 impl SettingsManager {
-    fn clear(&self) {
+    pub fn clear_all() {
         cpp!(unsafe [] {
             auto &settings = settings_manager_settings();
             settings.clear();
             settings.sync();
         });
+    }
+
+    fn clear(&self) {
+        Self::clear_all();
     }
 
     fn home_path(&self) -> QString {
@@ -602,6 +606,7 @@ impl SettingsManager {
         write_bool("showV4L2", show);
     }
 
+    //FIXME: we should be using this on macOS
     fn set_idevice_default_pairing_file(&self, mac_address: QString, pairing_file: QString) {
         cpp!(unsafe [mac_address as "QString", pairing_file as "QString"] {
             auto &settings = settings_manager_settings();
@@ -722,6 +727,7 @@ fn read_bool(key: &str, default_value: bool) -> bool {
     })
 }
 
+#[allow(dead_code)]
 fn has_setting(key: &str) -> bool {
     let key = QString::from(key);
     cpp!(unsafe [key as "QString"] -> bool as "bool" {
