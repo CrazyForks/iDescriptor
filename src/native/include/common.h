@@ -12,8 +12,8 @@ struct NetworkDevice {
     NetworkDevice(const QString &name, const QString &address,
                   const QString &macAddress, const QString &hostname,
                   uint16_t port)
-        : name(name), address(address), port(port), macAddress(macAddress),
-          hostname(hostname)
+        : name(name), hostname(hostname), address(address), port(port),
+          macAddress(macAddress)
     {
     }
 
