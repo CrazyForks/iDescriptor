@@ -295,7 +295,10 @@ Item {
 
                         delegate: ItemDelegate {
                             width: appList.width
-                            height: 60
+                            height: tab.implicitHeight
+                            background: Rectangle {
+                                color: "transparent"
+                            }
 
                             AppTab {
                                 id : tab
@@ -303,7 +306,8 @@ Item {
                                     root.appTabForBundleId[model.bundleId] = tab;
                                 }
                                 device: root.device
-                                width: appList.width
+                                width: parent.width
+                                height: parent.height
                                 appName: model.appName
                                 bundleId: model.bundleId
                                 version: model.version
