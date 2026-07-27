@@ -50,6 +50,7 @@ pub mod settings_manager;
 pub mod springboard_services;
 pub mod status_window_controller;
 pub mod transfer_speed_tester;
+#[cfg(not(debug_assertions))]
 pub mod ui_qrc;
 pub mod updater;
 pub mod utils;
@@ -122,7 +123,8 @@ fn main() {
         .init();
 
     let ui_live_reload = utils::env_flag("IDESCRIPTOR_UI_LIVE_RELOAD");
-    let qml_from_fs = ui_live_reload || utils::env_flag("IDESCRIPTOR_QML_FROM_FS");
+    let qml_from_fs =
+        cfg!(debug_assertions) || ui_live_reload || utils::env_flag("IDESCRIPTOR_QML_FROM_FS");
 
     // let _ = util::install_crash_handler();
     qmetaobject::log::init_qt_to_rust();
@@ -163,11 +165,13 @@ fn main() {
     });
 
     crate::qrc::rsrc();
+    #[cfg(not(debug_assertions))]
     crate::ui_qrc::qml();
 
     #[cfg(target_os = "macos")]
     {
         crate::qrc::macos_rsrc();
+        #[cfg(not(debug_assertions))]
         crate::ui_qrc::macos_qml();
     }
 
@@ -196,6 +200,7 @@ fn main() {
         }
 
         crate::qrc::windows_rsrc();
+        #[cfg(not(debug_assertions))]
         crate::ui_qrc::windows_qml();
     }
 
