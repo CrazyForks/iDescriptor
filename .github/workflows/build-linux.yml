@@ -27,7 +27,7 @@ env:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
@@ -97,9 +97,9 @@ jobs:
       - name: Build qml6glsink from gst-plugins-good
         shell: bash
         run: |
-          wget https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.24.13.tar.xz
-          tar -xf gst-plugins-good-1.24.13.tar.xz
-          cd gst-plugins-good-1.24.13
+          wget https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.20.7.tar.xz
+          tar -xf gst-plugins-good-1.20.7.tar.xz
+          cd gst-plugins-good-1.20.7
 
           meson setup build-qml6 . \
           --prefix=/usr \
@@ -165,7 +165,7 @@ jobs:
 
       - name: Build
         run: |
-          RUSTFLAGS="" cargo build --release
+          RUSTFLAGS="" cargo build --release --features appimage
           
 
       - name: Build AppImage
