@@ -19,7 +19,7 @@ public:
         return &instance;
     }
 
-    NetworkDeviceProvider(QObject *parent = nullptr)
+    NetworkDeviceProvider(QObject *parent = nullptr) : QObject(parent)
     {
 #ifdef __linux__
         m_networkProvider = new AvahiService(this);
@@ -44,7 +44,7 @@ public:
     {
         QMap<QString, QVariant> map;
 
-        for (const NetworkDevice device :
+        for (const NetworkDevice &device :
              m_networkProvider->getNetworkDevices()) {
             map[device.macAddress] = device.toVariantMap();
         };
