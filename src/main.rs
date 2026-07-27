@@ -1,28 +1,14 @@
 #![recursion_limit = "4096"]
-// TODO: disable on release build
-// #![windows_subsystem = "windows"]
-// #![windows_subsystem = "windows"]
+#![windows_subsystem = "windows"]
 
+use crate::qquickimageprovider_imp::AddImageProvider;
 use cpp::*;
-use idevice::{
-    afc::AfcClient, diagnostics_relay::DiagnosticsRelayClient, lockdown::LockdownClient,
-};
+use once_cell::sync::Lazy;
 use qmetaobject::*;
-use tracing_subscriber::{EnvFilter, filter::LevelFilter, prelude::*};
-
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
 use std::future::Future;
 use std::sync::mpsc;
 use tokio::runtime::Runtime;
-use tokio::sync::oneshot;
-use tokio::task::JoinHandle;
-
-use once_cell::sync::Lazy;
-
-use crate::qquickimageprovider_imp::AddImageProvider;
+use tracing_subscriber::{EnvFilter, filter::LevelFilter, prelude::*};
 
 pub mod afc_services;
 pub mod airplay;
@@ -91,6 +77,7 @@ cpp! {{
     #include <QFont>
     #include <QQmlFileSelector>
     #include <QIcon>
+    #include <QMessageBox>
 
     #include "src/live_reload.cpp"
     #include "src/native/networkdeviceprovider.h"
@@ -119,11 +106,15 @@ where
 }
 
 fn main() {
+    let reset_settings =
+        std::env::args_os().any(|argument| argument == std::ffi::OsStr::new("--reset-settings"));
+    let application_version = QString::from(env!("CARGO_PKG_VERSION"));
+
     let filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::DEBUG.into())
         .from_env_lossy()
-        // Keep idevice warnings and errors visible, but suppress its very noisy
-        // debug and trace events even while the application is running at debug.
+        // debug logs from idevice crate is so frequent and it even logs read bytes etc.
+        // so we filter it out for now
         .add_directive("idevice=warn".parse().expect("valid idevice log filter"));
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().compact())
@@ -135,28 +126,18 @@ fn main() {
 
     // let _ = util::install_crash_handler();
     qmetaobject::log::init_qt_to_rust();
-    let icons_path = if ui_live_reload {
-        QString::from(format!("{}/resources/icons/", env!("CARGO_MANIFEST_DIR")))
-    } else {
-        QString::from(":/resources/icons/")
-    };
+    // let icons_path = if ui_live_reload {
+    //     QString::from(format!("{}/resources/icons/", env!("CARGO_MANIFEST_DIR")))
+    // } else {
+    //     QString::from(":/resources/icons/")
+    // };
 
-    cpp!(unsafe [icons_path as "QString"] {
-
+    cpp!(unsafe [application_version as "QString"] {
         #define FLUENTUI_BUILD_STATIC_LIB 1
         #ifdef WIN32
             // ::SetUnhandledExceptionFilter(MyUnhandledExceptionFilter);
             qputenv("QT_QPA_PLATFORM", "windows:darkmode=2");
         #endif
-        // #if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
-        //     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
-        // #else
-        //     qputenv("QT_QUICK_CONTROLS_STYLE", "Default");
-        // #endif
-        // #ifdef Q_OS_LINUX
-        //     // fix bug UOSv20 v-sync does not work
-        //     qputenv("QSG_RENDER_LOOP", "basic");
-        // #endif
 
         #ifdef Q_OS_WINDOWS
             QQuickStyle::setStyle("FluentWinUI3");
@@ -178,30 +159,7 @@ fn main() {
         #endif
             QCoreApplication::setOrganizationName("iDescriptor");
             QCoreApplication::setApplicationName("iDescriptor");
-
-            // FIXME
-            // QCoreApplication::setApplicationVersion(VERSION);
-            // FIXME
-            // if (a.arguments().contains("--reset-settings")) {
-            //     // SettingsManager::sharedInstance()->clear();
-            //     QMessageBox::information(nullptr, "Settings Reset",
-            //                             "All application settings have been reset to "
-            //                             "their default values.");
-            // }
-            // QQmlApplicationEngine engine;
-        // #ifdef __APPLE__
-        //     QString appPath = QCoreApplication::applicationDirPath();
-        //     QString frameworksPath =
-        //         QDir::toNativeSeparators(appPath + "/../Frameworks");
-        //     QString gstPluginPath =
-        //         QDir::toNativeSeparators(frameworksPath + "/gstreamer");
-        //     QString gstPluginScannerPath =
-        //         QDir::toNativeSeparators(frameworksPath + "/gst-plugin-scanner");
-
-        //     setenv("GST_PLUGIN_PATH", gstPluginPath.toUtf8().constData(), 1);
-        //     setenv("GST_PLUGIN_SYSTEM_PATH", gstPluginPath.toUtf8().constData(), 1);
-        //     setenv("GST_PLUGIN_SCANNER", gstPluginScannerPath.toUtf8().constData(), 1);
-        // #endif
+            QCoreApplication::setApplicationVersion(application_version);
     });
 
     crate::qrc::rsrc();
@@ -241,7 +199,29 @@ fn main() {
         crate::ui_qrc::windows_qml();
     }
 
-    // qml_register_type::<gallery::Query>(cstr::cstr!("iDescriptor"), 1, 0, cstr::cstr!("Query"));
+    #[cfg(target_os = "macos")]
+    {
+        if !cfg!(debug_assertions) {
+            let executable_path =
+                std::env::current_exe().expect("failed to determine the application path");
+            let application_dir = executable_path
+                .parent()
+                .expect("application executable has no parent directory");
+            let frameworks_path = application_dir
+                .parent()
+                .expect("application directory has no parent directory")
+                .join("Frameworks");
+            let gst_plugin_path = frameworks_path.join("gstreamer");
+            let gst_plugin_scanner_path = frameworks_path.join("gst-plugin-scanner");
+
+            unsafe {
+                std::env::set_var("GST_PLUGIN_PATH", &gst_plugin_path);
+                std::env::set_var("GST_PLUGIN_SYSTEM_PATH", &gst_plugin_path);
+                std::env::set_var("GST_PLUGIN_SCANNER", &gst_plugin_scanner_path);
+            }
+        }
+    }
+
     qml_register_type::<screenshot::ScreenshotBackend>(
         cstr::cstr!("iDescriptor"),
         1,
@@ -264,6 +244,19 @@ fn main() {
 
     let mut engine = QmlEngine::new();
     let engine_ptr = engine.cpp_ptr();
+
+    if reset_settings {
+        settings_manager::SettingsManager::clear_all();
+        cpp!(unsafe [] {
+            QMessageBox::information(
+                nullptr,
+                QStringLiteral("Settings Reset"),
+                QStringLiteral(
+                    "All application settings have been reset to their default values."
+                )
+            );
+        });
+    }
 
     #[cfg(target_os = "windows")]
     cpp!(unsafe [] {
@@ -344,17 +337,13 @@ fn main() {
             engine_ptr->rootContext()->setContextProperty("NetworkDeviceProvider", s_networkProvider);
 
         }
-        // #endif
-        // engine_ptr->rootContext()->setContextProperty("NetworkDeviceProvider", NetworkDeviceProvider::sharedInstance());
     });
 
     // FIXME: workaround to find FluentUI
     // in dev builds
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, target_os = "windows"))]
     cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
-        #ifdef Q_OS_WINDOWS
-            engine_ptr->addImportPath("C:/Qt/6.9.3/mingw_64/qml");
-        #endif
+        engine_ptr->addImportPath("C:/Qt/6.9.3/mingw_64/qml");
     });
 
     let service_factory = QObjectBox::new(crate::service_factory::ServiceFactory::new(engine_ptr));
@@ -397,10 +386,6 @@ fn main() {
         eprintln!("Loading QML from resources: qrc:/{entry}");
         engine.load_url(QString::from(format!("qrc:/{}", entry)).into());
     }
-
-    // cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
-
-    // });
 
     engine.exec();
 }
