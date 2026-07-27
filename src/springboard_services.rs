@@ -1,11 +1,8 @@
-use crate::device_ctx;
-use crate::{RUNTIME, qt_threading::QtThreading, qvariantmap_insert};
+use crate::{RUNTIME, qt_threading::QtThreading};
 use base64::{Engine as _, engine::general_purpose};
-use idevice::services::core_device_proxy::CoreDeviceProxy;
 use idevice::springboardservices::SpringBoardServicesClient;
 use macros::QtThreading;
 use qmetaobject::prelude::*;
-use qttypes::{QStringList, QVariantMap};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

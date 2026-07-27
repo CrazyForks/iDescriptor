@@ -29,6 +29,7 @@ struct ImportServerContext {
     manifest_name: String,
 }
 
+#[allow(non_snake_case)]
 #[derive(QObject, Default, QtThreading)]
 pub struct WebWirelessGalleryImport {
     base: qt_base_class!(trait QObject),

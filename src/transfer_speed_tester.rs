@@ -117,6 +117,7 @@ impl From<anyhow::Error> for RunFailure {
     }
 }
 
+#[allow(non_snake_case)]
 #[derive(QObject, QtThreading)]
 pub struct TransferSpeedTester {
     base: qt_base_class!(trait QObject),

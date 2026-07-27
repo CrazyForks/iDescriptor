@@ -1,25 +1,8 @@
-use crate::{
-    RUNTIME,
-    device_ctx::get_device_opt,
-    qt_threading::{QtThread, QtThreading},
-};
 use cpp::cpp;
-use idevice::{IdeviceError, services::core_device_proxy::CoreDeviceProxy};
-use idevice::{
-    IdeviceService, RsdService, dvt::remote_server::RemoteServerClient, provider::IdeviceProvider,
-    rsd::RsdHandshake,
-};
-use idevice::{dvt::screenshot::ScreenshotClient, screenshotr::ScreenshotService};
-use macros::QtThreading;
+use log::warn;
 use qmetaobject::prelude::*;
 use qmetaobject::qtdeclarative::{QQuickItem, QQuickPaintedItem};
 use qttypes::{QByteArray, QImage, QPainter, QPointF, QRectF};
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
-
-use log::{debug, warn};
 
 cpp! {{
     #include <QtQuick/QQuickPaintedItem>

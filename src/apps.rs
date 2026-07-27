@@ -1,7 +1,4 @@
-use crate::{
-    RUNTIME, device_ctx::get_device, qt_threading::QtThreading, qvariantmap_insert,
-    settings_manager::SettingsManager,
-};
+use crate::{RUNTIME, device_ctx::get_device, qt_threading::QtThreading, qvariantmap_insert};
 use anyhow::Context;
 use idevice::utils::installation::install_package_with_callback;
 use ipatool::error::IpaToolError;
@@ -12,14 +9,11 @@ use qmetaobject::prelude::*;
 use qttypes::QVariantMap;
 use std::{
     collections::HashMap,
-    future::Future,
     path::{Path, PathBuf},
-    pin::Pin,
     sync::{
         Arc,
         mpsc::{self, SyncSender},
     },
-    task::{Context as TaskContext, Poll},
 };
 use tokio::task::JoinHandle;
 

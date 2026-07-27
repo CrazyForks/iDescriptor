@@ -52,18 +52,18 @@ struct BackupListItem {
     pub status: QString,
 }
 
-#[derive(Debug, Clone)]
-struct BackupInfo {
-    udid: String,
-    source: String,
-    device_name: String,
-    display_name: String,
-    last_backup: String,
-    version: String,
-    encrypted: bool,
-    path: String,
-    status: String,
-}
+// #[derive(Debug, Clone)]
+// struct BackupInfo {
+//     udid: String,
+//     source: String,
+//     device_name: String,
+//     display_name: String,
+//     last_backup: String,
+//     version: String,
+//     encrypted: bool,
+//     path: String,
+//     status: String,
+// }
 
 #[allow(non_snake_case)]
 #[derive(QObject, Default, QtThreading)]
@@ -583,11 +583,14 @@ fn read_backup_metadata(udid: QString, root: QString) -> anyhow::Result<(bool, b
     Ok((was_passcode_set, is_encrypted))
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Clone)]
 struct iDescriptorBackupDelegate {
     fs: FsBackupDelegate,
     qt_thread: QtThread<BackupManager>,
+    #[allow(dead_code)]
     operation: &'static str,
+    #[allow(dead_code)]
     root: String,
     udid: QString,
     start_time: Arc<Mutex<Option<Instant>>>,
@@ -687,11 +690,11 @@ impl BackupDelegate for iDescriptorBackupDelegate {
     }
 
     fn on_progress(&self, bytes_done: u64, bytes_total: u64, overall_progress: f64) {
-        let elapsed = {
-            let mut start = self.start_time.lock().unwrap();
-            let start = start.get_or_insert_with(Instant::now);
-            start.elapsed()
-        };
+        // let _elapsed = {
+        //     let mut start = self.start_time.lock().unwrap();
+        //     let start = start.get_or_insert_with(Instant::now);
+        //     start.elapsed()
+        // };
 
         let progress = if bytes_total > 0 {
             bytes_done as f64 / bytes_total as f64

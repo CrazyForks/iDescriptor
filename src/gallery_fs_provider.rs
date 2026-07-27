@@ -1,30 +1,11 @@
-use qmetaobject::prelude::*;
-use qttypes::{QStringList, QVariantList, QVariantMap};
-
-use crate::constants::{
-    ALBUM_CONTENTS_QUERY_TEMPLATE, DCIM_REMOTE_PATH, FAVS_ALBUM_ID, FAVS_ALBUM_QUERY, FAVS_QUERY,
-    FS_GALLERY_PROVIDER_NAME, IOS_15_ALBUM_QUERY_STATEMENT, IOS_26_ALBUM_QUERY_STATEMENT,
-    RECENTS_ALBUM_ID, RECENTS_ALBUM_QUERY, RECENTS_QUERY, SQLITE_GALLERY_PROVIDER_NAME,
-};
-use crate::device_ctx;
+use crate::constants::{DCIM_REMOTE_PATH, FS_GALLERY_PROVIDER_NAME};
 use crate::gallery::{
     GalleryAlbum, GalleryFuture, GalleryMediaFilter, GalleryProvider, apple_dcim_folder_id,
     is_apple_dcim_folder, is_previewable_media_file, matches_media_filter,
 };
-use crate::qt_threading::QtThreading;
-use crate::utils::{MediaFileType, create_album_info, media_file_type};
-use crate::{RUNTIME, qvariantmap_insert};
-use ::log::debug;
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use idevice::afc::AfcClient;
-use idevice::afc::opcode::AfcFopenMode;
-use macros::QtThreading;
-use rusqlite::{Connection, OptionalExtension};
-use std::future::Future;
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 
 struct FsGalleryProvider {

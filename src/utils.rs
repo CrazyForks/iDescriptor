@@ -1,6 +1,5 @@
-use crate::qvariantmap_insert;
 use crate::{POSSIBLE_ROOT, run_sync};
-use ::log::{debug, error,info, warn};
+use ::log::{debug, error, warn};
 use cpp::*;
 use idevice::{
     IdeviceError, IdeviceService,
@@ -9,9 +8,8 @@ use idevice::{
     house_arrest::HouseArrestClient,
     installation_proxy::InstallationProxyClient,
     provider::IdeviceProvider,
-    xpc::Dictionary as Xpc_Dict,
 };
-use plist::{Dictionary, Value};
+use plist::Dictionary;
 use plist_macro::plist;
 use qmetaobject::prelude::*;
 use qmetaobject::*;
@@ -214,8 +212,10 @@ pub fn parse_diag_info_old(dict: Dictionary) -> ParsedBatteryInfo {
         .and_then(|v| v.as_unsigned_integer())
         .unwrap_or(0);
 
-    let battery_serial_number = dict.get("Serial").and_then(|v| v.as_string()).unwrap_or("Error retrieving serial number".into());
-
+    let battery_serial_number = dict
+        .get("Serial")
+        .and_then(|v| v.as_string())
+        .unwrap_or("Error retrieving serial number".into());
 
     let health_percent = format!(
         "{}%",
@@ -243,7 +243,6 @@ pub fn parse_diag_info_old(dict: Dictionary) -> ParsedBatteryInfo {
 }
 
 pub fn parse_diag_info(dict: Dictionary, raw_product_type: String) -> ParsedBatteryInfo {
-
     let cycle_count = dict
         .get("BatteryData")
         .and_then(|v| v.as_dictionary())
@@ -260,7 +259,10 @@ pub fn parse_diag_info(dict: Dictionary, raw_product_type: String) -> ParsedBatt
         .map(|device| device.major > 8 || (device.major == 8 && device.minor > 1))
         .unwrap_or(false);
 
-    let battery_serial_number = dict.get("Serial").and_then(|v| v.as_string()).unwrap_or("Error retrieving serial number".into());
+    let battery_serial_number = dict
+        .get("Serial")
+        .and_then(|v| v.as_string())
+        .unwrap_or("Error retrieving serial number".into());
     let design_capacity = dict
         .get("BatteryData")
         .and_then(|v| v.as_dictionary())
@@ -926,6 +928,7 @@ pub fn image_to_b64(img: QImage) -> QString {
 }
 
 pub struct AfcReader {
+    #[allow(dead_code)]
     udid: String,
     path: String,
     afc_arc: Arc<Mutex<AfcClient>>,
@@ -954,7 +957,6 @@ impl AfcReader {
             return Vec::new();
         }
 
-        let udid = self.udid.clone();
         let path = self.path.clone();
         let afc_arc = self.afc_arc.clone();
         // FIXME: is run_sync safe in this context?

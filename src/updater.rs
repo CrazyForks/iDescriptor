@@ -16,6 +16,7 @@ cpp! {{
     #include <QUrl>
 }}
 
+#[allow(non_snake_case)]
 #[derive(QObject, QtThreading, Default)]
 pub struct Updater {
     base: qt_base_class!(trait QObject),
