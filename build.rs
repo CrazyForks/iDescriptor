@@ -7,20 +7,17 @@ fn main() {
     println!("cargo:rerun-if-changed=src/main.rs");
     println!("cargo:rerun-if-changed=src/status_window_controller.rs");
     println!("cargo:rerun-if-changed=src/live_reload.cpp");
-    println!("cargo:rerun-if-changed=src/bridge.cpp");
-    println!("cargo:rerun-if-changed=src/include/bridge.h");
-    println!("cargo:rerun-if-changed=src/networkdeviceprovider.h");
-    println!("cargo:rerun-if-changed=src/core/services/dnssd/dnssd_service.h");
-    println!("cargo:rerun-if-changed=src/core/services/dnssd/dnssd_service.cpp");
-    println!("cargo:rerun-if-changed=src/core/services/avahi/avahi_service.h");
-    println!("cargo:rerun-if-changed=src/core/services/avahi/avahi_service.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/CMakeLists.txt");
     println!("cargo:rerun-if-changed=lib/uxplay/uxplay.h");
     println!("cargo:rerun-if-changed=lib/uxplay/uxplay.cpp");
     println!("cargo:rerun-if-changed=src/native/platform/macos/macos.h");
     println!("cargo:rerun-if-changed=src/native/platform/macos/macos.mm");
     println!("cargo:rerun-if-changed=src/native/bridge.cpp");
     println!("cargo:rerun-if-changed=src/native/include/bridge.h");
+    println!("cargo:rerun-if-changed=src/native/networkdeviceprovider.h");
+    println!("cargo:rerun-if-changed=src/native/services/dnssd/dnssd_service.h");
+    println!("cargo:rerun-if-changed=src/native/services/dnssd/dnssd_service.cpp");
+    println!("cargo:rerun-if-changed=src/native/services/avahi/avahi_service.h");
+    println!("cargo:rerun-if-changed=src/native/services/avahi/avahi_service.cpp");
     println!("cargo:rerun-if-changed=src/native/CMakeLists.txt");
 
     let qt_include_path = env::var("DEP_QT_INCLUDE_PATH").unwrap();
