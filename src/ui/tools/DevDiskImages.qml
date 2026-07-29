@@ -109,16 +109,16 @@ ToolWindow {
         function onImageDownloadFinished(version, index, success, error) {
             DevImgsManager.handle_download_finished(version);
             if (success) {
-                App.Helpers.showInfo(root, qsTr("Developer disk image %1 was downloaded successfully.").arg(version));
+                App.Helpers.showInfo(root.contentItem, qsTr("Developer disk image %1 was downloaded successfully.").arg(version));
             } else {
                 const detail = error && error.length > 0 ? error : qsTr("Unknown download error.");
-                App.Helpers.showError(root, qsTr("Could not download developer disk image %1: %2").arg(version).arg(detail));
+                App.Helpers.showError(root.contentItem, qsTr("Could not download developer disk image %1: %2").arg(version).arg(detail));
             }
             DevImgsManager.fetch_image_list(root.currentDeviceUdid, settingsManager.dev_disk_img_path());
         }
 
         function onImageDownloadCancelled(version) {
-            App.Helpers.showInfo(root, qsTr("Download for developer disk image %1 was cancelled.").arg(version));
+            App.Helpers.showInfo(root.contentItem, qsTr("Download for developer disk image %1 was cancelled.").arg(version));
         }
 
         function onImageListRefreshFinished(udid, refreshed, success, error) {
@@ -127,9 +127,9 @@ ToolWindow {
 
             if (!success) {
                 const detail = error && error.length > 0 ? error : qsTr("Unknown refresh error.");
-                App.Helpers.showError(root, qsTr("Could not refresh the developer disk image list: %1").arg(detail));
+                App.Helpers.showError(root.contentItem, qsTr("Could not refresh the developer disk image list: %1").arg(detail));
             } else if (refreshed) {
-                App.Helpers.showInfo(root, qsTr("The developer disk image list was refreshed."));
+                App.Helpers.showInfo(root.contentItem, qsTr("The developer disk image list was refreshed."));
             }
         }
 
@@ -140,13 +140,13 @@ ToolWindow {
             root.mountedImageChecked = success;
             if (!success) {
                 const detail = error && error.length > 0 ? error : qsTr("Unknown device error.");
-                App.Helpers.showError(root, qsTr("Could not check the mounted developer disk image: %1").arg(detail));
+                App.Helpers.showError(root.contentItem, qsTr("Could not check the mounted developer disk image: %1").arg(detail));
             } else if (isLocked) {
-                App.Helpers.showWarning(root, qsTr("The device is locked. Unlock it and check again."));
+                App.Helpers.showWarning(root.contentItem, qsTr("The device is locked. Unlock it and check again."));
             } else if (isMounted) {
-                App.Helpers.showInfo(root, qsTr("A developer disk image is mounted on the selected device."));
+                App.Helpers.showInfo(root.contentItem, qsTr("A developer disk image is mounted on the selected device."));
             } else {
-                App.Helpers.showInfo(root, qsTr("No developer disk image is mounted on the selected device."));
+                App.Helpers.showInfo(root.contentItem, qsTr("No developer disk image is mounted on the selected device."));
             }
         }
     }
@@ -268,7 +268,7 @@ ToolWindow {
                                 onClicked: {
                                     const item = root.selectedImageItem();
                                     if (!item) {
-                                        App.Helpers.showWarning(root, qsTr("Select a developer disk image first."));
+                                        App.Helpers.showWarning(root.contentItem, qsTr("Select a developer disk image first."));
                                         return;
                                     }
 
@@ -277,20 +277,20 @@ ToolWindow {
                                     const info = DevImgsManager.get_locations_for_version(version, settingsManager.dev_disk_img_path());
                                     const exists = info["exists"];
                                     if (!exists) {
-                                        App.Helpers.showError(root, qsTr("The required files for developer disk image %1 are missing.").arg(version));
+                                        App.Helpers.showError(root.contentItem, qsTr("The required files for developer disk image %1 are missing.").arg(version));
                                         return;
                                     }
 
                                     const dmg_path = info["dmg"];
                                     const sig_path = info["sig"];
                                     if (!dmg_path || !sig_path) {
-                                        App.Helpers.showError(root, qsTr("The paths for developer disk image %1 are invalid.").arg(version));
+                                        App.Helpers.showError(root.contentItem, qsTr("The paths for developer disk image %1 are invalid.").arg(version));
                                         return;
                                     }
 
                                     const device = App.DeviceContext.getDevice(root.currentDeviceUdid);
                                     if (!device) {
-                                        App.Helpers.showError(root, qsTr("The selected device is no longer available."));
+                                        App.Helpers.showError(root.contentItem, qsTr("The selected device is no longer available."));
                                         return;
                                     }
 
@@ -298,13 +298,13 @@ ToolWindow {
                                         console.log("devImageMounted signal received for version:", version, "success:", success, "is_locked:", is_locked);
                                         if (success) {
                                             console.log("Developer disk image mounted successfully for version:", version);
-                                            App.Helpers.showInfo(root, qsTr("Developer disk image %1 was mounted successfully.").arg(version));
+                                            App.Helpers.showInfo(root.contentItem, qsTr("Developer disk image %1 was mounted successfully.").arg(version));
                                             DevImgsManager.fetch_image_list(root.currentDeviceUdid, settingsManager.dev_disk_img_path());
                                         } else {
                                             if (is_locked) {
-                                                App.Helpers.showWarning(root, qsTr("Could not mount developer disk image %1 because the device is locked.").arg(version));
+                                                App.Helpers.showWarning(root.contentItem, qsTr("Could not mount developer disk image %1 because the device is locked.").arg(version));
                                             } else {
-                                                App.Helpers.showError(root, qsTr("Could not mount developer disk image %1.").arg(version));
+                                                App.Helpers.showError(root.contentItem, qsTr("Could not mount developer disk image %1.").arg(version));
                                             }
                                         }
                                     });
@@ -638,13 +638,13 @@ ToolWindow {
                                 if (model.is_downloading) {
                                     console.log("Cancel download for version:", version);
                                     if (!DevImgsManager.cancel_download(version))
-                                        App.Helpers.showError(root, qsTr("Could not cancel the download for developer disk image %1.").arg(version));
+                                        App.Helpers.showError(root.contentItem, qsTr("Could not cancel the download for developer disk image %1.").arg(version));
                                     return;
                                 }
                                 const started_to_download = DevImgsManager.download_image(version, index, settingsManager.dev_disk_img_path());
                                 if (!started_to_download) {
                                     console.error("Failed to start download for version:", version);
-                                    App.Helpers.showError(root, qsTr("Could not start the download for developer disk image %1.").arg(version));
+                                    App.Helpers.showError(root.contentItem, qsTr("Could not start the download for developer disk image %1.").arg(version));
                                 }
                             }
                         }
