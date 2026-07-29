@@ -58,7 +58,7 @@ ToolWindow {
 
         const metadata = backupManager.get_backup_metadata(udid, root.backupRoot)
         if (!metadata || !metadata.success) {
-            App.Helpers.showError(root, qsTr("The backup metadata could not be read."))
+            App.Helpers.showError(root.contentItem, qsTr("The backup metadata could not be read."))
             return
         }
 
@@ -669,9 +669,8 @@ ToolWindow {
                     onBackupRootSelected: function(path) {
                         root.chooseBackupRoot(path)
                     }
-                    onDetailsRequested: function(udid) {
-                        // TODO: remove unnecessary args
-                        root.openBackupDetails(udid, udid)
+                    onDetailsRequested: function() {
+                        root.openBackupDetails(itemRoot.sectionUdid, itemRoot.sectionTitle)
                     }
                     onBackupFinished: backupManager.init(root.backupRoot)
                 }
