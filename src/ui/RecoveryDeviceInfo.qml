@@ -28,12 +28,12 @@ Item {
 
             Image {
                 source: v("placeholder_path", "qrc:/resources/icons/iphone_gen1_placeholder.png")
-                sourceSize: Qt.size(300, 450)
+                sourceSize: Qt.size(400, 600)
                 fillMode: Image.PreserveAspectFit
                 smooth: true
                 mipmap: true
-                Layout.preferredWidth: 150
-                Layout.preferredHeight: 190
+                Layout.preferredWidth: 210
+                Layout.preferredHeight: 280
             }
 
             ColumnLayout {
@@ -62,10 +62,15 @@ Item {
                     highlighted: true
                     enabled: v("ecid", "") !== ""
                     onClicked: {
-                        const res = core.exit_recovery_mode(v("ecid", ""))
-                        if (!res) {
-                            //FIXME: wire up error dialog
-                            // App.Dialogs.showErrorDialog(qsTr("Failed to exit recovery mode. Please check the logs for more information."))
+                        const success = core.exit_recovery_mode(v("ecid", ""))
+                        if (success) {
+                            App.Helpers.showInfo(
+                                root,
+                                qsTr("The command to exit recovery mode was sent successfully. The device should restart shortly."))
+                        } else {
+                            App.Helpers.showError(
+                                root,
+                                qsTr("Failed to exit recovery mode. This could be due to USB permissions."))
                         }
                     }
                 }
@@ -83,29 +88,29 @@ Item {
                 anchors.fill: parent
 
                 Label { text: qsTr("Model:"); font.bold: true }
-                Label { text: v("model_identifier", v("hardware_model", qsTr("Unknown"))); elide: Text.ElideRight; Layout.fillWidth: true }
+                CopyableText { text: v("model_identifier", v("hardware_model", qsTr("Unknown"))); elide: Text.ElideRight; Layout.fillWidth: true }
                 Label { text: qsTr("Board:"); font.bold: true }
-                Label { text: v("board", v("srtg", qsTr("Unknown"))); elide: Text.ElideRight; Layout.fillWidth: true }
+                CopyableText { text: v("board", v("srtg", qsTr("Unknown"))); elide: Text.ElideRight; Layout.fillWidth: true }
 
                 Label { text: qsTr("Marketing Name:"); font.bold: true }
-                Label { text: v("marketing_name", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+                CopyableText { text: v("marketing_name", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                 Label { text: qsTr("Mode:"); font.bold: true }
-                Label { text: v("mode", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+                CopyableText { text: v("mode", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                 Label { text: qsTr("ECID:"); font.bold: true }
-                Label { text: v("ecid", qsTr("Unknown")); elide: Text.ElideMiddle; Layout.fillWidth: true }
+                CopyableText { text: v("ecid", qsTr("Unknown")); elide: Text.ElideMiddle; Layout.fillWidth: true }
                 Label { text: qsTr("Serial Number:"); font.bold: true }
-                Label { text: v("srnm", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+                CopyableText { text: v("srnm", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                 Label { text: qsTr("CPID:"); font.bold: true }
-                Label { text: v("cpid", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+                CopyableText { text: v("cpid", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                 Label { text: qsTr("BDID:"); font.bold: true }
-                Label { text: v("bdid", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
+                CopyableText { text: v("bdid", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                 Label { text: qsTr("Vendor ID:"); font.bold: true }
-                Label { text: "0x" + Number(v("vendor_id", 0)).toString(16); elide: Text.ElideRight; Layout.fillWidth: true }
+                CopyableText { text: "0x" + Number(v("vendor_id", 0)).toString(16); elide: Text.ElideRight; Layout.fillWidth: true }
                 Label { text: qsTr("Product ID:"); font.bold: true }
-                Label { text: "0x" + Number(v("product_id", 0)).toString(16); elide: Text.ElideRight; Layout.fillWidth: true }
+                CopyableText { text: "0x" + Number(v("product_id", 0)).toString(16); elide: Text.ElideRight; Layout.fillWidth: true }
             }
         }
 
@@ -124,12 +129,11 @@ Item {
                     font.bold: true
                 }
 
-                Label {
+                CopyableText {
                     Layout.fillWidth: true
                     text: v("serial_string", "")
                     color: App.Theme.textMuted
                     wrapMode: Text.WrapAnywhere
-                    font.pixelSize: 12
                 }
             }
         }
