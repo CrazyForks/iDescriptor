@@ -9,7 +9,8 @@ Item {
     property string title: ""
     property string deviceId: ""
     required property string mode
-    readonly property bool selectedDevice: App.DeviceContext.currentRecoveryDeviceId === deviceId
+    readonly property bool selectedDevice: App.DeviceContext.currentTab === 0
+                                           && App.DeviceContext.currentRecoveryDeviceId === deviceId
     readonly property string displayTitle: title && title.length ? title : qsTr("Recovery Device")
 
     implicitWidth: 200

@@ -141,6 +141,15 @@ fn main() {
 
         #ifdef Q_OS_WINDOWS
             QQuickStyle::setStyle("FluentWinUI3");
+        #else
+            QQuickStyle::setStyle("IDescriptorStyle");
+            #ifdef Q_OS_MACOS
+                QQuickStyle::setFallbackStyle("macOS");
+            #elif defined(Q_OS_LINUX)
+                QQuickStyle::setFallbackStyle("Fusion");
+            #else
+                QQuickStyle::setFallbackStyle("Basic");
+            #endif
         #endif
         #ifndef Q_OS_LINUX
             // uxplay now uses qml6glsink so we have to use opengl
@@ -244,6 +253,22 @@ fn main() {
 
     let mut engine = QmlEngine::new();
     let engine_ptr = engine.cpp_ptr();
+
+    #[cfg(not(target_os = "windows"))]
+    cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
+        engine_ptr->addImportPath(":/src/ui/styles");
+    });
+
+    #[cfg(all(debug_assertions, not(target_os = "windows")))]
+    if ui_live_reload || qml_from_fs {
+        let style_import_path = QString::from(utils::source_qml_path("src/ui/styles"));
+        cpp!(unsafe [
+            engine_ptr as "QQmlApplicationEngine *",
+            style_import_path as "QString"
+        ] {
+            engine_ptr->addImportPath(style_import_path);
+        });
+    }
 
     if reset_settings {
         settings_manager::SettingsManager::clear_all();

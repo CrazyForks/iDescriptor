@@ -1,0 +1,5 @@
+module IDescriptorStyle
+ScrollBar 2.0 ScrollBar.qml
+ScrollBar 6.0 ScrollBar.qml
+ScrollView 2.2 ScrollView.qml
+ScrollView 6.0 ScrollView.qml

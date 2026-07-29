@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import "../../"
 
 FluWindow {
-    id:window
+    id: window
     title: qsTr("iDescriptor")
     width: 1000
     height: 668
@@ -16,25 +16,25 @@ FluWindow {
 
     function applyEffect(effect) {
         if (effect === "acrylic") {
-            window.backgroundColor = "transparent"
-            window.effect = "acrylic"
+            window.backgroundColor = "transparent";
+            window.effect = "acrylic";
         } else {
-            window.backgroundColor = FluTheme.windowBackgroundColor
-            window.effect = "normal"
+            window.backgroundColor = FluTheme.windowBackgroundColor;
+            window.effect = "normal";
         }
     }
 
     Connections {
         target: Settings
         onWindowEffectChanged: {
-            window.applyEffect(effect)
+            window.applyEffect(effect);
         }
     }
 
     Component.onCompleted: {
-        window.applyEffect(settingsManager.window_effect())
+        window.applyEffect(settingsManager.window_effect());
         if (!settingsManager.is_window_effect_choice_presented())
-            Qt.callLater(() => windowEffectDialog.open())
+            Qt.callLater(() => windowEffectDialog.open());
     }
 
     WindowEffectDialog {
@@ -42,8 +42,8 @@ FluWindow {
         targetWindow: window
     }
 
-    onClosing: function(close) {
-        ClosingHandler.handler("*", close, window)
+    onClosing: function (close) {
+        ClosingHandler.handler("*", close, window);
     }
 
     appBar: FluAppBar {
@@ -51,52 +51,10 @@ FluWindow {
         showDark: false
         showStayTop: false
         z: 7
-
-        RowLayout{
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top 
-            anchors.topMargin: 10
-            anchors.rightMargin: Qt.platform.os === "windows" ? 40 : 0
-            
-            spacing: 0
-            TabButton {
-                text: qsTr("iDevice")
-                onClicked: DeviceContext.currentTab = 0
-                active: DeviceContext.currentTab == 0
-            }
-
-            TabButton {
-                text: qsTr("Apps")
-                onClicked: DeviceContext.currentTab = 1
-                active:  DeviceContext.currentTab == 1
-            }
-            TabButton {
-                text: qsTr("Toolbox")
-                onClicked:  DeviceContext.currentTab = 2
-                active:  DeviceContext.currentTab == 2
-            }
-            TabButton {
-                text: qsTr("Jailbroken")
-                onClicked:  DeviceContext.currentTab = 3
-                active:  DeviceContext.currentTab == 3
-            }
-        }
     }
 
-    ColumnLayout {
+    MainWorkspace {
         anchors.fill: parent
-        anchors.topMargin: appBar.height + 30
-        Tabs {
-            Layout.fillWidth : true
-            Layout.fillHeight : true
-            
-            currentIndex: DeviceContext.currentTab
-        }
-
-        StatusBar {
-            
-        }
+        anchors.topMargin: appBar.height
     }
-
 }

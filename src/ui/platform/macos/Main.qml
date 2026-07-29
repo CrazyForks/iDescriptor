@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 import "../../"
 
 ApplicationWindow {
@@ -19,52 +18,17 @@ ApplicationWindow {
 
     Component.onCompleted: {
         Qt.callLater(function () {
-            QmlUtils.setup_main_window(window.contentItem.Window.window)
-        })
-        Updater.checkAutomatically()
+            QmlUtils.setup_main_window(window.contentItem.Window.window);
+        });
+        Updater.checkAutomatically();
     }
 
-    onClosing: function(close) {
-        ClosingHandler.handler("*", close, window)
+    onClosing: function (close) {
+        ClosingHandler.handler("*", close, window);
     }
 
-    ColumnLayout {
+    MainWorkspace {
         anchors.fill: parent
-        spacing: 0
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.topMargin: 10
-            spacing: 0
-            TabButton {
-                text: qsTr("iDevice")
-                onClicked: DeviceContext.currentTab = 0
-                active: DeviceContext.currentTab == 0
-            }
-
-            TabButton {
-                text: qsTr("Apps")
-                onClicked: DeviceContext.currentTab = 1
-                active: DeviceContext.currentTab == 1
-            }
-            TabButton {
-                text: qsTr("Toolbox")
-                onClicked: DeviceContext.currentTab = 2
-                active: DeviceContext.currentTab == 2
-            }
-            TabButton {
-                text: qsTr("Jailbroken")
-                onClicked: DeviceContext.currentTab = 3
-                active: DeviceContext.currentTab == 3
-            }
-        }
-
-        Tabs {
-            currentIndex: DeviceContext.currentTab
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-        }
-
-        StatusBar {}
     }
 
     // needed on macos
@@ -77,9 +41,9 @@ ApplicationWindow {
         enabled: true
         acceptedButtons: Qt.LeftButton
         z: 1000
-        onPressed: function(mouse) {
-            window.startSystemMove()
-            mouse.accepted = false
+        onPressed: function (mouse) {
+            window.startSystemMove();
+            mouse.accepted = false;
         }
     }
 }
