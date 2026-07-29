@@ -367,8 +367,8 @@ async fn check_linux_dependencies() -> Result<Vec<DependencyStatus>> {
     dependencies.push(DependencyStatus {
         id: "udev_rules",
         name: "UDEV rules",
-        description: "Required for Linux iOS device permissions and recovery workflows.",
-        optional: false,
+        description: "Optional USB permissions for devices in recovery mode.",
+        optional: true,
         availability: udev_rules,
         action_text: "View Instructions",
     });
