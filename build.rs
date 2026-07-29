@@ -4,28 +4,48 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rerun-if-changed=src/main.rs");
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+
+    println!("cargo:rerun-if-changed=src/native.rs");
     println!("cargo:rerun-if-changed=src/status_window_controller.rs");
+
     println!("cargo:rerun-if-changed=src/live_reload.cpp");
     println!("cargo:rerun-if-changed=lib/uxplay/uxplay.h");
     println!("cargo:rerun-if-changed=lib/uxplay/uxplay.cpp");
-    println!("cargo:rerun-if-changed=src/native/platform/macos/macos.h");
-    println!("cargo:rerun-if-changed=src/native/platform/macos/macos.mm");
     println!("cargo:rerun-if-changed=src/native/bridge.cpp");
     println!("cargo:rerun-if-changed=src/native/include/bridge.h");
     println!("cargo:rerun-if-changed=src/native/networkdeviceprovider.h");
-    println!("cargo:rerun-if-changed=src/native/services/dnssd/dnssd_service.h");
-    println!("cargo:rerun-if-changed=src/native/services/dnssd/dnssd_service.cpp");
-    println!("cargo:rerun-if-changed=src/native/services/avahi/avahi_service.h");
-    println!("cargo:rerun-if-changed=src/native/services/avahi/avahi_service.cpp");
+    println!("cargo:rerun-if-changed=src/native/systemappearance.cpp");
+    println!("cargo:rerun-if-changed=src/native/systemappearance.h");
     println!("cargo:rerun-if-changed=src/native/CMakeLists.txt");
+
+    if target_os == "macos" {
+        println!("cargo:rerun-if-changed=src/native/platform/macos/macos.h");
+        println!("cargo:rerun-if-changed=src/native/platform/macos/macos.mm");
+    }
+    if target_os == "macos" || target_os == "windows" {
+        println!("cargo:rerun-if-changed=src/native/services/dnssd/dnssd_service.h");
+        println!("cargo:rerun-if-changed=src/native/services/dnssd/dnssd_service.cpp");
+    } else {
+        println!("cargo:rerun-if-changed=src/native/services/avahi/avahi_service.h");
+        println!("cargo:rerun-if-changed=src/native/services/avahi/avahi_service.cpp");
+    }
 
     let qt_include_path = env::var("DEP_QT_INCLUDE_PATH").unwrap();
     let qt_library_path = env::var("DEP_QT_LIBRARY_PATH").unwrap();
     let qt_version = env::var("DEP_QT_VERSION").unwrap();
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let flatpak_build = env::var_os("CARGO_FEATURE_FLATPAK").is_some();
     let appimage_build = target_os == "linux" && env::var_os("CARGO_FEATURE_APPIMAGE").is_some();
+
+    //TODO
+    // if target_os == "linux" {
+    //     let linker_dir = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("scripts");
+    //     println!(
+    //         "cargo:rustc-link-arg-bin=idescriptor=-B{}",
+    //         linker_dir.display()
+    //     );
+    //     println!("cargo:rustc-link-arg-bin=idescriptor=-fuse-ld=lld");
+    // }
 
     // compile_translations(&qt_library_path);
 
@@ -63,7 +83,7 @@ fn main() {
         );
     }
     // ------------------------------------------------------------------
-    // cpp_build — compiles the cpp! macros in src/main.rs
+    // cpp_build — scans the crate root and compiles its cpp! macro modules
     // ------------------------------------------------------------------
     let mut config = cpp_build::Config::new();
     // GCC 16 diagnoses a SFINAE pattern used by the Qt headers. This is
@@ -89,9 +109,11 @@ fn main() {
     public_include("QtQml");
     public_include("QtQuickControls2");
     public_include("QtWidgets");
-    if target_os == "linux" && flatpak_build {
+    if target_os == "linux" {
         public_include("QtDBus");
-        config.define("IDESCRIPTOR_FLATPAK", None);
+        if flatpak_build {
+            config.define("IDESCRIPTOR_FLATPAK", None);
+        }
     }
 
     let mut private_include = |name: &str| {
@@ -194,9 +216,7 @@ fn main() {
         pkg_config::Config::new()
             .probe("avahi-compat-libdns_sd")
             .unwrap();
-        if flatpak_build {
-            pkg_config::Config::new().probe("Qt6DBus").unwrap();
-        }
+        pkg_config::Config::new().probe("Qt6DBus").unwrap();
     }
 
     // FFmpeg

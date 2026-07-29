@@ -2,7 +2,6 @@
 #![windows_subsystem = "windows"]
 
 use crate::qquickimageprovider_imp::AddImageProvider;
-use cpp::*;
 use once_cell::sync::Lazy;
 use qmetaobject::*;
 use std::future::Future;
@@ -37,6 +36,7 @@ pub mod io_manager;
 pub mod jailbroken;
 pub mod list_model;
 pub mod media_streamer;
+pub mod native;
 pub mod platform;
 pub mod qml_image;
 pub mod qml_utils;
@@ -68,21 +68,6 @@ pub const EV_FAIL: u32 = 4;
 // TODO
 // #[global_allocator]
 // static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
-cpp! {{
-    #include <QQuickStyle>
-    #include <QQuickWindow>
-    #include <QQmlContext>
-    #include <QLoggingCategory>
-    #include <QtGui/QGuiApplication>
-    #include <QFont>
-    #include <QQmlFileSelector>
-    #include <QIcon>
-    #include <QMessageBox>
-
-    #include "src/live_reload.cpp"
-    #include "src/native/networkdeviceprovider.h"
-}}
 
 static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
     tokio::runtime::Builder::new_multi_thread()
@@ -134,48 +119,18 @@ fn main() {
     //     QString::from(":/resources/icons/")
     // };
 
-    cpp!(unsafe [application_version as "QString"] {
-        #define FLUENTUI_BUILD_STATIC_LIB 1
-        #ifdef WIN32
-            // ::SetUnhandledExceptionFilter(MyUnhandledExceptionFilter);
-            qputenv("QT_QPA_PLATFORM", "windows:darkmode=2");
-        #endif
+    native::configure_application(application_version);
 
-        #ifdef Q_OS_WINDOWS
-            QQuickStyle::setStyle("FluentWinUI3");
-        #else
-            QQuickStyle::setStyle("IDescriptorStyle");
-            #ifdef Q_OS_MACOS
-                QQuickStyle::setFallbackStyle("macOS");
-            #elif defined(Q_OS_LINUX)
-                QQuickStyle::setFallbackStyle("Fusion");
-            #else
-                QQuickStyle::setFallbackStyle("Basic");
-            #endif
-        #endif
-        #ifndef Q_OS_LINUX
-            // uxplay now uses qml6glsink so we have to use opengl
-            // Linux is fine with QT_QPA_PLATFORM=xcb
-            QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
-        #endif
-
-        // QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
-        #if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
-            QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-            QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
-        #if (QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
-            QApplication::setHighDpiScaleFactorRoundingPolicy(
-                Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
-        #endif
-        #endif
-            QCoreApplication::setOrganizationName("iDescriptor");
-            QCoreApplication::setApplicationName("iDescriptor");
-            QCoreApplication::setApplicationVersion(application_version);
-    });
+    #[cfg(target_os = "linux")]
+    unsafe {
+        std::env::set_var("QT_QPA_PLATFORM", "xcb");
+    }
 
     crate::qrc::rsrc();
     #[cfg(not(debug_assertions))]
     crate::ui_qrc::qml();
+    #[cfg(all(not(debug_assertions), target_os = "linux"))]
+    crate::ui_qrc::linux_qml();
 
     #[cfg(target_os = "macos")]
     {
@@ -260,41 +215,26 @@ fn main() {
     let engine_ptr = engine.cpp_ptr();
 
     #[cfg(not(target_os = "windows"))]
-    cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
-        engine_ptr->addImportPath(":/src/ui/styles");
-    });
+    native::add_resource_style_import_path(&mut engine);
 
     #[cfg(all(debug_assertions, not(target_os = "windows")))]
     if ui_live_reload || qml_from_fs {
         let style_import_path = QString::from(utils::source_qml_path("src/ui/styles"));
-        cpp!(unsafe [
-            engine_ptr as "QQmlApplicationEngine *",
-            style_import_path as "QString"
-        ] {
-            engine_ptr->addImportPath(style_import_path);
-        });
+        native::add_style_import_path(&mut engine, style_import_path);
     }
 
     if reset_settings {
         settings_manager::SettingsManager::clear_all();
-        cpp!(unsafe [] {
-            QMessageBox::information(
-                nullptr,
-                QStringLiteral("Settings Reset"),
-                QStringLiteral(
-                    "All application settings have been reset to their default values."
-                )
-            );
-        });
+        native::show_settings_reset_message();
     }
 
     #[cfg(target_os = "windows")]
-    cpp!(unsafe [] {
-        QGuiApplication::setFont(QFont("Segoe UI"));
-    });
+    native::set_default_font();
 
     let settings_manager_impl = settings_manager::SettingsManager::default();
     let initial_language = settings_manager_impl.language();
+    let z_linux_window_enabled =
+        cfg!(target_os = "linux") && settings_manager_impl.z_linux_window();
     qml_utils::QmlUtils::apply_language_to_engine(engine_ptr, initial_language);
     let settings_manager = QObjectBox::new(settings_manager_impl);
     engine.set_object_property("settingsManager".into(), settings_manager.pinned());
@@ -353,42 +293,29 @@ fn main() {
         status_window_controller.pinned(),
     );
 
-    cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
-
-        static QQmlFileSelector* s_fileSelector = nullptr;
-        if (!s_fileSelector) {
-            s_fileSelector = new QQmlFileSelector(engine_ptr, engine_ptr);
-        }
-
-
-        static NetworkDeviceProvider* s_networkProvider = nullptr;
-        if (!s_networkProvider) {
-            s_networkProvider = new NetworkDeviceProvider(QCoreApplication::instance());
-            engine_ptr->rootContext()->setContextProperty("NetworkDeviceProvider", s_networkProvider);
-
-        }
-    });
+    native::initialize_engine(&mut engine);
 
     // FIXME: workaround to find FluentUI
     // in dev builds
     #[cfg(all(debug_assertions, target_os = "windows"))]
-    cpp!(unsafe [engine_ptr as "QQmlApplicationEngine *"] {
-        engine_ptr->addImportPath("C:/Qt/6.9.3/mingw_64/qml");
-    });
+    native::add_development_import_path(&mut engine);
 
     let service_factory = QObjectBox::new(crate::service_factory::ServiceFactory::new(engine_ptr));
     engine.set_object_property("serviceFactory".into(), service_factory.pinned());
 
     let windows_qml_entry = "src/ui/platform/windows/Main.qml";
     let macos_qml_entry = "src/ui/platform/macos/Main.qml";
-    let other_qml_entry = "src/ui/Main.qml";
+    let linux_qml_entry = "src/ui/ZLinuxWindow.qml";
+    let default_qml_entry = "src/ui/Main.qml";
 
     let entry = if cfg!(target_os = "windows") {
         windows_qml_entry
     } else if cfg!(target_os = "macos") {
         macos_qml_entry
+    } else if z_linux_window_enabled {
+        linux_qml_entry
     } else {
-        other_qml_entry
+        default_qml_entry
     };
 
     if ui_live_reload {
@@ -398,13 +325,7 @@ fn main() {
         eprintln!("QML live reload enabled: {}", entry_path.to_string());
         engine.load_file(entry_path.clone().into());
 
-        cpp!(unsafe [
-            engine_ptr as "QQmlApplicationEngine *",
-            ui_path as "QString",
-            entry_path as "QString"
-        ] {
-            init_live_reload(engine_ptr, ui_path, entry_path);
-        });
+        native::initialize_live_reload(&mut engine, ui_path, entry_path);
     } else if qml_from_fs {
         let path = utils::deployed_qml_path(entry).unwrap_or_else(|| utils::source_qml_path(entry));
         eprintln!("Loading QML from filesystem: {path}");

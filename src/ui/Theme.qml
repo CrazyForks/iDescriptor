@@ -5,15 +5,7 @@ import QtQuick
 QtObject {
     id: theme
 
-    readonly property SystemPalette _sysPalette: SystemPalette {
-        colorGroup: SystemPalette.Active
-    }
-
-    readonly property bool darkMode: {
-        if (Qt.application.styleHints.colorScheme !== Qt.ColorScheme.Unknown)
-            return Qt.application.styleHints.colorScheme === Qt.ColorScheme.Dark;
-        return _sysPalette.windowText.hslLightness > _sysPalette.window.hslLightness;
-    }
+    readonly property bool darkMode: SystemAppearance.darkMode
 
     readonly property color accent: "#0a84ff"
     readonly property color accentPressed: "#006edb"
@@ -50,6 +42,37 @@ QtObject {
 
     readonly property color sidebarBackground: darkMode ? "#1c1c1e" : "#f5f5f7"
     readonly property color sidebarDivider: darkMode ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.08)
+
+    readonly property color diskUsageSystem: darkMode ? "#8e8e93" : "#636366"
+    readonly property color diskUsageApps: systemOrange
+    readonly property color diskUsageMedia: darkMode ? "#5e5ce6" : "#5856d6"
+    readonly property color diskUsageGallery: darkMode ? "#ff375f" : "#ff2d55"
+    readonly property color diskUsageOthers: systemGreen
+    readonly property color diskUsageFree: darkMode ? "#2c2c2e" : "#e5e5ea"
+
+    readonly property Palette palette: Palette {
+        window: theme.windowBackground
+        windowText: theme.text
+        base: theme.controlFill
+        alternateBase: theme.groupedBackground
+        text: theme.text
+        button: theme.controlFill
+        buttonText: theme.text
+        brightText: theme.textSelected
+        highlight: theme.selection
+        highlightedText: theme.textSelected
+        placeholderText: theme.textMuted
+        accent: theme.accent
+        link: theme.systemBlue
+        linkVisited: theme.accentPressed
+        toolTipBase: theme.elevatedSurface
+        toolTipText: theme.text
+        light: theme.darkMode ? theme.controlStroke : "#ffffff"
+        midlight: theme.softBgBorder
+        mid: theme.separator
+        dark: theme.darkMode ? "#111113" : "#8e8e93"
+        shadow: theme.darkMode ? "#000000" : Qt.rgba(0, 0, 0, 0.35)
+    }
 
     readonly property int sidebarCornerRadius: 8
     readonly property int sidebarRowHeight: 36
