@@ -147,7 +147,7 @@ Item {
                         Layout.minimumWidth: 0
                         text: root.displayTitle
                         color: App.Theme.text
-                        font.weight: root.selectedDevice ? Font.DemiBold : Font.Normal
+                        // font.weight: root.selectedDevice ? Font.DemiBold : Font.Normal
                         font.pixelSize: 13
                         elide: Text.ElideRight
                     }
@@ -264,7 +264,7 @@ Item {
 
                                 IconImage {
                                     source: navButton.iconSource
-                                    color: "black"
+                                    color: palette.text
                                     sourceSize.width: 16
                                     sourceSize.height: 16
                                     Layout.preferredWidth: 16
@@ -279,7 +279,7 @@ Item {
                                     color: navButton.checked ? App.Theme.selection
                                                              : App.Theme.text
                                     font.pixelSize: 12
-                                    font.weight: navButton.checked ? Font.DemiBold : Font.Normal
+                                    // font.weight: navButton.checked ? Font.DemiBold : Font.Normal
                                     elide: Text.ElideRight
                                 }
                             }
