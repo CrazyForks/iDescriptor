@@ -26,6 +26,9 @@ find_package(PkgConfig REQUIRED)
 # Qt6
 # ---------------------------------------------------------------------------
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2)
+if(UNIX AND NOT APPLE)
+    find_package(Qt6 REQUIRED COMPONENTS DBus)
+endif()
 set(CMAKE_AUTOMOC ON)
 
 # ---------------------------------------------------------------------------
@@ -98,6 +101,8 @@ endif()
 set(BRIDGE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/bridge.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/networkdeviceprovider.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/systemappearance.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/systemappearance.h
     ${SERVICE_SOURCES}
 )
 
@@ -147,6 +152,7 @@ elseif(WIN32)
     target_link_libraries(cpp_bridge PUBLIC "${BONJOUR_SDK_DIR}/Lib/x64/dnssd.lib")
 else()
     target_link_libraries(cpp_bridge PUBLIC
+        Qt6::DBus
         PkgConfig::AVAHI
         PkgConfig::AVAHI_COMPAT
     )
