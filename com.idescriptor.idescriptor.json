@@ -4,7 +4,7 @@
   "runtime-version": "6.8",
   "sdk": "org.kde.Sdk",
   "add-extensions": {
-    "org.kde.Platform.ffmpeg-full": {
+    "org.freedesktop.Platform.ffmpeg-full": {
       "version": "24.08",
       "directory": "lib/ffmpeg",
       "add-ld-path": "."
@@ -22,10 +22,8 @@
     "--socket=pulseaudio",
     "--share=network",
     "--device=all",
-    "--socket=system-bus",
     "--filesystem=/run/usbmuxd",
     "--system-talk-name=org.freedesktop.Avahi",
-    "--talk-name=org.freedesktop.Platform.ffmpeg-full",
     "--env=QT_MEDIA_BACKEND=ffmpeg",
     "--env=AVAHI_COMPAT_NOWARN=1"
   ],
@@ -56,35 +54,6 @@
       ]
     },
     {
-      "name": "libdaemon",
-      "buildsystem": "autotools",
-      "sources": [
-        {
-          "type": "archive",
-          "url": "http://0pointer.de/lennart/projects/libdaemon/libdaemon-0.14.tar.gz",
-          "sha256": "fd23eb5f6f986dcc7e708307355ba3289abe03cc381fc47a80bca4a50aa6b834"
-        }
-      ]
-    },
-    {
-      "name": "libevent",
-      "buildsystem": "autotools",
-      "config-opts": [
-        "--disable-samples",
-        "--disable-openssl",
-        "--disable-debug-mode",
-        "--disable-regress",
-        "--disable-libevent-regress",
-        "--disable-test-programs"
-      ],
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/libevent/libevent.git"
-        }
-      ]
-    },
-    {
       "name": "avahi",
       "buildsystem": "autotools",
       "config-opts": [
@@ -97,7 +66,9 @@
         "--with-distro=none",
         "--disable-manpages",
         "--disable-dbus-bus-activation",
-        "--enable-compat-libdns_sd"
+        "--enable-compat-libdns_sd",
+        "--disable-libdaemon",
+        "--disable-libevent"
       ],
       "sources": [
         {
@@ -151,23 +122,38 @@
       ]
     },
     {
+      "name": "qml6glsink",
+      "buildsystem": "meson",
+      "config-opts": [
+        "--auto-features=disabled",
+        "-Dqt6=enabled",
+        "-Dqt5=disabled",
+        "-Dqt-x11=enabled",
+        "-Dtests=disabled",
+        "-Dexamples=disabled",
+        "-Dnls=disabled"
+      ],
+      "sources": [
+        {
+          "type": "archive",
+          "url": "https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.24.13.tar.xz",
+          "sha256": "574ac6f9fd84b32eb04e80572391d6762df6f9802a47bc0386cd6cc48c14d08b"
+        }
+      ]
+    },
+    {
       "name": "iDescriptor",
       "buildsystem": "simple",
       "build-options": {
         "append-path": "/usr/lib/sdk/rust-stable/bin",
         "env": {
           "CARGO_HOME": "/run/build/iDescriptor/cargo",
-          "RUST_BACKTRACE": "1",
-          "CUSTOM_LIB_PATH": "/app/lib",
-          "CUSTOM_INCLUDE_PATH": "/app/include",
-          "CUSTOM_PKGCONFIG_PATH": "/app/lib/pkgconfig",
-          "GO_EXECUTABLE": "/app/sdk/golang/bin/go",
-          "FLATPAK_BUILD": "ON"
+          "RUST_BACKTRACE": "1"
         },
         "build-args": ["--share=network"]
       },
       "build-commands": [
-        "cargo build --release",
+        "cargo build --release --features flatpak",
         "install -Dm0755 target/release/idescriptor ${FLATPAK_DEST}/bin/iDescriptor"
       ],
       "sources": [
