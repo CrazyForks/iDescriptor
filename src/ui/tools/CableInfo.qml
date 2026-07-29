@@ -1,6 +1,6 @@
 import QtQuick
-import QtQuick.Controls 
-import QtQuick.Layouts 
+import QtQuick.Controls
+import QtQuick.Layouts
 import "../base"
 import ".."
 
@@ -78,7 +78,7 @@ ToolWindow {
             && modelNumber.length > 0
             && accessoryName.length > 0
 
-        let actuallyTypeC = info.DIAG_INFO.usb_connection_type == "usb type-c"
+        let actuallyTypeC = root.device.info.DIAG_INFO.usb_connection_type == "usb type-c"
         if (isTypeC && !actuallyTypeC) {
             isFakeInfo = true
         } else {
