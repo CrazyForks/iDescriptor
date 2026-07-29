@@ -31,7 +31,7 @@ ToolWindow {
             if (!success) {
                 root.busy = false
                 root.busyAction = ""
-                App.Helpers.showError(root, qsTr("Developer Mode preparation did not complete. Location simulation was not changed."))
+                App.Helpers.showError(root.contentItem, qsTr("Developer Mode preparation did not complete. Location simulation was not changed."))
                 return
             }
 
@@ -67,7 +67,7 @@ ToolWindow {
         const lon = parseCoordinate(longitudeField.text)
 
         if (!isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-            App.Helpers.showWarning(root, qsTr("Please enter a latitude between −90 and 90 and a longitude between −180 and 180."))
+            App.Helpers.showWarning(root.contentItem, qsTr("Please enter a latitude between −90 and 90 and a longitude between −180 and 180."))
             return false
         }
 
@@ -98,9 +98,19 @@ ToolWindow {
         if (root.busy)
             return
 
-        root.busy = true
-        root.busyAction = "reset"
-        root.device.service_manager.clear_location()
+        App.Helpers.messageBox(
+            root.contentItem,
+            qsTr("Reset Simulated Location?"),
+            qsTr("This will clear the simulated location and return the device to the location it determines normally. Do you want to continue?"),
+            MessageDialog.Yes | MessageDialog.No,
+            function(button) {
+                if (button !== MessageDialog.Yes || root.busy)
+                    return
+
+                root.busy = true
+                root.busyAction = "reset"
+                root.device.service_manager.clear_location()
+            })
     }
 
     function loadRecentLocations() {
@@ -131,16 +141,16 @@ ToolWindow {
             if (success) {
                 if (action === "set") {
                     root.saveCurrentLocation()
-                    App.Helpers.showInfo(root, qsTr("The simulated location was applied successfully."))
+                    App.Helpers.showInfo(root.contentItem, qsTr("The simulated location was applied successfully."))
                 } else {
-                    App.Helpers.showInfo(root, qsTr("Location simulation was reset successfully."))
+                    App.Helpers.showInfo(root.contentItem, qsTr("Location simulation was reset successfully."))
                 }
                 return
             }
 
             if (code === 21) {
                 if (root.lastPreparationForced) {
-                    App.Helpers.showError(root, qsTr("Developer Mode is still not available. Error code: %1").arg(code))
+                    App.Helpers.showError(root.contentItem, qsTr("Developer Mode is still not available. Error code: %1").arg(code))
                     return
                 }
 
@@ -151,11 +161,11 @@ ToolWindow {
             }
 
             if (code === 109) {
-                App.Helpers.showError(root, qsTr("The location request timed out. Please verify the device connection and try again."))
+                App.Helpers.showError(root.contentItem, qsTr("The location request timed out. Please verify the device connection and try again."))
                 return
             }
 
-            App.Helpers.showError(root, qsTr("Failed to update location simulation. Error code: %1").arg(code))
+            App.Helpers.showError(root.contentItem, qsTr("Failed to update location simulation. Error code: %1").arg(code))
         }
     }
 
@@ -290,9 +300,9 @@ ToolWindow {
                 console.log("Map error:", error)
                 console.log("Error string:", errorString)
                 if (errorString.length > 0)
-                    App.Helpers.showWarning(root, qsTr("The map could not be loaded: %1").arg(errorString))
+                    App.Helpers.showWarning(root.contentItem, qsTr("The map could not be loaded: %1").arg(errorString))
             }
-            
+
             // Update marker when center changes
             onCenterChanged: {
                 marker.coordinate = center
