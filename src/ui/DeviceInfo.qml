@@ -160,7 +160,7 @@ Item {
 
                         CopyableText {
                             text: v("product_type", qsTr("Unknown Device"))
-                            font.bold: true
+                            font.bold: false
                             elide: Text.ElideRight
                         }
 
@@ -244,38 +244,38 @@ Item {
                         anchors.margins: 10
 
                         // Left: iOS Version; Right: Hardware Model
-                        Label { text: qsTr("iOS Version:"); font.bold: true }
+                        Label { text: qsTr("iOS Version:"); font.bold: false }
                         CopyableText { text: v("ProductVersion", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: qsTr("Hardware Model:"); font.bold: true }
+                        Label { text: qsTr("Hardware Model:"); font.bold: false }
                         CopyableText { text: v("HardwareModel", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Left: Device Name; Right: Region
-                        Label { text: qsTr("Device Name:"); font.bold: true }
+                        Label { text: qsTr("Device Name:"); font.bold: false }
                         CopyableText { text: v("DeviceName", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: qsTr("Region:"); font.bold: true }
+                        Label { text: qsTr("Region:"); font.bold: false }
                         CopyableText { text: v("region", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Left: Activation State; Right: Hardware Platform
-                        Label { text: qsTr("Activation State:"); font.bold: true }
+                        Label { text: qsTr("Activation State:"); font.bold: false }
                         CopyableText {
                             text: v("ActivationState", qsTr("Unknown"))
                             color: root.activationStateColor(text)
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
-                        Label { text: qsTr("Hardware Platform:"); font.bold: true }
+                        Label { text: qsTr("Hardware Platform:"); font.bold: false }
                         CopyableText { text: v("HardwarePlatform", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Left: Device Class; Right: Firmware Version
-                        Label { text: qsTr("Device Class:"); font.bold: true }
+                        Label { text: qsTr("Device Class:"); font.bold: false }
                         CopyableText { text: v("DeviceClass", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: qsTr("Firmware Version:"); font.bold: true }
+                        Label { text: qsTr("Firmware Version:"); font.bold: false }
                         CopyableText { text: v("FirmwareVersion", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Left: Jailbroken; Right: Battery Health
-                        Label { text: qsTr("Jailbroken:"); font.bold: true }
+                        Label { text: qsTr("Jailbroken:"); font.bold: false }
                         CopyableText { text: v("Jailbroken", false) ? qsTr("Yes") : qsTr("No"); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: qsTr("Battery Health:"); font.bold: true }
+                        Label { text: qsTr("Battery Health:"); font.bold: false }
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 5
@@ -299,21 +299,21 @@ Item {
                         }
 
                         // Left: Model Number; Right: Production Device
-                        Label { text: qsTr("Model Number:"); font.bold: true }
+                        Label { text: qsTr("Model Number:"); font.bold: false }
                         CopyableText { text: v("ModelNumber", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: qsTr("Production Device:"); font.bold: true }
+                        Label { text: qsTr("Production Device:"); font.bold: false }
                         CopyableText { text: v("ProductionDevice", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Left: CPU Architecture; Right: Serial Number
-                        Label { text: qsTr("CPU Architecture:"); font.bold: true }
+                        Label { text: qsTr("CPU Architecture:"); font.bold: false }
                         CopyableText { text: v("CPUArchitecture", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: qsTr("Serial Number:"); font.bold: true }
+                        Label { text: qsTr("Serial Number:"); font.bold: false }
                         PrivateText { text: v("SerialNumber", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
 
                         // Left: Build Version; Right: IMEI
-                        Label { text: qsTr("Build Version:"); font.bold: true }
+                        Label { text: qsTr("Build Version:"); font.bold: false }
                         CopyableText { text: v("BuildVersion", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: qsTr("IMEI:"); font.bold: true }
+                        Label { text: qsTr("IMEI:"); font.bold: false }
                         PrivateText { text: v("InternationalMobileEquipmentIdentity", qsTr("Unknown")); elide: Text.ElideRight; Layout.fillWidth: true }
                     }
                 }
