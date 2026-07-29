@@ -320,7 +320,7 @@ Item {
                         text: root.checkingBackupEncryption
                               ? qsTr("Checking backup encryption…")
                               : root.backupEncryptionStatusResolved
-                                ? qsTr("Backup encryption enabled")
+                                ? qsTr("Encryption enabled")
                                 : qsTr("Backup encryption status unavailable")
                         tristate: true
                         checkState: !root.backupEncryptionStatusResolved

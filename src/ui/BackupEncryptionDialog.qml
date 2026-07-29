@@ -159,7 +159,7 @@ AnimatedDialog {
                     Layout.fillWidth: true
                     text: dialog.encryptionEnabled
                           ? qsTr("Encrypted backups are enabled for %1. Enter the current password to replace it.").arg(dialog.deviceName)
-                          : qsTr("iDescriptor requires encrypted backups by default. Choose a password before backing up %1.").arg(dialog.deviceName)
+                          : qsTr("Encrypted backups aren't enabled on this device. Choose a password to enable encryption on %1.").arg(dialog.deviceName)
                     color: App.Theme.text
                     wrapMode: Text.WordWrap
                 }
