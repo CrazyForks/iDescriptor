@@ -22,6 +22,7 @@ use tokio::{fs, io::AsyncWriteExt};
 pub static DEFAULT_CHUNK_SIZE: usize = 1024 * 1024;
 
 #[derive(QObject, Default, QtThreading)]
+#[allow(non_snake_case)]
 pub struct IOManager {
     base: qt_base_class!(trait QObject),
     jobs: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
@@ -87,13 +88,13 @@ pub struct IOManager {
     has_active_tasks: qt_method!(fn(&self) -> bool),
     cancel_job: qt_method!(fn(&self, job_id: QString)),
     cancel_all_jobs: qt_method!(fn(&self)),
-    file_transfer_progress: qt_signal!(
+    fileTransferProgress: qt_signal!(
         job_id: QString,
         file_name: QString,
         bytes_transferred: i64,
         total_bytes: i64
     ),
-    export_item_finished: qt_signal!(
+    exportItemFinished: qt_signal!(
         job_id: QString,
         file_name: QString,
         destination_path: QString,
@@ -101,14 +102,14 @@ pub struct IOManager {
         bytes_transferred: i64,
         error_message: QString
     ),
-    export_job_finished: qt_signal!(
+    exportJobFinished: qt_signal!(
         job_id: QString,
         cancelled: bool,
         successful_items: i32,
         failed_items: i32,
         total_bytes: i64
     ),
-    import_item_finished: qt_signal!(
+    importItemFinished: qt_signal!(
         job_id: QString,
         file_name: QString,
         destination_path: QString,
@@ -116,7 +117,7 @@ pub struct IOManager {
         bytes_transferred: i64,
         error_message: QString
     ),
-    import_job_finished: qt_signal!(
+    importJobFinished: qt_signal!(
         job_id: QString,
         cancelled: bool,
         successful_items: i32,
@@ -501,7 +502,7 @@ async fn handle_start_export(
                 let file_name = file_name_for_path(&device_path);
                 let job_id_signal = job_id.clone();
                 qt_thread.queue(move |mgr| {
-                    mgr.export_item_finished(
+                    mgr.exportItemFinished(
                         QString::from(job_id_signal),
                         QString::from(file_name),
                         QString::default(),
@@ -592,7 +593,7 @@ async fn handle_start_import(
                 let file_name = file_name_for_path(&local_path);
                 let job_id_signal = job_id.clone();
                 qt_thread.queue(move |mgr| {
-                    mgr.import_item_finished(
+                    mgr.importItemFinished(
                         QString::from(job_id_signal),
                         QString::from(file_name),
                         QString::default(),
@@ -1012,7 +1013,7 @@ fn emit_progress(
     let job_id = job_id.to_string();
     let file_name = file_name.to_string();
     qt_thread.queue(move |mgr| {
-        mgr.file_transfer_progress(
+        mgr.fileTransferProgress(
             QString::from(job_id),
             QString::from(file_name),
             transferred,
@@ -1033,7 +1034,7 @@ fn emit_export_item_finished(
     let destination_path = result.destination_path;
     let error_message = result.error_message.unwrap_or_default();
     qt_thread.queue(move |mgr| {
-        mgr.export_item_finished(
+        mgr.exportItemFinished(
             QString::from(job_id),
             QString::from(file_name),
             QString::from(destination_path),
@@ -1056,7 +1057,7 @@ fn emit_import_item_finished(
     let destination_path = result.destination_path;
     let error_message = result.error_message.unwrap_or_default();
     qt_thread.queue(move |mgr| {
-        mgr.import_item_finished(
+        mgr.importItemFinished(
             QString::from(job_id),
             QString::from(file_name),
             QString::from(destination_path),
@@ -1076,7 +1077,7 @@ fn finish_export_job(
     total_bytes: i64,
 ) {
     qt_thread.queue(move |mgr| {
-        mgr.export_job_finished(
+        mgr.exportJobFinished(
             QString::from(job_id),
             cancelled,
             successful,
@@ -1095,7 +1096,7 @@ fn finish_import_job(
     total_bytes: i64,
 ) {
     qt_thread.queue(move |mgr| {
-        mgr.import_job_finished(
+        mgr.importJobFinished(
             QString::from(job_id),
             cancelled,
             successful,

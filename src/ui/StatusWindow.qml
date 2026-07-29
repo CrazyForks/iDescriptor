@@ -7,10 +7,10 @@ import "./base"
 
 DefaultWindow {
     id: window
-    showMaximize: false  
-    showMinimize: false     
-    showClose: false 
-    ListModel { id : processesList } 
+    showMaximize: false
+    showMinimize: false
+    showClose: false
+    ListModel { id : processesList }
     _effect : "normal"
     width: 300
     height: 300
@@ -37,24 +37,24 @@ DefaultWindow {
         target: ioManager
         enabled: !!ioManager
 
-        function onFile_transfer_progress(jobId, fileName, bytesTransferred, totalBytes) {
+        function onFileTransferProgress(jobId, fileName, bytesTransferred, totalBytes) {
             window.updateProgress(jobId, fileName, bytesTransferred, totalBytes)
         }
 
-        function onExport_item_finished(jobId, fileName, destinationPath, success, bytesTransferred, errorMessage) {
+        function onExportItemFinished(jobId, fileName, destinationPath, success, bytesTransferred, errorMessage) {
             window.finishItem(jobId, success)
         }
 
-        function onExport_job_finished(jobId, cancelled, successfulItems, failedItems, totalBytes) {
+        function onExportJobFinished(jobId, cancelled, successfulItems, failedItems, totalBytes) {
             window.finishProcess(jobId, cancelled, successfulItems, failedItems, totalBytes)
         }
 
         //hide process bar when failed
-        function onImport_item_finished(jobId, fileName, destinationPath, success, bytesTransferred, errorMessage) {
+        function onImportItemFinished(jobId, fileName, destinationPath, success, bytesTransferred, errorMessage) {
             window.finishItem(jobId, success)
         }
 
-        function onImport_job_finished(jobId, cancelled, successfulItems, failedItems, totalBytes) {
+        function onImportJobFinished(jobId, cancelled, successfulItems, failedItems, totalBytes) {
             window.finishProcess(jobId, cancelled, successfulItems, failedItems, totalBytes)
         }
     }
@@ -74,7 +74,7 @@ DefaultWindow {
         color: Qt.platform.os !== "windows" ? palette.window : "transparent"
         border.color: Qt.platform.os !== "windows" ? Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.12) : "transparent"
         border.width: Qt.platform.os !== "windows" ? 1 : 0
-    
+
         ColumnLayout {
             anchors.fill: parent
 
@@ -130,7 +130,7 @@ DefaultWindow {
     Label {
         text: "Export & Import processes will appear here"
         font.pixelSize: 12
-        color: "#d6d6d6"
+        color: palette.text
         anchors.centerIn: parent
         visible: !processesList.count
     }

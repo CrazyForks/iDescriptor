@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Controls.impl
 import QtQuick.Dialogs
+import QtCore
 import "." as App
 import "./base"
 
@@ -23,6 +24,7 @@ Item {
     property string errorMessage: ""
     property bool refreshAfterLoad: false
     property var pendingImportJobs: ({})
+    property var pendingExternalOpenJobs: ({})
     property bool deleting: false
     property string pendingDeleteRequestId: ""
     property int selectedCount: 0
@@ -157,7 +159,7 @@ Item {
 
     function openFileOnDevice(name) {
         if (!afcClient) return
-        var path = fullPath(name)
+        const path = fullPath(name)
 
         if (Helpers.is_previewable(name)) {
             const comp = Qt.createComponent("PreviewWindow.qml")
@@ -183,7 +185,84 @@ Item {
             return
         }
 
-        errorMessage = qsTr("Open is not implemented for this file type yet.")
+        confirmOpenExternally(path, name, false)
+    }
+
+    function confirmOpenExternally(remotePath, displayName, requested) {
+        if (!afcClient || !ioManager || !root.udid)
+            return;
+        App.Helpers.messageBox(
+            root,
+            qsTr("Open Externally"),
+            requested ? qsTr("Export %1 to a temporary folder and open it with the default application?").arg(displayName) : qsTr("This file type cannot be previewed would like to export to a temporary folder and open it with the default application?"),
+            MessageDialog.Yes | MessageDialog.No,
+            function(button) {
+                if (button === MessageDialog.Yes)
+                    root.startExternalOpenExport(remotePath, displayName)
+            })
+    }
+
+    function startExternalOpenExport(remotePath, displayName) {
+        if (!ioManager || !root.udid)
+            return
+
+        const jobId = String(QmlUtils.generate_uuid())
+        const tempRoot = QmlUtils.url_to_path(
+            StandardPaths.writableLocation(StandardPaths.TempLocation))
+        if (!tempRoot || tempRoot.length === 0) {
+            App.Helpers.showError(
+                root,
+                qsTr("The system temporary folder could not be located."))
+            return
+        }
+
+
+
+        const destinationDir = QmlUtils.join_path(
+            tempRoot,
+            "idescriptor-open-" + jobId)
+        root.pendingExternalOpenJobs[jobId] = {
+            "displayName": displayName,
+            "remotePath": remotePath,
+            "destinationDir": destinationDir
+        }
+
+
+
+        const isHouseArrest = !!(afcClient && afcClient.bundle_id)
+
+
+        App.StatusWindow.addProcess(
+            jobId,
+            isHouseArrest ? qsTr("Exporting for External Open from %1").arg(afcClient.bundle_id) : qsTr("Exporting for External Open"),
+            qsTr("Export"),
+            1,
+            destinationDir
+        )
+
+        if (isHouseArrest) {
+            ioManager.start_export_with_hause_arrest_afc(
+                root.udid,
+                jobId,
+                [remotePath],
+                destinationDir,
+                afcClient.bundle_id,
+                false)
+        } else if (root.useAfc2) {
+            ioManager.start_export_with_afc2(
+                root.udid,
+                jobId,
+                [remotePath],
+                destinationDir,
+                false)
+        } else {
+            ioManager.start_export(
+                root.udid,
+                jobId,
+                [remotePath],
+                destinationDir,
+                false)
+        }
     }
 
     ListModel { id: entriesModel }
@@ -261,7 +340,7 @@ Item {
         const isHouseArrest = !!(afcClient && afcClient.bundle_id)
         App.StatusWindow.addProcess(
             jobId,
-            isHouseArrest ? qsTr("Exporting Files from %1").arg(afcClient.bundle_id) : qsTr("Exporting Files"),
+            isHouseArrest ? qsTr("Exporting File(s) from %1").arg(afcClient.bundle_id) : qsTr("Exporting File(s)"),
             qsTr("Export"),
             paths.length,
             destinationDir
@@ -304,7 +383,49 @@ Item {
         target: ioManager
         enabled: !!ioManager
 
-        function onImport_job_finished(jobId, cancelled, successfulItems, failedItems, totalBytes) {
+        function onExportItemFinished(jobId, fileName, destinationPath, success, bytesTransferred, errorMessage) {
+            const key = String(jobId)
+            const job = root.pendingExternalOpenJobs[key]
+            if (job === undefined)
+                return
+
+            delete root.pendingExternalOpenJobs[key]
+
+            if (!success) {
+                App.Helpers.showError(
+                    root.Window.window,
+                    errorMessage && errorMessage.length > 0
+                        ? errorMessage
+                        : qsTr("%1 could not be exported.").arg(job.displayName))
+                return
+            }
+
+            const opened = Qt.openUrlExternally(
+                App.Helpers.toFileUrl(destinationPath))
+            if (!opened) {
+                App.Helpers.showError(
+                    root.Window.window,
+                    qsTr("%1 was exported, but no application could open it.").arg(job.displayName))
+            }
+        }
+
+        function onExportJobFinished(jobId, cancelled, successfulItems, failedItems, totalBytes) {
+            const key = String(jobId)
+            const job = root.pendingExternalOpenJobs[key]
+            if (job === undefined)
+                return
+
+            // A successful item result normally removes the request first. If
+            // the request is still present, the job ended before producing one.
+            delete root.pendingExternalOpenJobs[key]
+            App.Helpers.showError(
+                root.Window.window,
+                cancelled
+                    ? qsTr("Opening %1 was cancelled or could not be started.").arg(job.displayName)
+                    : qsTr("%1 could not be exported for opening.").arg(job.displayName))
+        }
+
+        function onImportJobFinished(jobId, cancelled, successfulItems, failedItems, totalBytes) {
             const key = String(jobId)
             const job = root.pendingImportJobs[key]
             if (job === undefined)
@@ -652,6 +773,14 @@ Item {
                             else
                                 root.openFileOnDevice(contextMenu.entryName)
                         }
+                    }
+
+                    MenuItem {
+                        visible: !contextMenu.entryIsDir
+                        text: qsTr("Open Externally")
+                        onTriggered: root.confirmOpenExternally(
+                            contextMenu.entryPath,
+                            contextMenu.entryName, true)
                     }
 
                     MenuItem {
