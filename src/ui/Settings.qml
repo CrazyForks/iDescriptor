@@ -19,7 +19,6 @@ DefaultWindow {
     modality: Qt.ApplicationModal
     autoDestroy: false
     autoVisible: false
-    color: palette.window
 
     /* Windows only*/
     showMaximize: false
@@ -36,6 +35,7 @@ DefaultWindow {
     property int wireless_file_server_port: 8080
     property bool unmount_ifuse_on_exit: false
     property bool auto_check_updates: true
+    property bool z_linux_window: false
     property bool auto_enable_wifi_connections: true
     property string theme: "System Default"
     property string language: "en"
@@ -105,6 +105,7 @@ DefaultWindow {
         wireless_file_server_port = backendValue("wireless_file_server_port", 8080)
         unmount_ifuse_on_exit = backendValue("unmount_ifuse_on_exit", false)
         auto_check_updates = backendValue("auto_check_updates", true)
+        z_linux_window = backendValue("z_linux_window", false)
         auto_enable_wifi_connections = backendValue("auto_enable_wifi_connections", true)
         theme = backendValue("theme", "System Default")
         language = normalizeLanguage(backendValue("language", "en"))
@@ -132,6 +133,7 @@ DefaultWindow {
         callBackend("set_wireless_file_server_port", wireless_file_server_port)
         callBackend("set_unmount_ifuse_on_exit", unmount_ifuse_on_exit)
         callBackend("set_auto_check_updates", auto_check_updates)
+        callBackend("set_z_linux_window", z_linux_window)
         callBackend("set_auto_enable_wifi_connections", auto_enable_wifi_connections)
         callBackend("set_theme", theme)
         callBackend("set_language", language)
@@ -346,7 +348,6 @@ DefaultWindow {
 
                     Switch {
                         Layout.fillWidth: true
-                        LayoutMirroring.enabled: true
                         visible: Qt.platform.os !== "osx" && Qt.platform.os !== "darwin"
                         text: qsTr("Unmount iFuse drives on exit")
                         checked: root.unmount_ifuse_on_exit
@@ -358,7 +359,6 @@ DefaultWindow {
 
                     Switch {
                         Layout.fillWidth: true
-                        LayoutMirroring.enabled: true
                         text: qsTr("Automatically check for updates")
                         checked: root.auto_check_updates
                         onToggled: {
@@ -398,6 +398,36 @@ DefaultWindow {
                         spacing: 10
 
                         Label {
+                            text: qsTr("Language")
+                            Layout.preferredWidth: 175
+                        }
+
+                        ComboBox {
+                            textRole: "label"
+                            valueRole: "value"
+                            model: [
+                                { value: "en", label: qsTr("English") },
+                                { value: "de", label: qsTr("German") }
+                            ]
+                            currentIndex: Math.max(0, indexOfValue(root.language))
+                            onActivated: {
+                                root.language = currentValue
+                                root.markDirty(true)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+                }
+
+                SettingsSection {
+                    title: qsTr("Appearance")
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
                             text: qsTr("Theme")
                             Layout.preferredWidth: 175
                         }
@@ -412,6 +442,19 @@ DefaultWindow {
                         }
 
                         Item { Layout.fillWidth: true }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        visible: Qt.platform.os === "linux"
+                        text: qsTr("Use custom window frame")
+                        checked: root.z_linux_window
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Use a custom Linux window frame instead of default.")
+                        onToggled: {
+                            root.z_linux_window = checked
+                            root.markDirty(true)
+                        }
                     }
 
                     RowLayout {
@@ -443,32 +486,6 @@ DefaultWindow {
 
                         Item { Layout.fillWidth: true }
                     }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 10
-
-                        Label {
-                            text: qsTr("Language")
-                            Layout.preferredWidth: 175
-                        }
-
-                        ComboBox {
-                            textRole: "label"
-                            valueRole: "value"
-                            model: [
-                                { value: "en", label: qsTr("English") },
-                                { value: "de", label: qsTr("German") }
-                            ]
-                            currentIndex: Math.max(0, indexOfValue(root.language))
-                            onActivated: {
-                                root.language = currentValue
-                                root.markDirty(true)
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
                 }
 
                 SettingsSection {
@@ -476,7 +493,6 @@ DefaultWindow {
 
                     Switch {
                         Layout.fillWidth: true
-                        LayoutMirroring.enabled: true
                         text: qsTr("Auto-raise main window on device connection")
                         checked: root.auto_raise_window
                         onToggled: {
@@ -487,7 +503,6 @@ DefaultWindow {
 
                     Switch {
                         Layout.fillWidth: true
-                        LayoutMirroring.enabled: true
                         text: qsTr("Switch to newly connected device")
                         checked: root.switch_to_new_device
                         onToggled: {
@@ -498,7 +513,6 @@ DefaultWindow {
 
                     Switch {
                         Layout.fillWidth: true
-                        LayoutMirroring.enabled: true
                         text: qsTr("Automatically enable Wi-Fi connections")
                         checked: root.auto_enable_wifi_connections
                         onToggled: {
@@ -509,7 +523,6 @@ DefaultWindow {
 
                     Switch {
                         Layout.fillWidth: true
-                        LayoutMirroring.enabled: true
                         text: qsTr("Automatically connect to wireless devices")
                         checked: root.auto_connect_wireless_devices
                         onToggled: {
@@ -520,7 +533,6 @@ DefaultWindow {
 
                     Switch {
                         Layout.fillWidth: true
-                        LayoutMirroring.enabled: true
                         text: qsTr("Upgrade to wireless on disconnect")
                         checked: root.upgrade_to_wireless_on_disconnect
                         ToolTip.visible: hovered
@@ -612,7 +624,6 @@ DefaultWindow {
 
                     Switch {
                         Layout.fillWidth: true
-                        LayoutMirroring.enabled: true
                         text: qsTr("Allow New Connections to Take Over")
                         checked: root.airplay_no_hold
                         onToggled: {
@@ -623,7 +634,6 @@ DefaultWindow {
 
                     Switch {
                         Layout.fillWidth: true
-                        LayoutMirroring.enabled: true
                         visible: Qt.platform.os === "linux"
                         text: qsTr("Use legacy ports")
                         checked: root.airplay_use_legacy_ports
@@ -637,7 +647,6 @@ DefaultWindow {
 
                     Switch {
                         Layout.fillWidth: true
-                        LayoutMirroring.enabled: true
                         visible: Qt.platform.os === "linux"
                         text: qsTr("Show V4L2 Button on AirPlay Widget")
                         checked: root.show_v4l2
@@ -651,7 +660,7 @@ DefaultWindow {
                 Label {
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
-                    text: qsTr("iDescriptor\nA free, open-source, and cross-platform iDevice management tool.")
+                    text: qsTr("iDescriptor\nA free, open-source, cross-platform iDevice management tool.\n\n© 2026 iDescriptor Authors and Contributors")
                     color: "#8a8a8e"
                     font.pixelSize: 11
                     wrapMode: Text.WordWrap
