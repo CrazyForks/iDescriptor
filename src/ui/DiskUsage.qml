@@ -13,6 +13,13 @@ Item {
     required property real galleryUsage
     required property bool galleryUsageResolved
 
+    readonly property color systemColor: Theme.diskUsageSystem
+    readonly property color appsColor: Theme.diskUsageApps
+    readonly property color mediaColor: Theme.diskUsageMedia
+    readonly property color galleryColor: Theme.diskUsageGallery
+    readonly property color othersColor: Theme.diskUsageOthers
+    readonly property color freeColor: Theme.diskUsageFree
+
     readonly property real totalCapacity: Number(device.info["TotalDiskCapacity"] || 0)
     readonly property real systemUsage: Number(device.info["TotalSystemCapacity"] || 0)
     property real appsUsage: 0
@@ -131,9 +138,9 @@ Item {
                         Rectangle {
                             id: clipContainer
                             anchors.fill: parent
-                            color: "transparent"
+                            color: root.freeColor
                             border.width: 0
-                            radius: 5
+                            radius: 7
                             clip: true
                             layer.enabled: true
                             layer.effect: OpacityMask {
@@ -153,9 +160,8 @@ Item {
                                 id: systemBar
                                 width: segmentWidth(systemUsage, barContainer.width)
                                 height: barContainer.height
-                                color: "#a1384d"
-                                border.color: "#e64a5b"
-                                border.width: 1
+                                color: root.systemColor
+                                border.width: 0
                                 visible: width > 0
 
                                 HoverHandler { id: systemHover }
@@ -169,9 +175,8 @@ Item {
                                 id: appsBar
                                 width: segmentWidth(appsUsage, barContainer.width)
                                 height: barContainer.height
-                                color: "#4f869f"
-                                border.color: "#63b4da"
-                                border.width: 1
+                                color: root.appsColor
+                                border.width: 0
                                 visible: width > 0
 
                                 HoverHandler { id: appsHover }
@@ -185,7 +190,7 @@ Item {
                                 id: mediaBar
                                 width: segmentWidth(mediaUsage, barContainer.width)
                                 height: barContainer.height
-                                color: "#2ECC71"
+                                color: root.mediaColor
                                 border.width: 0
                                 visible: width > 0
 
@@ -200,9 +205,8 @@ Item {
                                 id: galleryBar
                                 width: segmentWidth(galleryUsage, barContainer.width)
                                 height: barContainer.height
-                                color: "#9b59b6"
-                                border.color: "#b36cd1"
-                                border.width: 1
+                                color: root.galleryColor
+                                border.width: 0
                                 visible: width > 0
 
                                 HoverHandler { id: galleryHover }
@@ -216,9 +220,8 @@ Item {
                                 id: othersBar
                                 width: segmentWidth(othersUsage, barContainer.width)
                                 height: barContainer.height
-                                color: "#a28729"
-                                border.color: "#c4a32d"
-                                border.width: 1
+                                color: root.othersColor
+                                border.width: 0
                                 visible: width > 0
 
                                 HoverHandler { id: othersHover }
@@ -232,10 +235,8 @@ Item {
                                 id: freeBar
                                 width: segmentWidth(freeSpace, barContainer.width)
                                 height: barContainer.height
-                                color: Theme.softBg.darker(0.1)
-                                border.color: Theme.softBgBorder
-                                // border.color: "#4f4f4f"
-                                border.width: 1
+                                color: root.freeColor
+                                border.width: 0
                                 visible: width > 0
 
                                 HoverHandler { id: freeHover }
@@ -244,6 +245,7 @@ Item {
                                     .arg(root.freeSizeText)
                                     .arg(root.freePercentText)
                             }
+
                         }
                         }
                     }
