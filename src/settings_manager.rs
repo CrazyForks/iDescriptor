@@ -84,6 +84,8 @@ pub struct SettingsManager {
 
     auto_check_updates: qt_method!(fn(&self) -> bool),
     set_auto_check_updates: qt_method!(fn(&self, enabled: bool)),
+    z_linux_window: qt_method!(fn(&self) -> bool),
+    set_z_linux_window: qt_method!(fn(&self, enabled: bool)),
     auto_raise_window: qt_method!(fn(&self) -> bool),
     set_auto_raise_window: qt_method!(fn(&self, enabled: bool)),
     switch_to_new_device: qt_method!(fn(&self) -> bool),
@@ -397,6 +399,14 @@ impl SettingsManager {
         write_bool("autoCheckUpdates", enabled);
     }
 
+    pub fn z_linux_window(&self) -> bool {
+        read_bool("ZLinuxWindow", false)
+    }
+
+    fn set_z_linux_window(&self, enabled: bool) {
+        write_bool("ZLinuxWindow", enabled);
+    }
+
     fn auto_raise_window(&self) -> bool {
         read_bool("autoRaiseWindow", true)
     }
@@ -540,6 +550,7 @@ impl SettingsManager {
             self.home_path().to_string()
         )));
         self.set_auto_check_updates(true);
+        self.set_z_linux_window(false);
         self.set_auto_raise_window(true);
         self.set_switch_to_new_device(true);
         self.set_auto_connect_wireless_devices(true);
