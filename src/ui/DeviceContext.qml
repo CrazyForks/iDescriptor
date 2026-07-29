@@ -20,6 +20,7 @@ QtObject {
     property var wifiEnableAttempts: ({})
     property int wifiEnableAttemptToken: 0
     property bool gcScheduled: false
+    property bool sidebarVisible: true
 
     signal deviceRemoved(string udid)
     signal deviceAdded(string udid, string mac)
@@ -28,9 +29,9 @@ QtObject {
     signal noPairingFileForWirelessDevice(string mac)
     signal pairingFailed(string udid)
 
-    /* 
+    /*
        schedule garbage collection otherwise
-       things get cleaned up after a long time 
+       things get cleaned up after a long time
     */
     function scheduleGc() {
         if (root.gcScheduled)
@@ -71,6 +72,14 @@ QtObject {
         root.currentRecoveryDeviceId = ""
         root.currentPendingDeviceUdid = ""
         root.showWelcomePage = false
+    }
+
+    // set as selected if there is no device and user
+    // is on the welcome page
+    function selectConnectedDeviceToFocus(udid) {
+        if (root.currentDeviceUdid !== "") return;
+        if (!root.showWelcomePage) return;
+        root.selectConnectedDevice(udid)
     }
 
     function selectRecoveryDevice(id) {
@@ -369,10 +378,13 @@ QtObject {
                         }
                     )
                     root.deviceAdded(udid, mac)
-                    // Automatic wireless connections stay in the background. Wired and
-                    // custom pairing-file connections preserve their existing behavior.
-                    if (!wirelessAttempt || wirelessAttempt.selectOnSuccess)
+                    if (!wirelessAttempt)
                         root.selectConnectedDevice(udid)
+                    else if (wirelessAttempt && wirelessAttempt.selectOnSuccess) {
+                        root.selectConnectedDevice(udid)
+                    } else {
+                        root.selectConnectedDeviceToFocus(udid)
+                    }
                     break;
                 /* Device removed */
                 case 2:
