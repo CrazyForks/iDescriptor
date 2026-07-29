@@ -220,121 +220,144 @@ Item {
         SectionBox {
             Layout.fillWidth: true
             Layout.fillHeight: true
-
             Layout.maximumWidth: 600
+            padding: 0
 
             ColumnLayout {
                 spacing: 8
 
                 Label {
+                    Layout.topMargin: 10
+                    Layout.leftMargin: 10
+                    Layout.rightMargin: 10
                     text: qsTr("Network Devices")
                     font.pointSize: 14
-                    font.weight: Font.Bold
+                    // font.weight: Font.Bold
                 }
 
                 ScrollView {
                     id: deviceScroll
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    contentWidth: availableWidth
+                    contentHeight: scrollContent.height
                     clip: true
+                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-                    Column {
+                    Item {
+                        id: scrollContent
                         width: deviceScroll.availableWidth
-                        spacing: 8
+                        height: deviceColumn.implicitHeight + 24
 
-                        Repeater {
+                        Column {
+                            id: deviceColumn
+                            x: 12
+                            y: 12
+                            width: Math.max(0, parent.width - 24)
+                            spacing: 12
+
+                            Repeater {
                             model: deviceModel
 
-                            delegate: SectionBox {
+                            delegate: Item {
                                 id: deviceSectionBox
                                 width: parent.width
-                                height: implicitHeight
+                                height: deviceRow.implicitHeight
 
-                                ColumnLayout {
-                                    id: content
-                                    Layout.fillWidth: true
+                                RowLayout {
+                                    id: deviceRow
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
                                     spacing: 10
 
                                     Label {
-                                        Layout.fillWidth: true
-                                        Layout.rightMargin: 44
-                                        text: name
-                                        wrapMode: Text.WordWrap
-                                        font.pointSize: 13
-                                        font.weight: Font.Medium
-                                    }
-
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 12
-
-                                        Label {
-                                            text: qsTr("IP: %1").arg(address || "-")
-                                            font.pointSize: 11
-                                            opacity: 0.8
-                                        }
-
-                                        Label {
-                                            text: qsTr("Port: %1").arg(port !== "" ? port : "-")
-                                            font.pointSize: 11
-                                            opacity: 0.8
-                                        }
-
-                                        Item { Layout.fillWidth: true }
-
-                                        Button {
-                                            text: buttonText
-                                            enabled: buttonEnabled
-                                            onClicked: {
-                                                root.setStatusForMac(mac, "connecting")
-                                                App.DeviceContext.tryToConnectToNetworkDevice(mac, address, true)
+                                        text: "●"
+                                        font.pointSize: 14
+                                        color: {
+                                            switch (state) {
+                                            case "failed": return "#d83b01"
+                                            case "noPairing": return "#ffb900"
+                                            case "connecting": return "#0078d4"
+                                            case "connected": return "#2e7d32"
+                                            case "alreadyExists": return "#6b6b6b"
+                                            default: return "#2e7d32"
                                             }
                                         }
+                                    }
 
-                                        Label {
-                                            text: "●"
-                                            font.pointSize: 14
-                                            color: {
-                                                switch (state) {
-                                                case "failed": return "#d83b01"
-                                                case "noPairing": return "#ffb900"
-                                                case "connecting": return "#0078d4"
-                                                case "connected": return "#2e7d32"
-                                                case "alreadyExists": return "#6b6b6b"
-                                                default: return "#2e7d32"
+                                    ColumnLayout {
+                                        id: content
+                                        Layout.fillWidth: true
+
+
+                                        spacing: 10
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 4
+
+                                            Label {
+                                                Layout.fillWidth: true
+                                                Layout.minimumWidth: 0
+                                                text: name
+                                                wrapMode: Text.NoWrap
+                                                elide: Text.ElideRight
+                                            }
+
+                                            ToolButton {
+                                                id: sectionMenuButton
+                                                Layout.minimumWidth: implicitWidth
+                                                enabled: !!address
+                                                icon.source: "qrc:/resources/icons/mi_options-vertical.svg"
+                                                icon.color: palette.text
+                                                onClicked: sectionMenu.open()
+
+                                                background: Rectangle {
+                                                    color: "transparent"
+                                                }
+
+                                                Menu {
+                                                    id: sectionMenu
+
+                                                    MenuItem {
+                                                        text: qsTr("Connect via custom pairing file")
+                                                        onTriggered: pairingFileDialog.open()
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
 
-                                }
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 12
 
-                                overlay: [
-                                    ToolButton {
-                                        id: sectionMenuButton
-                                        anchors.top: parent.top
-                                        anchors.right: parent.right
-                                        anchors.topMargin: 1
-                                        anchors.rightMargin: 1
-                                        enabled: !!address
-                                        icon.source: "qrc:/resources/icons/mi_options-vertical.svg"
-                                        icon.color: palette.text
-                                        onClicked: sectionMenu.open()
-                                        background : Rectangle {
-                                            color : "transparent"
-                                        }
+                                            Label {
+                                                Layout.fillWidth: true
+                                                Layout.minimumWidth: 0
+                                                text: qsTr("IP: %1").arg(address || "-")
+                                                elide: Text.ElideRight
+                                                opacity: 0.8
+                                            }
 
-
-                                        Menu {
-                                            id: sectionMenu
-
-                                            MenuItem {
-                                                text: qsTr("Connect via custom pairing file")
-                                                onTriggered: pairingFileDialog.open()
+                                            Button {
+                                                Layout.minimumWidth: implicitWidth
+                                                text: buttonText
+                                                enabled: buttonEnabled
+                                                onClicked: {
+                                                    root.setStatusForMac(mac, "connecting")
+                                                    App.DeviceContext.tryToConnectToNetworkDevice(mac, address, true)
+                                                }
                                             }
                                         }
+
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            height: 1
+                                            color: App.Theme.sidebarDivider
+                                        }
                                     }
-                                ]
+                                }
+
 
                                 FileDialog {
                                     id: pairingFileDialog
@@ -352,7 +375,8 @@ Item {
                             }
                         }
 
-                        Item { width: 1; height: 1 } // spacer
+                            Item { width: 1; height: 1 } // spacer
+                        }
                     }
                 }
             }
