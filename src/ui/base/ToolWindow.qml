@@ -4,12 +4,11 @@ import QtQuick.Layouts
 import ".." as App
 
 
-Window {
+DefaultWindow {
     id: root
     required property string udid
     required property var device
     property bool auto_close: true
-    color: palette.window
 
     Component.onCompleted : {
         if (Qt.platform.os === "osx") {

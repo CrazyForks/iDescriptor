@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import "../"
 
 Window {
     id: window
@@ -11,8 +12,10 @@ Window {
     property bool auto_close: true
     property bool autoDestroy: true
     property bool autoVisible: false
-    property bool fitsAppBarWindows: true  
+    property bool fitsAppBarWindows: true
     property bool setupMacOSWindowStyle: false
+    color: Theme.windowBackground
+    palette: Theme.palette
 
 
     Component.onCompleted : {

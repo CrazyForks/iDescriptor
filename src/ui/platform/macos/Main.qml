@@ -14,6 +14,7 @@ ApplicationWindow {
     rightPadding: 0
     bottomPadding: 0
     visible: true
+    palette: Theme.palette
     flags: Qt.Window | Qt.NoTitleBarBackgroundHint | Qt.ExpandedClientAreaHint
 
     Component.onCompleted: {

@@ -10,13 +10,15 @@ ApplicationWindow {
     minimumWidth: 900
     minimumHeight: 550
     visible: true
+    color: Theme.windowBackground
+    palette: Theme.palette
 
     Component.onCompleted: {
-        Updater.checkAutomatically();
+        Updater.checkAutomatically()
     }
 
-    onClosing: function (close) {
-        ClosingHandler.handler("*", close, window);
+    onClosing: function(close) {
+        ClosingHandler.handler("*", close, window)
     }
 
     MainWorkspace {
