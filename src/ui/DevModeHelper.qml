@@ -12,23 +12,31 @@ AnimatedDialog {
     property int iosVersion: root.device.info.ios_version_major
     modal: true
     focus: true
-    closePolicy: Popup.NoAutoClose
+    closePolicy: root.operationInProgress
+        ? Popup.NoAutoClose
+        : Popup.CloseOnEscape | Popup.CloseOnPressOutside
     anchors.centerIn: parent
-    width: Math.min(parent ? parent.width - 32 : 560, 560)
-    height: root.contentIndex === 1 ? 500 : 220
-    title: root.iosVersion >= 17 ? qsTr("Developer Mode - iDescriptor") : qsTr("Developer Disk Image - iDescriptor")
+    width: Math.min(parent ? parent.width - 32 : 760, 760)
+    height: root.contentIndex === 1
+        ? Math.min(parent ? parent.height - 32 : 680, 680)
+        : 220
 
     property string version: ""
     property string statusText: qsTr("Please wait...")
     property string developerModeError: ""
     property int contentIndex: 0
     property bool didHandle: false
+    property bool tryAnywayEnabled: true
+    property bool operationInProgress: false
 
     signal handled(bool success, bool forced)
+    signal preparationFailed(string message)
 
     function showError(message) {
+        root.operationInProgress = false
         stateView.errorText = message
         stateView.viewState = StateView.State.Error
+        root.preparationFailed(message)
     }
 
     function start() {
@@ -38,6 +46,7 @@ AnimatedDialog {
     }
 
     function retry() {
+        root.operationInProgress = true
         stateView.viewState = StateView.State.Loading
         contentIndex = 0
         statusText = qsTr("Please wait...")
@@ -56,6 +65,7 @@ AnimatedDialog {
     }
 
     function checkDeveloperMode() {
+        root.operationInProgress = true
         stateView.viewState = StateView.State.Content
         contentIndex = 0
         statusText = qsTr("Checking Developer Mode...")
@@ -75,9 +85,11 @@ AnimatedDialog {
     }
 
     function revealDeveloperModeOption() {
+        root.operationInProgress = true
         developerModeError = ""
 
         App.Helpers.connectOnce(root.device.service_manager.developerModeOptionRevealed, function(revealed) {
+            root.operationInProgress = false
             if (!revealed)
                 developerModeError = qsTr("Could not reveal Developer Mode automatically. You can still follow the steps below or try anyway.")
         })
@@ -86,6 +98,7 @@ AnimatedDialog {
     }
 
     function checkDeveloperDiskImage() {
+        root.operationInProgress = true
         // FIXME: we dont have developer disk images for ios 6 and below
         if (root.iosVersion <= 5) {
             showError(qsTr("Developer disk image is not available for this iOS version. Please use a device with iOS 6 or above."))
@@ -118,6 +131,7 @@ AnimatedDialog {
     }
 
     function prepareCompatibleImage() {
+        root.operationInProgress = true
         const info = DevImgsManager.get_best_compatible_version(root.iosVersion, settingsManager.dev_disk_img_path())
         root.version = info.version || ""
 
@@ -156,6 +170,7 @@ AnimatedDialog {
 
     /* try to mount a specific version */
     function mountVersion(version) {
+        root.operationInProgress = true
         statusText = qsTr("Mounting...")
 
         const locations = DevImgsManager.get_locations_for_version(version, settingsManager.dev_disk_img_path())
@@ -187,6 +202,7 @@ AnimatedDialog {
         as soon as the img is mounted
     */
     function finishWithSuccess(wait, forced) {
+        root.operationInProgress = true
         statusText = root.iosVersion >= 17 ? qsTr("Developer Mode handled.") : qsTr("Developer disk image mounted.")
         stateView.viewState = StateView.State.Content
         contentIndex = 0
@@ -201,6 +217,7 @@ AnimatedDialog {
         if (root.didHandle)
             return
 
+        root.operationInProgress = false
         root.didHandle = true
         root.handled(false, false)
     }
@@ -291,7 +308,8 @@ AnimatedDialog {
                     id: tutorialVideo
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.minimumHeight: 220
+                    Layout.minimumHeight: 320
+                    Layout.preferredHeight: 420
                     source: "qrc:/resources/dev-mode.mp4"
                     fillMode: VideoOutput.PreserveAspectFit
                     loops: MediaPlayer.Infinite
@@ -310,6 +328,7 @@ AnimatedDialog {
                 Button {
                     Layout.alignment: Qt.AlignHCenter
                     text: qsTr("Try Anyway")
+                    visible: root.tryAnywayEnabled
                     onClicked: root.finishWithSuccess(false, true)
                 }
             }
