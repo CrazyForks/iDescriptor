@@ -244,6 +244,7 @@ Item {
 
             ColumnLayout {
                 anchors.fill: parent
+                anchors.margins: 5
 
                 RowLayout {
                     Layout.fillWidth: true
