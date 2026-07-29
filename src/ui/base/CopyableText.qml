@@ -7,6 +7,7 @@ Item {
 
     property string text: ""
     property int elide: Text.ElideNone
+    property int wrapMode: Text.NoWrap
     property color color: Theme.text
     property color backgroundColor: "transparent"
     property real backgroundRadius: 5
@@ -39,6 +40,7 @@ Item {
         text: root.showingCopied ? qsTr("Copied!") : root.text
         color: root.color
         elide: root.elide
+        wrapMode: root.wrapMode
         clip: true
         verticalAlignment: Text.AlignVCenter
     }
