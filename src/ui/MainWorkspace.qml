@@ -5,8 +5,6 @@ import "." as App
 Item {
     id: root
 
-    property bool sidebarVisible: true
-
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -19,16 +17,16 @@ Item {
             AppSidebar {
                 id: sidebar
 
-                visible: root.sidebarVisible
+                visible: App.DeviceContext.sidebarVisible
                 Layout.fillHeight: true
                 Layout.minimumWidth: 180
                 Layout.preferredWidth: Math.round(root.width * 0.2)
                 Layout.maximumWidth: 260
-                onToggleRequested: root.sidebarVisible = false
+                onToggleRequested: App.DeviceContext.sidebarVisible = false
             }
 
             Rectangle {
-                visible: root.sidebarVisible
+                visible: App.DeviceContext.sidebarVisible
                 Layout.fillHeight: true
                 Layout.preferredWidth: 1
                 color: App.Theme.sidebarDivider
@@ -45,12 +43,12 @@ Item {
                     spacing: 0
 
                     SidebarToggleButton {
-                        visible: !root.sidebarVisible
+                        visible: !App.DeviceContext.sidebarVisible
                         // The macOS traffic lights occupy x=20...74. Keep the
                         // collapsed-sidebar control beside them, not below them.
                         Layout.leftMargin: Qt.platform.os === "osx" ? 84 : 10
                         Layout.rightMargin: 4
-                        onClicked: root.sidebarVisible = true
+                        onClicked: App.DeviceContext.sidebarVisible = true
                     }
 
                     App.TabButton {
