@@ -47,7 +47,7 @@ Item {
         onAccepted: root.performDeviceAction(action, udid, removeDevice)
     }
 
-    property string currentDeviceUdid: ""
+    property string currentDeviceUdid: App.DeviceContext.currentDeviceUdid
     property var airplayInstance: null
     property var devDiskImagesInstance: null
     property var wirelessGalleryImportInstance: null
@@ -152,7 +152,7 @@ Item {
 
 
     // 0 Airplayer, 1 SimulateLocation, 2 LiveScreen, 3 QueryMobileGestalt, 4 DeveloperDiskImages,
-    // 5 WirelessGalleryImport, 6 iFuse, 7 CableInfo, 8 NetworkDevices, 9 MountDevImage,
+    // 5 WirelessGalleryImport, 6 iFuse, 7 CableInfo, 8 NetworkDevices, 9 EnableDevMode,
     // 10 Restart, 11 Shutdown, 12 RecoveryMode, 13 EnableWifiConnections, 14 BackupManager,
     // 15 TransferSpeedTest
     // signal toolClicked(int toolId, bool requiresDevice)
@@ -265,6 +265,66 @@ Item {
             case 8:
                 createSingletonComp("./tools/NetworkDevices.qml", "networkDevicesInstance", false)
                 break;
+            case 9: {
+                const major_version = device.info.ios_version_major
+
+                function startDevModeHelper() {
+                    const component = Qt.createComponent("./DevModeHelper.qml")
+                    if (component.status !== Component.Ready) {
+                        root.showError(qsTr("Failed to load Developer Mode helper: %1").arg(component.errorString()))
+                        return
+                    }
+
+                    const helper = component.createObject(root, {
+                        device,
+                        tryAnywayEnabled: false
+                    })
+                    if (!helper) {
+                        root.showError(qsTr("Failed to create Developer Mode helper: %1").arg(component.errorString()))
+                        return
+                    }
+
+                    let preparationFailed = false
+                    helper.preparationFailed.connect(function(message) {
+                        preparationFailed = true
+                        root.showError(message)
+                    })
+                    helper.handled.connect(function(success) {
+                        if (success) {
+                            root.showInfo(helper.iosVersion >= 17
+                                ? qsTr("Developer Mode is enabled on the selected device.")
+                                : qsTr("A developer disk image is mounted on the selected device."))
+                        } else if (!preparationFailed) {
+                            root.showError(helper.iosVersion >= 17
+                                ? qsTr("Developer Mode was not enabled. Complete the steps on the device and try again.")
+                                : qsTr("A developer disk image could not be mounted."))
+                        }
+
+                        Qt.callLater(function() {
+                            helper.destroy()
+                        })
+                    })
+                    helper.start()
+                }
+
+                const title = major_version < 17
+                    ? qsTr("Mount Developer Disk Image?")
+                    : qsTr("Check Developer Mode?")
+                const message = major_version < 17
+                    ? qsTr("This tool will mount a developer disk image for you. Developer disk images are required to enable extra features on the device. Do you want to continue?")
+                    : qsTr("This tool will check if Developer Mode is enabled on your device. Developer Mode is required to enable extra features on the device. Do you want to continue?")
+
+                App.Helpers.messageBox(
+                    root,
+                    title,
+                    message,
+                    MessageDialog.Yes | MessageDialog.No,
+                    function(button) {
+                        if (button === MessageDialog.Yes)
+                            startDevModeHelper()
+                    })
+                break
+            }
             case 10:
                 confirmDeviceAction(
                     "restart",
@@ -332,7 +392,6 @@ Item {
         // toolbox's last normal-device selection when either of those is active.
         if (!udid) {
             if (!root.hasDevice) {
-                root.currentDeviceUdid = ""
                 deviceCombo.currentIndex = 0
             }
             return
@@ -342,9 +401,9 @@ Item {
         if (index < 0)
             return
 
-        root.currentDeviceUdid = udid
-        if (deviceCombo.currentIndex !== index)
+        if (deviceCombo.currentIndex !== index) {
             deviceCombo.currentIndex = index
+        }
     }
 
     Connections {
@@ -354,6 +413,8 @@ Item {
             root.syncNormalDeviceSelection()
         }
     }
+
+
 
     readonly property var mainToolsModel: ([
         {
@@ -450,8 +511,8 @@ Item {
     readonly property var moreToolsModel: ([
         {
             toolId: 9,
-            title: qsTr("Mount Dev Image"),
-            description: qsTr("Mount a compatible device image with a single click"),
+            title: qsTr("Enable Dev Mode"),
+            description: qsTr("Check or enable Developer Mode on this device"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/mdi_disk.svg",
             visible: true
@@ -517,16 +578,16 @@ Item {
                 valueRole: "udid"
 
                 onActivated: (index) => {
+                    console.log("Toolbox activated")
                     const udid = deviceCombo.currentValue || ""
-                    root.currentDeviceUdid = udid
                     root.deviceSelectionChanged(udid)
                 }
 
-                onCountChanged: {
-                    // Model changes and DeviceContext selection updates can arrive
-                    // in the same event turn, so synchronize after both settle.
-                    Qt.callLater(root.syncNormalDeviceSelection)
-                }
+                // onCountChanged: {
+                //     // Model changes and DeviceContext selection updates can arrive
+                //     // in the same event turn, so synchronize after both settle.
+                //     Qt.callLater(root.syncNormalDeviceSelection)
+                // }
             }
 
             Item { Layout.fillWidth: true }
