@@ -6,6 +6,7 @@ import "." as App
 
 Rectangle {
     id: root
+    radius: 10
 
     signal toggleRequested
 
@@ -16,14 +17,30 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
-        Item {
+        RowLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: 48
 
+            IconImage {
+                id: welcomeLogo
+                Layout.preferredWidth: 35
+                Layout.preferredHeight: 35
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 10
+                color: palette.text
+                source: "qrc:/resources/icons/plain-icon.svg"
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                mipmap: true
+            }
+
+            Item {
+                Layout.fillWidth: true
+            }
+
             SidebarToggleButton {
-                anchors.right: parent.right
-                anchors.rightMargin: 10
-                anchors.verticalCenter: parent.verticalCenter
+                Layout.rightMargin: 10
+                // Layout.verticalCenter: parent.verticalCenter
                 onClicked: root.toggleRequested()
             }
         }
@@ -33,6 +50,7 @@ Rectangle {
 
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.topMargin: 10
             clip: true
             contentWidth: availableWidth
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -52,7 +70,7 @@ Rectangle {
                     text: qsTr("Favorites")
                     color: App.Theme.textMuted
                     font.pixelSize: 11
-                    font.weight: Font.DemiBold
+                    // font.weight: Font.DemiBold
                 }
 
                 Button {
@@ -101,7 +119,7 @@ Rectangle {
                             text: qsTr("Welcome")
                             color: App.Theme.text
                             font.pixelSize: 13
-                            font.weight: App.DeviceContext.currentTab === 0 && App.DeviceContext.showWelcomePage ? Font.DemiBold : Font.Normal
+                            // font.weight: App.DeviceContext.currentTab === 0 && App.DeviceContext.showWelcomePage ? Font.DemiBold : Font.Normal
                             elide: Text.ElideRight
                         }
                     }
