@@ -64,6 +64,7 @@ qrc!(pub qml,
         "src/ui/styles/IDescriptorStyle/qmldir",
         "src/ui/styles/IDescriptorStyle/ScrollBar.qml",
         "src/ui/styles/IDescriptorStyle/ScrollView.qml",
+        "src/ui/styles/IDescriptorStyle/Switch.qml",
 
         // base/
         "src/ui/base/AnimatedTab.qml",
@@ -105,6 +106,13 @@ qrc!(pub qml,
         // installed-apps/
         "src/ui/installed-apps/AppTab.qml",
         "src/ui/installed-apps/InstalledApps.qml",
+    }
+);
+
+#[cfg(target_os = "linux")]
+qrc!(pub linux_qml,
+    "/" {
+        "src/ui/ZLinuxWindow.qml",
     }
 );
 
