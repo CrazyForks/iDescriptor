@@ -78,7 +78,7 @@ Item {
         const isLoggedIn = apps.state.email.length > 0
         if (!isLoggedIn) {
             if (Qt.platform.os === "windows") {
-                // showWarning from FluWindow 
+                // showWarning from FluWindow
                 showWarning(qsTr("You must be signed in to install apps."),3000)
             } else {
                 loginDialog.open()
@@ -97,7 +97,7 @@ Item {
         const isLoggedIn = apps.state.email.length > 0
         if (!isLoggedIn) {
             if (Qt.platform.os === "windows") {
-                // showWarning from FluWindow 
+                // showWarning from FluWindow
                 showWarning(qsTr("You must be signed in to download IPA files."),3000)
             } else {
                 loginDialog.open()
@@ -378,10 +378,10 @@ Item {
             Flow {
                 id: catalogGrid
                 width: catalogScroll.availableWidth
-                spacing: 5
+                spacing: 10
 
                 readonly property real itemWidth: Math.max(
-                    270,
+                    300,
                     (width - (2 * spacing)) / 3
                 )
                 readonly property real itemHeight: 110

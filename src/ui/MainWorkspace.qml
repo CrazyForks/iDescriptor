@@ -67,7 +67,13 @@ Item {
 
                 Rectangle {
                     anchors.fill: parent
-                    color: Qt.platform.os !== "osx" ? App.Theme.windowBackground : App.Theme.windowBackgroundMacOS
+                    color: {
+                        switch (Qt.platform.os) {
+                            case "osx": return App.Theme.windowBackgroundMacOS
+                            case "windows": return App.Theme.windowBackgroundWindows
+                            default: return App.Theme.windowBackground
+                        }
+                    }
                 }
 
                 ColumnLayout {
@@ -85,7 +91,9 @@ Item {
                             // collapsed-sidebar control beside them, not below them.
                             anchors.left: parent.left
                             anchors.leftMargin: Qt.platform.os === "osx" ? 84 : 10
-                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.top: parent.top
+                            anchors.topMargin: Qt.platform.os === "windows" ? 25 : 0
+                            // anchors.verticalCenter: parent.verticalCenter
                             onClicked: App.DeviceContext.sidebarVisible = true
                         }
 
@@ -94,7 +102,9 @@ Item {
                             anchors.left: collapsedSidebarButton.visible
                                           ? collapsedSidebarButton.right : parent.left
                             anchors.leftMargin: collapsedSidebarButton.visible ? 10 : 16
-                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.top: parent.top
+                            anchors.topMargin: Qt.platform.os === "windows" ? 25 : 0
+                            // anchors.verticalCenter: parent.verticalCenter
                             text: root.destinationTitle()
                             color: App.Theme.text
                             font.pixelSize: 13
@@ -103,15 +113,18 @@ Item {
                             width: Math.min(180, implicitWidth)
                         }
 
-                        DeviceSectionTabs {
-                            visible: App.DeviceContext.currentDestination === "device"
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.verticalCenter: parent.verticalCenter
-                            currentSection: root.selectedDeviceSection
-                            onSectionRequested: function(sectionIndex) {
-                                App.DeviceContext.selectDeviceSection(sectionIndex)
-                            }
-                        }
+                        // DeviceSectionTabs {
+                        //     visible: App.DeviceContext.currentDestination === "device"
+                        //     anchors.horizontalCenter: parent.horizontalCenter
+                        //     // anchors.verticalCenter: parent.verticalCenter
+                        //     anchors.top: parent.top
+                        //     anchors.topMargin: Qt.platform.os === "windows" ? 25 : 0
+
+                        //     currentSection: root.selectedDeviceSection
+                        //     onSectionRequested: function(sectionIndex) {
+                        //         App.DeviceContext.selectDeviceSection(sectionIndex)
+                        //     }
+                        // }
                     }
 
                     WorkspaceStack {

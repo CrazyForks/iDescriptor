@@ -37,7 +37,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: App.Theme.sidebarCornerRadius
-        color: root.selectedDevice ? App.Theme.selectionSoft
+        color: root.selectedDevice ? App.Theme.sidebarSelection
                                    : deviceHover.hovered ? App.Theme.hover
                                                          : "transparent"
 

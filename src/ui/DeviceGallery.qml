@@ -189,6 +189,9 @@ Item {
                 id: nav
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                //padding
+                Layout.margins:10
+                Layout.bottomMargin: 0
                 initialItem: mainPageComponent
                 clip: true
 
@@ -244,7 +247,7 @@ Item {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 5
+                // anchors.margins: 5
 
                 RowLayout {
                     Layout.fillWidth: true

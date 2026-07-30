@@ -23,7 +23,6 @@ DefaultWindow {
     /* Windows only*/
     showMaximize: false
     showMinimize: false
-    signal windowEffectChanged(string effect)
     /*----------*/
     property bool dirty: false
     property bool restartRequired: false
@@ -51,6 +50,13 @@ DefaultWindow {
     property bool airplay_no_hold: true
     property bool airplay_use_legacy_ports: true
     property bool show_v4l2: false
+
+    Connections {
+        target: App.Theme
+        function onWindowEffectChanged() {
+            root.applyEffect(App.Theme.windowEffect)
+        }
+    }
 
     function open() {
         loadSettings()
@@ -172,10 +178,7 @@ DefaultWindow {
         if (Qt.platform.os === "windows") {
             const effect = settingsManager.window_effect()
             root.window_effect = effect
-            Qt.callLater(() => {
-                root.applyEffect(effect)
-            })
-            root.windowEffectChanged(effect)
+            App.Theme.windowEffect = effect
         }
     }
 
@@ -478,9 +481,7 @@ DefaultWindow {
                             onActivated: {
                                 root.window_effect = currentValue
                                 root.markDirty(false)
-                                //defined in DefaultWindow.qml
-                                root.applyEffect(root.window_effect)
-                                root.windowEffectChanged(root.window_effect)
+                                App.Theme.windowEffect = root.window_effect
                             }
                         }
 

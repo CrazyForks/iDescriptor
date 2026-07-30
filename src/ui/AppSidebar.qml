@@ -13,7 +13,13 @@ Rectangle {
 
     signal toggleRequested
 
-    color: Qt.platform.os === "osx" ? "transparent" : App.Theme.sidebarBackground
+    color: {
+        switch (Qt.platform.os) {
+            case "osx": return "transparent"
+            case "windows": return App.Theme.sidebarBackgroundWindows
+            default: return App.Theme.sidebarBackground
+        }
+    }
     implicitWidth: 200
 
     ColumnLayout {
@@ -22,7 +28,7 @@ Rectangle {
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 48
+            Layout.preferredHeight: Qt.platform.os === "windows" ? 48 : 48
 
             IconImage {
                 visible: Qt.platform.os !== "osx"
@@ -43,8 +49,10 @@ Rectangle {
                 Layout.fillWidth: true
             }
 
+
             SidebarToggleButton {
                 Layout.rightMargin: 10
+                Layout.topMargin: Qt.platform.os !== "windows" ? 0 : 25
                 // Layout.verticalCenter: parent.verticalCenter
                 onClicked: root.toggleRequested()
             }

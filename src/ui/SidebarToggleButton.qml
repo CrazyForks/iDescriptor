@@ -3,12 +3,15 @@ import QtQuick.Controls
 import QtQuick.Controls.impl
 import "." as App
 
-ToolButton {
+Button {
     id: root
+    flat: true
 
-    implicitWidth: 30
-    implicitHeight: 30
+    // implicitWidth: 30
+    // implicitHeight: 30
     hoverEnabled: true
+
+    // Layout.topMargin: Qt.platform.os === "windows" ? 990 : 0
 
     ToolTip.visible: hovered
     ToolTip.delay: 500
@@ -28,7 +31,9 @@ ToolButton {
     contentItem: IconImage {
         source: "qrc:/resources/icons/sidebar_left.svg"
         color: App.Theme.icon
-        sourceSize.width: 19
-        sourceSize.height: 19
+        sourceSize.width: App.Theme.sidebarIconSize
+        sourceSize.height: App.Theme.sidebarIconSize
+        width: App.Theme.sidebarIconSize
+        height: App.Theme.sidebarIconSize
     }
 }

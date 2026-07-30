@@ -1,5 +1,6 @@
 import QtQuick
 import iDescriptor
+import QtQuick.Layouts
 import "." as App
 
 Item {
@@ -30,12 +31,31 @@ Item {
                      && deviceDelegate.model.udid
                         === App.DeviceContext.currentDestinationId
 
-            Device {
-                device: deviceDelegate.model
-                udid: deviceDelegate.model.udid
+            ColumnLayout {
                 anchors.fill: parent
-                info: deviceDelegate.model.info
-                currentSection: deviceDelegate.model.currentSection
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+
+                DeviceSectionTabs {
+                    // anchors.horizontalCenter: parent.horizontalCenter
+                    // anchors.verticalCenter: parent.verticalCenter
+                    // anchors.top: parent.top
+                    // Layout.topMargin: Qt.platform.os === "windows" ? 5 : 0
+                    Layout.alignment: Qt.AlignHCenter
+
+                    currentSection: root.selectedDeviceSection
+                    onSectionRequested: function(sectionIndex) {
+                        App.DeviceContext.selectDeviceSection(sectionIndex)
+                    }
+                }
+                Device {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    device: deviceDelegate.model
+                    udid: deviceDelegate.model.udid
+                    info: deviceDelegate.model.info
+                    currentSection: deviceDelegate.model.currentSection
+                }
             }
         }
     }

@@ -25,7 +25,7 @@ Button {
 
     background: Rectangle {
         radius: App.Theme.sidebarCornerRadius
-        color: root.selected ? App.Theme.selectionSoft
+        color: root.selected ? App.Theme.sidebarSelection
                              : root.down ? App.Theme.pressed
                                          : root.hovered ? App.Theme.hover
                                                         : "transparent"
