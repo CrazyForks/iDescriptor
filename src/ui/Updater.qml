@@ -432,7 +432,6 @@ DefaultWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.minimumHeight: 150
-                    visible: !root.packageManagerManaged
 
                     ColumnLayout {
                         anchors.fill: parent

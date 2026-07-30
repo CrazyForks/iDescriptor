@@ -92,7 +92,7 @@ impl Updater {
     fn build_updater() -> anyhow::Result<zupdater::Updater> {
         let update_config = update_config();
 
-        Ok(zupdater::Updater::builder()
+        let mut builder = zupdater::Updater::builder()
             .application_name(crate::APP_LABEL)
             .current_version(env!("CARGO_PKG_VERSION"))
             .repo("iDescriptor/iDescriptor")
@@ -100,8 +100,13 @@ impl Updater {
             .is_portable(update_config.is_portable)
             .asset_policy(update_config.asset_policy)
             .package_manager_managed(update_config.package_manager_managed)
-            .update_procedure(update_config.update_procedure)
-            .build()?)
+            .update_procedure(update_config.update_procedure);
+
+        if let Some(message) = update_config.package_manager_managed_message {
+            builder = builder.package_manager_managed_message(message);
+        }
+
+        Ok(builder.build()?)
     }
 
     fn check_for_updates(&mut self, manual: bool) {
@@ -538,6 +543,7 @@ struct UpdaterSetup {
     is_portable: bool,
     asset_policy: AssetPolicy,
     package_manager_managed: bool,
+    package_manager_managed_message: Option<String>,
     skip_prerelease: bool,
 }
 
@@ -586,8 +592,20 @@ fn update_config() -> UpdaterSetup {
         is_portable: channel == InstallChannel::WindowsPortable,
         asset_policy: channel.asset_policy(),
         package_manager_managed: channel.is_externally_managed(),
+        package_manager_managed_message: if channel == InstallChannel::CustomPackageManager {
+            custom_package_manager_message(option_env!("IDESCRIPTOR_PACKAGE_MANAGER_MESSAGE"))
+        } else {
+            None
+        },
         skip_prerelease: true,
     }
+}
+
+fn custom_package_manager_message(message: Option<&str>) -> Option<String> {
+    message
+        .map(str::trim)
+        .filter(|message| !message.is_empty())
+        .map(str::to_string)
 }
 
 #[allow(dead_code)]
@@ -814,6 +832,25 @@ mod tests {
         assert_eq!(
             InstallChannel::CustomPackageManager.external_update_url(),
             None
+        );
+    }
+
+    #[test]
+    fn custom_package_manager_message_ignores_missing_or_blank_values() {
+        assert_eq!(custom_package_manager_message(None), None);
+        assert_eq!(custom_package_manager_message(Some("   ")), None);
+        assert_eq!(
+            custom_package_manager_message(Some("  Update with yay or paru.  ")),
+            Some("Update with yay or paru.".to_string())
+        );
+    }
+
+    #[cfg(feature = "package_manager")]
+    #[test]
+    fn package_manager_config_uses_compiled_custom_message() {
+        assert_eq!(
+            update_config().package_manager_managed_message,
+            custom_package_manager_message(option_env!("IDESCRIPTOR_PACKAGE_MANAGER_MESSAGE"))
         );
     }
 
