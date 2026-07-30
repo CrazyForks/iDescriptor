@@ -25,21 +25,20 @@ FluWindow {
     }
 
     Connections {
-        target: Settings
-        onWindowEffectChanged: {
-            window.applyEffect(effect);
+        target: Theme
+        function onWindowEffectChanged() {
+            window.applyEffect(Theme.windowEffect)
         }
     }
 
     Component.onCompleted: {
         window.applyEffect(settingsManager.window_effect());
         if (!settingsManager.is_window_effect_choice_presented())
-            Qt.callLater(() => windowEffectDialog.open());
+            Qt.callLater(() => windowEffectPanel.present());
     }
 
-    WindowEffectDialog {
-        id: windowEffectDialog
-        targetWindow: window
+    WindowEffectPanel {
+        id: windowEffectPanel
     }
 
     onClosing: function (close) {
@@ -55,6 +54,6 @@ FluWindow {
 
     MainWorkspace {
         anchors.fill: parent
-        anchors.topMargin: appBar.height
+        // anchors.topMargin: appBar.height
     }
 }
