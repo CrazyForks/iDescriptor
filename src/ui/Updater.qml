@@ -16,6 +16,7 @@ DefaultWindow {
     minimumHeight: 420
     title: qsTr("Updater - iDescriptor")
     visible: false
+    autoVisible: false
     modality: Qt.ApplicationModal
     color: App.Theme.windowBackground
     setupMacOSWindowStyle: Qt.platform.os === "osx"
@@ -95,6 +96,8 @@ DefaultWindow {
             console.log("auto_check_updates is false skipping...")
             return
         }
+
+        console.log("Looking for updates...")
 
         checkForUpdates(false)
     }
