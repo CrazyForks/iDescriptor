@@ -1,11 +1,31 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import "./base"
 
 Item {
     id: root
-    required property int currentIndex
+    required property string currentDestination
+    readonly property int currentIndex: root.destinationIndex(currentDestination)
+
+    function destinationIndex(destination) {
+        switch (destination) {
+        case "device":
+        case "pendingDevice":
+        case "recoveryDevice":
+            return 0
+        case "apps":
+            return 1
+        case "toolbox":
+            return 2
+        case "jailbroken":
+            return 3
+        case "welcome":
+        default:
+            return 4
+        }
+    }
 
     StackLayout {
         anchors.fill: parent
@@ -45,6 +65,17 @@ Item {
         Loader {
             active: root.currentIndex === 3 || item
             sourceComponent: jailbreakTabComponent
+        }
+
+        AnimatedTab {
+            index: 4
+            currentIndex: root.currentIndex
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            Welcome {
+                anchors.fill: parent
+            }
         }
     }
 

@@ -6,7 +6,6 @@ import QtQuick.Controls
 import QtQuick.Controls.impl
 import QtQuick.Dialogs
 import "." as App
-import "./base"
 
 Item {
     id: root
@@ -22,29 +21,6 @@ Item {
         id: infoDialog
         title: qsTr("Information")
         text: ""
-    }
-
-    AnimatedDialog {
-        id: confirmActionDialog
-        parent: Overlay.overlay
-        modal: true
-        focus: true
-        anchors.centerIn: Overlay.overlay
-        title: ""
-        standardButtons: Dialog.Yes | Dialog.No
-
-        property string action: ""
-        property string message: ""
-        property bool removeDevice: false
-        property string udid: ""
-
-        Label {
-            text: confirmActionDialog.message
-            wrapMode: Text.WordWrap
-            width: Math.min(root.width - 64, 420)
-        }
-
-        onAccepted: root.performDeviceAction(action, udid, removeDevice)
     }
 
     property string currentDeviceUdid: App.DeviceContext.currentDeviceUdid
@@ -69,12 +45,15 @@ Item {
     }
 
     function confirmDeviceAction(action, title, message, removeDevice, udid) {
-        confirmActionDialog.action = action
-        confirmActionDialog.title = title
-        confirmActionDialog.message = message
-        confirmActionDialog.removeDevice = removeDevice
-        confirmActionDialog.udid = udid
-        confirmActionDialog.open()
+        App.Helpers.messageBox(
+            root,
+            title,
+            message,
+            MessageDialog.Yes | MessageDialog.No,
+            function(button) {
+                if (button === MessageDialog.Yes)
+                    root.performDeviceAction(action, udid, removeDevice)
+            })
     }
 
     function performDeviceAction(action, udid, removeDevice) {
@@ -370,7 +349,7 @@ Item {
 
     function deviceSelectionChanged(udid) {
         if (udid && udid.length) {
-            App.DeviceContext.selectConnectedDevice(udid)
+            App.DeviceContext.setCurrentDevice(udid)
         }
     }
 
@@ -388,8 +367,7 @@ Item {
     function syncNormalDeviceSelection() {
         const udid = App.DeviceContext.currentDeviceUdid
 
-        // Recovery and pending selections clear currentDeviceUdid. Keep the
-        // toolbox's last normal-device selection when either of those is active.
+        // The visible destination and Toolbox's device context are independent.
         if (!udid) {
             if (!root.hasDevice) {
                 deviceCombo.currentIndex = 0

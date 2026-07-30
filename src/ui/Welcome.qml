@@ -35,16 +35,6 @@ Item {
                 color: palette.text
             }
 
-            IconImage {
-                id: welcomeLogo
-                Layout.preferredWidth: 50
-                Layout.preferredHeight: 50
-                color: palette.text
-                source: "qrc:/resources/icons/plain-icon.svg"
-                fillMode: Image.PreserveAspectFit
-                smooth: true
-                mipmap: true
-            }
         }
 
 

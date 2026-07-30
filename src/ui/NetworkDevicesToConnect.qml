@@ -273,16 +273,7 @@ Item {
                                     Label {
                                         text: "●"
                                         font.pointSize: 14
-                                        color: {
-                                            switch (state) {
-                                            case "failed": return "#d83b01"
-                                            case "noPairing": return "#ffb900"
-                                            case "connecting": return "#0078d4"
-                                            case "connected": return "#2e7d32"
-                                            case "alreadyExists": return "#6b6b6b"
-                                            default: return "#2e7d32"
-                                            }
-                                        }
+                                        color: App.Theme.accent
                                     }
 
                                     ColumnLayout {
@@ -290,7 +281,7 @@ Item {
                                         Layout.fillWidth: true
 
 
-                                        spacing: 10
+                                        spacing: 1
 
                                         RowLayout {
                                             Layout.fillWidth: true

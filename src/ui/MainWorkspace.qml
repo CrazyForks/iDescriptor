@@ -5,6 +5,35 @@ import "." as App
 Item {
     id: root
 
+    readonly property var selectedDevice:
+        App.DeviceContext.currentDestination === "device"
+        ? App.DeviceContext.getDevice(App.DeviceContext.currentDestinationId)
+        : null
+    readonly property int selectedDeviceSection:
+        root.selectedDevice ? root.selectedDevice.currentSection : 0
+
+    function destinationTitle() {
+        switch (App.DeviceContext.currentDestination) {
+        case "welcome":
+            return qsTr("Welcome")
+        case "apps":
+            return qsTr("Apps")
+        case "toolbox":
+            return qsTr("Toolbox")
+        case "jailbroken":
+            return qsTr("Jailbroken")
+        case "pendingDevice":
+            return qsTr("Connecting…")
+        case "recoveryDevice":
+            return qsTr("Recovery Device")
+        case "device":
+            return root.selectedDevice && root.selectedDevice.info
+                    ? root.selectedDevice.info.product_type : qsTr("Device")
+        default:
+            return ""
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -32,51 +61,69 @@ Item {
                 color: App.Theme.sidebarDivider
             }
 
-            ColumnLayout {
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 0
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 48
+                Rectangle {
+                    anchors.fill: parent
+                    // color: App.Theme.windowBackground
+                    // color: Qt.rgba(0.961, 0.961, 0.969, 0.85)
+                    color: App.Theme.darkMode ? Qt.rgba(0.122, 0.122, 0.133, 0.85) : Qt.rgba(0.961, 0.961, 0.969, 0.85)
+                    // color: Qt.lighter(App.Theme.windowBackground, 1.1)
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
                     spacing: 0
 
-                    SidebarToggleButton {
-                        visible: !App.DeviceContext.sidebarVisible
-                        // The macOS traffic lights occupy x=20...74. Keep the
-                        // collapsed-sidebar control beside them, not below them.
-                        Layout.leftMargin: Qt.platform.os === "osx" ? 84 : 10
-                        Layout.rightMargin: 4
-                        onClicked: App.DeviceContext.sidebarVisible = true
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 48
+
+                        SidebarToggleButton {
+                            id: collapsedSidebarButton
+                            visible: !App.DeviceContext.sidebarVisible
+                            // The macOS traffic lights occupy x=20...74. Keep the
+                            // collapsed-sidebar control beside them, not below them.
+                            anchors.left: parent.left
+                            anchors.leftMargin: Qt.platform.os === "osx" ? 84 : 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            onClicked: App.DeviceContext.sidebarVisible = true
+                        }
+
+                        Text {
+                            visible: App.DeviceContext.currentDestination !== "device"
+                            anchors.left: collapsedSidebarButton.visible
+                                          ? collapsedSidebarButton.right : parent.left
+                            anchors.leftMargin: collapsedSidebarButton.visible ? 10 : 16
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root.destinationTitle()
+                            color: App.Theme.text
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                            width: Math.min(180, implicitWidth)
+                        }
+
+                        DeviceSectionTabs {
+                            visible: App.DeviceContext.currentDestination === "device"
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.verticalCenter: parent.verticalCenter
+                            currentSection: root.selectedDeviceSection
+                            onSectionRequested: function(sectionIndex) {
+                                App.DeviceContext.selectDeviceSection(sectionIndex)
+                            }
+                        }
                     }
 
-                    App.TabButton {
-                        text: qsTr("Apps")
-                        onClicked: App.DeviceContext.currentTab = 1
-                        active: App.DeviceContext.currentTab === 1
+                    WorkspaceStack {
+                        currentDestination: App.DeviceContext.currentDestination
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
                     }
 
-                    App.TabButton {
-                        text: qsTr("Toolbox")
-                        onClicked: App.DeviceContext.currentTab = 2
-                        active: App.DeviceContext.currentTab === 2
-                    }
-
-                    App.TabButton {
-                        text: qsTr("Jailbroken")
-                        onClicked: App.DeviceContext.currentTab = 3
-                        active: App.DeviceContext.currentTab === 3
-                    }
                 }
-
-                Tabs {
-                    currentIndex: App.DeviceContext.currentTab
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                }
-
-                StatusBar {}
             }
         }
     }

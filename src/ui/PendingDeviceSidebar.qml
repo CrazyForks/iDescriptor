@@ -8,8 +8,9 @@ Item {
     id: root
 
     required property string udid
-    readonly property bool selectedDevice: App.DeviceContext.currentTab === 0
-                                           && App.DeviceContext.currentPendingDeviceUdid === root.udid
+    readonly property bool selectedDevice:
+        App.DeviceContext.currentDestination === "pendingDevice"
+        && App.DeviceContext.currentDestinationId === root.udid
     readonly property string shortUdid: root.udid.length > 10
         ? root.udid.slice(0, 10) + "…"
         : root.udid

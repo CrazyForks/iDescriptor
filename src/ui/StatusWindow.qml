@@ -18,8 +18,8 @@ DefaultWindow {
     autoVisible: false
     autoDestroy: false
     fitsAppBarWindows: true
-    property var statusBarParentWindow: null
-    property var statusBarOpener: null
+    property var registeredParentWindow: null
+    property var registeredOpener: null
 
     flags: Qt.ToolTip
          | Qt.FramelessWindowHint
@@ -135,15 +135,15 @@ DefaultWindow {
         visible: !processesList.count
     }
 
-    function registerStatusBarOpener(parentWindow, opener) {
-        statusBarParentWindow = parentWindow
-        statusBarOpener = opener
+    function registerOpener(parentWindow, opener) {
+        registeredParentWindow = parentWindow
+        registeredOpener = opener
     }
 
-    function unregisterStatusBarOpener(opener) {
-        if (statusBarOpener === opener) {
-            statusBarParentWindow = null
-            statusBarOpener = null
+    function unregisterOpener(opener) {
+        if (registeredOpener === opener) {
+            registeredParentWindow = null
+            registeredOpener = null
         }
     }
 
@@ -158,7 +158,7 @@ DefaultWindow {
             targetX = Math.max(available.x,
                                Math.min(targetX, available.x + available.width - window.width))
 
-            // The status bar normally has space above it. If the main window is
+            // The sidebar footer normally has space above it. If the main window is
             // near the top of a screen, place the process window below instead.
             if (targetY < available.y)
                 targetY = globalPos.y + openerHeight
@@ -179,19 +179,19 @@ DefaultWindow {
         StatusWindowController.install(window, globalPos.x, globalPos.y, openerWidth, openerHeight)
     }
 
-    function openAtStatusBar() {
-        if (!statusBarParentWindow || !statusBarOpener) {
+    function openAtRegisteredOpener() {
+        if (!registeredParentWindow || !registeredOpener) {
             // This can only happen while the main UI is still being created.
-            // Keep the process window usable until StatusBar registers its opener.
+            // Keep the process window usable until the sidebar footer registers.
             window.show()
             window.raise()
             StatusWindowController.install(window, 0, 0, 0, 0)
             return false
         }
 
-        var globalPos = statusBarOpener.mapToGlobal(0, 0)
-        openForOpener(statusBarParentWindow, globalPos,
-                      statusBarOpener.width, statusBarOpener.height)
+        var globalPos = registeredOpener.mapToGlobal(0, 0)
+        openForOpener(registeredParentWindow, globalPos,
+                      registeredOpener.width, registeredOpener.height)
         return true
     }
 
@@ -232,7 +232,7 @@ DefaultWindow {
             "destinationPath": destinationPath,
             "onComplete": null
         })
-        openAtStatusBar()
+        openAtRegisteredOpener()
     }
 
     function removeProcess(processId) {

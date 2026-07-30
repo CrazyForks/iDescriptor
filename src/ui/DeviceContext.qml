@@ -10,10 +10,8 @@ QtObject {
     property ListModel recoveryDevices: ListModel {}
     property ListModel pendingDevices: ListModel {}
     property string currentDeviceUdid : ""
-    property string currentRecoveryDeviceId : ""
-    property string currentPendingDeviceUdid: ""
-    property int currentTab: 0
-    property bool showWelcomePage : true
+    property string currentDestination: "welcome"
+    property string currentDestinationId: ""
     // Record<normalized MAC, { ip, selectOnSuccess }>
     property var wirelessConnectionAttempts: ({})
     // Record<UDID, attempt token>
@@ -68,39 +66,65 @@ QtObject {
     }
 
     function selectConnectedDevice(udid) {
+        if (!root.getDevice(udid))
+            return
+
         root.currentDeviceUdid = udid
-        root.currentRecoveryDeviceId = ""
-        root.currentPendingDeviceUdid = ""
-        root.showWelcomePage = false
+        root.currentDestinationId = udid
+        root.currentDestination = "device"
     }
 
-    // set as selected if there is no device and user
-    // is on the welcome page
-    function selectConnectedDeviceToFocus(udid) {
-        if (root.currentDeviceUdid !== "") return;
-        if (!root.showWelcomePage) return;
-        root.selectConnectedDevice(udid)
+    function setCurrentDevice(udid) {
+        if (root.getDevice(udid))
+            root.currentDeviceUdid = udid
     }
 
     function selectRecoveryDevice(id) {
-        root.currentDeviceUdid = ""
-        root.currentRecoveryDeviceId = id
-        root.currentPendingDeviceUdid = ""
-        root.showWelcomePage = false
+        if (!root.getRecoveryDevice(id))
+            return
+
+        root.currentDestinationId = id
+        root.currentDestination = "recoveryDevice"
     }
 
     function selectPendingDevice(udid) {
-        root.currentDeviceUdid = ""
-        root.currentRecoveryDeviceId = ""
-        root.currentPendingDeviceUdid = udid
-        root.showWelcomePage = false
+        if (!root.getPendingDevice(udid))
+            return
+
+        root.currentDestinationId = udid
+        root.currentDestination = "pendingDevice"
     }
 
     function selectWelcomePage() {
-        root.currentDeviceUdid = ""
-        root.currentRecoveryDeviceId = ""
-        root.currentPendingDeviceUdid = ""
-        root.showWelcomePage = true
+        root.currentDestinationId = ""
+        root.currentDestination = "welcome"
+    }
+
+    function selectAppsPage() {
+        root.currentDestinationId = ""
+        root.currentDestination = "apps"
+    }
+
+    function selectToolboxPage() {
+        root.currentDestinationId = ""
+        root.currentDestination = "toolbox"
+    }
+
+    function selectJailbrokenPage() {
+        root.currentDestinationId = ""
+        root.currentDestination = "jailbroken"
+    }
+
+    function selectDeviceSection(sectionIndex) {
+        if (root.currentDestination !== "device")
+            return
+
+        const device = root.getDevice(root.currentDestinationId)
+        if (!device || sectionIndex < 0 || sectionIndex > 3)
+            return
+
+        if (device.currentSection !== sectionIndex)
+            device.currentSection = sectionIndex
     }
 
     function getRecoveryDevice(id) {
@@ -130,28 +154,31 @@ QtObject {
             }
         }
 
-        if (root.currentPendingDeviceUdid === udid)
-            root.currentPendingDeviceUdid = ""
-
-        if (updateSelection !== false)
+        const removedDestination = root.currentDestination === "pendingDevice"
+                                   && root.currentDestinationId === udid
+        if (updateSelection !== false && removedDestination)
             root.selectFallbackDevice()
-        else
-            root.showWelcomePage = root.getVisibleDeviceCount() === 0
     }
 
     function selectFallbackDevice() {
-        if (root.currentDeviceUdid && root.getDevice(root.currentDeviceUdid)) {
-            root.selectConnectedDevice(root.currentDeviceUdid)
+        if (root.currentDestination === "device"
+                && root.currentDestinationId
+                && root.getDevice(root.currentDestinationId)) {
+            root.selectConnectedDevice(root.currentDestinationId)
             return
         }
 
-        if (root.currentRecoveryDeviceId && root.getRecoveryDevice(root.currentRecoveryDeviceId)) {
-            root.selectRecoveryDevice(root.currentRecoveryDeviceId)
+        if (root.currentDestination === "recoveryDevice"
+                && root.currentDestinationId
+                && root.getRecoveryDevice(root.currentDestinationId)) {
+            root.selectRecoveryDevice(root.currentDestinationId)
             return
         }
 
-        if (root.currentPendingDeviceUdid && root.getPendingDevice(root.currentPendingDeviceUdid)) {
-            root.selectPendingDevice(root.currentPendingDeviceUdid)
+        if (root.currentDestination === "pendingDevice"
+                && root.currentDestinationId
+                && root.getPendingDevice(root.currentDestinationId)) {
+            root.selectPendingDevice(root.currentDestinationId)
             return
         }
 
@@ -305,12 +332,20 @@ QtObject {
     }
 
     function removeDevice(udid) {
+        const removedDeviceWasVisible = root.currentDestination === "device"
+                                        && root.currentDestinationId === udid
         for (let i = 0; i < devices.count; i++) {
             const device = devices.get(i)
             if (device.udid === udid) {
                 const connectionId = device.connectionId
                 devices.remove(i)
+                if (root.currentDeviceUdid === udid) {
+                    root.currentDeviceUdid = devices.count > 0
+                            ? devices.get(0).udid : ""
+                }
                 core.remove_device(udid, connectionId)
+                if (removedDeviceWasVisible)
+                    root.selectFallbackDevice()
                 root.scheduleGc()
                 break
             }
@@ -359,6 +394,9 @@ QtObject {
                         }
                     }
 
+                    const pendingDeviceWasVisible =
+                        root.currentDestination === "pendingDevice"
+                        && root.currentDestinationId === udid
                     root.removePendingDevice(udid, false)
                     const text = `${info.marketing_name} / ${udid.slice(0,10)}...`
                     const mac = info["WiFiAddress"]
@@ -378,13 +416,13 @@ QtObject {
                         }
                     )
                     root.deviceAdded(udid, mac)
-                    if (!wirelessAttempt)
+                    if (pendingDeviceWasVisible
+                            || root.currentDestination === "welcome")
                         root.selectConnectedDevice(udid)
-                    else if (wirelessAttempt && wirelessAttempt.selectOnSuccess) {
+                    else if (wirelessAttempt && wirelessAttempt.selectOnSuccess)
                         root.selectConnectedDevice(udid)
-                    } else {
-                        root.selectConnectedDeviceToFocus(udid)
-                    }
+                    else
+                        root.setCurrentDevice(udid)
                     break;
                 /* Device removed */
                 case 2:
@@ -397,6 +435,8 @@ QtObject {
                     let removedDeviceWasWireless = false
                     let removedMatchingDevice = false
                     const removedDeviceWasSelected = root.currentDeviceUdid === udid
+                    const removedDeviceWasVisible = root.currentDestination === "device"
+                                                    && root.currentDestinationId === udid
 
                     // FIXME: find an O(1) solution
                     for (let i = 0; i < devices.count; i++) {
@@ -417,11 +457,14 @@ QtObject {
                     if (!removedMatchingDevice)
                         break
                     delete root.wifiEnableAttempts[udid]
-                    if (root.currentDeviceUdid === udid)
-                        root.currentDeviceUdid = ""
+                    if (removedDeviceWasSelected) {
+                        root.currentDeviceUdid = devices.count > 0
+                                ? devices.get(0).udid : ""
+                    }
                     root.removePendingDevice(udid, false)
                     root.deviceRemoved(udid)
-                    root.selectFallbackDevice()
+                    if (removedDeviceWasVisible)
+                        root.selectFallbackDevice()
                     if (!removedDeviceWasWireless && removedMac) {
                         Qt.callLater(function() {
                             root.upgradeWiredDeviceToWireless(
@@ -441,12 +484,8 @@ QtObject {
                         udid: udid,
                         text: qsTr("Pairing…")
                     })
-                    root.showWelcomePage = false
-                    if (!root.currentDeviceUdid
-                            && !root.currentRecoveryDeviceId
-                            && !root.currentPendingDeviceUdid) {
+                    if (root.currentDestination === "welcome")
                         root.selectPendingDevice(udid)
-                    }
                     break;
                 /* Pending device removed */
                 case 4:
@@ -472,10 +511,7 @@ QtObject {
                     const entry = { id, info: info, text: name }
                     recoveryDevices.append(entry)
 
-                    root.showWelcomePage = false
-                    if (!root.currentDeviceUdid
-                            && !root.currentRecoveryDeviceId
-                            && !root.currentPendingDeviceUdid)
+                    if (root.currentDestination === "welcome")
                         root.selectRecoveryDevice(id)
                     break;
                 /* Recovery device removed */
@@ -487,9 +523,9 @@ QtObject {
                             break
                         }
                     }
-                    if (root.currentRecoveryDeviceId === id)
-                        root.currentRecoveryDeviceId = ""
-                    root.selectFallbackDevice()
+                    if (root.currentDestination === "recoveryDevice"
+                            && root.currentDestinationId === id)
+                        root.selectFallbackDevice()
                     root.scheduleGc()
                     break;
             }

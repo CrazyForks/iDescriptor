@@ -123,7 +123,7 @@ Item {
                         ToolTip.visible: hovered
                         ToolTip.delay: 400
                         ToolTip.text: qsTr("Shut down device")
-                        onClicked: Toolbox.toolClicked(11, true)
+                        onClicked: Toolbox.toolClicked(11, true, false)
                     }
                     IconToolButton {
                         id: restartButton
@@ -131,7 +131,7 @@ Item {
                         ToolTip.visible: hovered
                         ToolTip.delay: 400
                         ToolTip.text: qsTr("Restart device")
-                        onClicked: Toolbox.toolClicked(10, true)
+                        onClicked: Toolbox.toolClicked(10, true, false)
                     }
                     IconToolButton {
                         id: recoveryButton
@@ -139,7 +139,7 @@ Item {
                         ToolTip.visible: hovered
                         ToolTip.delay: 400
                         ToolTip.text: qsTr("Enter recovery mode")
-                        onClicked: Toolbox.toolClicked(12, true)
+                        onClicked: Toolbox.toolClicked(12, true, false)
                     }
                 }
             }
