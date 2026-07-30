@@ -116,11 +116,3 @@ qrc!(pub macos_rsrc,
         "resources/keychain.mp4",
     }
 );
-
-#[cfg(target_os = "windows")]
-qrc!(pub windows_rsrc,
-    "/" {
-        "resources/windows/window.acrylic.png",
-        "resources/windows/window.normal.png",
-    }
-);
