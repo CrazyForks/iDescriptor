@@ -4,8 +4,41 @@ use log::{debug, error, info, warn};
 use macros::QtThreading;
 use qmetaobject::prelude::*;
 use qttypes::{QString, QVariantMap};
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use zupdater::{DownloadedUpdate, Platform, Release, Update, UpdateProcedure};
+use zupdater::{AssetPolicy, DownloadedUpdate, Release, Update, UpdateProcedure};
+
+#[cfg(all(
+    target_os = "linux",
+    any(
+        all(feature = "appimage", feature = "flatpak"),
+        all(feature = "appimage", feature = "package_manager"),
+        all(feature = "flatpak", feature = "package_manager"),
+    )
+))]
+compile_error!(
+    "Only one Linux distribution feature may be enabled: appimage, flatpak, or package_manager"
+);
+
+#[cfg(all(feature = "windows_store", not(target_os = "windows")))]
+compile_error!("The windows_store feature is only supported on Windows");
+
+#[cfg(all(
+    any(feature = "appimage", feature = "flatpak", feature = "package_manager"),
+    not(target_os = "linux")
+))]
+compile_error!("The appimage, flatpak, and package_manager features are only supported on Linux");
+
+const FLATPAK_PAGE_URL: &str = "https://flathub.org/apps/com.idescriptor.idescriptor";
+// TODO: Verify that this is the final published Flatpak/Flathub URL.
+
+const WINDOWS_STORE_URI: &str = "ms-windows-store://search/?query=iDescriptor";
+// TODO: Replace this search URI with the final Microsoft Store PDP URI and verify that it opens
+// the exact iDescriptor listing once the product ID is assigned.
+
+const WINDOWS_STORE_FALLBACK_URL: &str = "https://apps.microsoft.com/search?query=iDescriptor";
+// TODO: Replace this search URL with the final public Microsoft Store listing URL.
 
 cpp! {{
     #include <QCoreApplication>
@@ -65,9 +98,9 @@ impl Updater {
             .repo("iDescriptor/iDescriptor")
             .skip_prerelease(update_config.skip_prerelease)
             .is_portable(update_config.is_portable)
+            .asset_policy(update_config.asset_policy)
             .package_manager_managed(update_config.package_manager_managed)
             .update_procedure(update_config.update_procedure)
-            .package_manager_managed_message(update_config.package_manager_managed_message)
             .build()?)
     }
 
@@ -187,20 +220,27 @@ impl Updater {
             );
 
             let progress_thread = q_thread.clone();
-            let result = update
-                .download_with_progress(&destination_dir, move |progress| {
-                    let downloaded_bytes = progress.downloaded_bytes as i64;
-                    let total_bytes = progress.total_bytes.map(|value| value as i64).unwrap_or(-1);
-                    let fraction = progress.fraction().unwrap_or(0.0);
-                    let progress_thread = progress_thread.clone();
+            let result: anyhow::Result<DownloadedUpdate> = async {
+                let downloaded = update
+                    .download_with_progress(&destination_dir, move |progress| {
+                        let downloaded_bytes = progress.downloaded_bytes as i64;
+                        let total_bytes =
+                            progress.total_bytes.map(|value| value as i64).unwrap_or(-1);
+                        let fraction = progress.fraction().unwrap_or(0.0);
+                        let progress_thread = progress_thread.clone();
 
-                    progress_thread.queue(move |t| {
-                        t.state = Self::downloading_state(downloaded_bytes, progress.total_bytes);
-                        t.state_changed();
-                        t.download_progress(downloaded_bytes, total_bytes, fraction);
-                    });
-                })
-                .await;
+                        progress_thread.queue(move |t| {
+                            t.state =
+                                Self::downloading_state(downloaded_bytes, progress.total_bytes);
+                            t.state_changed();
+                            t.download_progress(downloaded_bytes, total_bytes, fraction);
+                        });
+                    })
+                    .await?;
+
+                prepare_downloaded_update(&update, downloaded).await
+            }
+            .await;
 
             q_thread.queue(move |t| match result {
                 Ok(downloaded) => {
@@ -308,9 +348,38 @@ impl Updater {
     }
 }
 
+async fn prepare_downloaded_update(
+    update: &Update,
+    downloaded: DownloadedUpdate,
+) -> anyhow::Result<DownloadedUpdate> {
+    if update.asset_policy != AssetPolicy::LinuxAppImage {
+        return Ok(downloaded);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        mark_appimage_executable(&downloaded.path).await?;
+        return Ok(downloaded);
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        anyhow::bail!("AppImage updates can only be prepared on Linux");
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn mark_appimage_executable(path: &Path) -> anyhow::Result<()> {
+    let mut permissions = tokio::fs::metadata(path).await?.permissions();
+    permissions.set_mode(0o755);
+    tokio::fs::set_permissions(path, permissions).await?;
+    Ok(())
+}
+
 fn update_to_profile(update: &Update) -> QVariantMap {
     let mut profile = QVariantMap::default();
     let asset = update.asset.as_ref();
+    let channel = install_channel();
 
     qvariantmap_insert!(
         profile,
@@ -350,6 +419,21 @@ fn update_to_profile(update: &Update) -> QVariantMap {
         QString::from(update.published_at.clone().unwrap_or_default())
     );
     qvariantmap_insert!(profile, "prerelease", update.prerelease);
+    qvariantmap_insert!(
+        profile,
+        "delivery_kind",
+        QString::from(channel.delivery_kind())
+    );
+    qvariantmap_insert!(
+        profile,
+        "external_update_url",
+        QString::from(channel.external_update_url().unwrap_or_default())
+    );
+    qvariantmap_insert!(
+        profile,
+        "external_update_fallback_url",
+        QString::from(channel.external_update_fallback_url().unwrap_or_default())
+    );
     qvariantmap_insert!(
         profile,
         "package_manager_managed",
@@ -452,68 +536,165 @@ fn release_to_profile(release: &Release) -> QVariantMap {
 struct UpdaterSetup {
     update_procedure: UpdateProcedure,
     is_portable: bool,
+    asset_policy: AssetPolicy,
     package_manager_managed: bool,
     skip_prerelease: bool,
-    package_manager_managed_message: String,
 }
 
 fn update_config() -> UpdaterSetup {
-    let is_portable = is_portable_build();
-    let package_manager_managed = is_package_manager_managed();
-    let platform = zupdater::Updater::detect_platform().ok();
+    let channel = install_channel();
 
-    let update_procedure = match platform {
-        Some(Platform::Windows) => UpdateProcedure {
-            open_file: !is_portable,
-            open_file_dir: is_portable,
-            quit_app: !is_portable,
-            informative_text: if is_portable {
-                "New portable version downloaded, app location will be shown after this message."
-                    .to_string()
-            } else {
-                "The application will now quit to install the update.".to_string()
-            },
-            text: if is_portable {
-                "New portable version downloaded".to_string()
-            } else {
-                "Do you want to install the downloaded update now?".to_string()
-            },
+    let update_procedure = match channel {
+        InstallChannel::WindowsInstaller => UpdateProcedure {
+            open_file: true,
+            open_file_dir: false,
+            quit_app: true,
+            informative_text: "The application will now quit to install the update.".to_string(),
+            text: "Do you want to install the downloaded update now?".to_string(),
         },
-        Some(Platform::MacOs) => UpdateProcedure {
+        InstallChannel::WindowsPortable => UpdateProcedure {
+            open_file: false,
+            open_file_dir: true,
+            quit_app: false,
+            informative_text:
+                "New portable version downloaded, app location will be shown after this message."
+                    .to_string(),
+            text: "New portable version downloaded".to_string(),
+        },
+        InstallChannel::MacDmg => UpdateProcedure {
             open_file: true,
             open_file_dir: false,
             quit_app: true,
             informative_text: "The application will now quit and open .dmg file downloaded to \"Downloads\". From there you can drag it to Applications to install.".to_string(),
             text: "Update downloaded would you like to quit and install the update?".to_string(),
         },
-        Some(Platform::Linux) => UpdateProcedure {
+        InstallChannel::LinuxAppImage => UpdateProcedure {
             open_file: true,
             open_file_dir: false,
             quit_app: true,
             informative_text: "AppImages we ship are not updateable. New version is downloaded to \"Downloads\". You can start using the new version by launching it from there. You can delete this AppImage version if you like.".to_string(),
             text: "Update downloaded would you like to quit and open the new version?".to_string(),
         },
-        None => UpdateProcedure::default(),
+        InstallChannel::WindowsStore
+        | InstallChannel::Flatpak
+        | InstallChannel::CustomPackageManager
+        | InstallChannel::NativeLinux => UpdateProcedure::default(),
     };
 
     UpdaterSetup {
         update_procedure,
-        is_portable,
-        package_manager_managed,
+        is_portable: channel == InstallChannel::WindowsPortable,
+        asset_policy: channel.asset_policy(),
+        package_manager_managed: channel.is_externally_managed(),
         skip_prerelease: true,
-        package_manager_managed_message: package_manager_message(),
     }
 }
 
-fn is_portable_build() -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        is_windows_portable_install()
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InstallChannel {
+    WindowsInstaller,
+    WindowsPortable,
+    WindowsStore,
+    MacDmg,
+    LinuxAppImage,
+    Flatpak,
+    CustomPackageManager,
+    NativeLinux,
+}
+
+impl InstallChannel {
+    fn asset_policy(self) -> AssetPolicy {
+        match self {
+            Self::WindowsInstaller => AssetPolicy::WindowsInstaller,
+            Self::WindowsPortable => AssetPolicy::WindowsPortable,
+            Self::MacDmg => AssetPolicy::MacDmg,
+            Self::LinuxAppImage => AssetPolicy::LinuxAppImage,
+            Self::WindowsStore | Self::Flatpak | Self::CustomPackageManager | Self::NativeLinux => {
+                AssetPolicy::NoDirectDownload
+            }
+        }
     }
 
-    #[cfg(not(target_os = "windows"))]
+    fn delivery_kind(self) -> &'static str {
+        match self {
+            Self::WindowsStore => "windowsStore",
+            Self::Flatpak => "flatpak",
+            Self::CustomPackageManager => "packageManager",
+            Self::LinuxAppImage => "appImage",
+            Self::NativeLinux => "releasePage",
+            Self::WindowsInstaller | Self::WindowsPortable | Self::MacDmg => "direct",
+        }
+    }
+
+    fn is_externally_managed(self) -> bool {
+        matches!(
+            self,
+            Self::WindowsStore | Self::Flatpak | Self::CustomPackageManager
+        )
+    }
+
+    fn external_update_url(self) -> Option<&'static str> {
+        match self {
+            Self::Flatpak => Some(FLATPAK_PAGE_URL),
+            Self::WindowsStore => Some(WINDOWS_STORE_URI),
+            _ => None,
+        }
+    }
+
+    fn external_update_fallback_url(self) -> Option<&'static str> {
+        match self {
+            Self::WindowsStore => Some(WINDOWS_STORE_FALLBACK_URL),
+            _ => None,
+        }
+    }
+}
+
+fn install_channel() -> InstallChannel {
+    #[cfg(target_os = "windows")]
     {
-        false
+        if cfg!(feature = "windows_store") {
+            return InstallChannel::WindowsStore;
+        }
+
+        return if is_windows_portable_install() {
+            InstallChannel::WindowsPortable
+        } else {
+            InstallChannel::WindowsInstaller
+        };
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        return InstallChannel::MacDmg;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        return linux_install_channel(
+            cfg!(feature = "appimage"),
+            cfg!(feature = "flatpak"),
+            cfg!(feature = "package_manager"),
+        );
+    }
+
+    #[allow(unreachable_code)]
+    InstallChannel::NativeLinux
+}
+
+fn linux_install_channel(
+    is_appimage: bool,
+    is_flatpak: bool,
+    is_package_manager: bool,
+) -> InstallChannel {
+    if is_flatpak {
+        InstallChannel::Flatpak
+    } else if is_appimage {
+        InstallChannel::LinuxAppImage
+    } else if is_package_manager {
+        InstallChannel::CustomPackageManager
+    } else {
+        InstallChannel::NativeLinux
     }
 }
 
@@ -536,18 +717,6 @@ fn is_windows_portable_install() -> bool {
         .flatten()
         .map(|path| path.to_lowercase())
         .any(|path| exe_path.starts_with(&path))
-}
-
-fn is_package_manager_managed() -> bool {
-    cfg!(target_os = "linux") && option_env!("PACKAGE_MANAGER_MANAGED").is_some()
-}
-
-fn package_manager_message() -> String {
-    let hint = option_env!("PACKAGE_MANAGER_HINT").unwrap_or("your package manager");
-
-    format!(
-        "You seem to have installed iDescriptor using a package manager. Please use {hint} to update it."
-    )
 }
 
 fn downloads_dir() -> PathBuf {
@@ -602,4 +771,72 @@ fn reveal_path(path: QString) {
     cpp!(unsafe [dir as "QString"] {
         QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn linux_channel_requires_appimage_feature_signal() {
+        assert_eq!(
+            linux_install_channel(false, false, false),
+            InstallChannel::NativeLinux
+        );
+        assert_eq!(
+            linux_install_channel(true, false, false),
+            InstallChannel::LinuxAppImage
+        );
+    }
+
+    #[test]
+    fn externally_managed_channels_do_not_select_release_assets() {
+        for channel in [
+            InstallChannel::Flatpak,
+            InstallChannel::WindowsStore,
+            InstallChannel::CustomPackageManager,
+        ] {
+            assert_eq!(channel.asset_policy(), AssetPolicy::NoDirectDownload);
+            assert!(channel.is_externally_managed());
+        }
+    }
+
+    #[test]
+    fn only_store_channels_expose_external_update_urls() {
+        assert_eq!(
+            InstallChannel::Flatpak.external_update_url(),
+            Some(FLATPAK_PAGE_URL)
+        );
+        assert_eq!(
+            InstallChannel::WindowsStore.external_update_url(),
+            Some(WINDOWS_STORE_URI)
+        );
+        assert_eq!(
+            InstallChannel::CustomPackageManager.external_update_url(),
+            None
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn downloaded_appimage_is_marked_executable() -> anyhow::Result<()> {
+        let test_dir =
+            std::env::temp_dir().join(format!("idescriptor-updater-test-{}", std::process::id()));
+        std::fs::create_dir_all(&test_dir)?;
+        let appimage_path = test_dir.join("iDescriptor-Linux_x86_64.AppImage");
+        std::fs::write(&appimage_path, b"appimage-test")?;
+        let mut initial_permissions = std::fs::metadata(&appimage_path)?.permissions();
+        initial_permissions.set_mode(0o644);
+        std::fs::set_permissions(&appimage_path, initial_permissions)?;
+
+        mark_appimage_executable(&appimage_path).await?;
+
+        assert_ne!(
+            std::fs::metadata(&appimage_path)?.permissions().mode() & 0o111,
+            0
+        );
+
+        std::fs::remove_dir_all(test_dir)?;
+        Ok(())
+    }
 }

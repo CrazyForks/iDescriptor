@@ -40,6 +40,9 @@ DefaultWindow {
     readonly property bool canDownload: !root.packageManagerManaged && !!root.profile.browser_download_url
     readonly property bool shouldOpenDownloadedFile: !!root.profile.update_procedure_open_file
     readonly property bool shouldRevealDownloadedFile: !!root.profile.update_procedure_open_file_dir
+    readonly property bool hasExternalUpdateAction:
+        root.profile.delivery_kind === "flatpak"
+        || root.profile.delivery_kind === "windowsStore"
 
     function componentForState(state) {
         switch (state) {
@@ -167,15 +170,46 @@ DefaultWindow {
 
     function packageManagerText() {
         return root.profile.package_manager_managed_message
-                || qsTr("This installation is managed by a package manager. Please use it to update iDescriptor.")
+                || qsTr("Please use your package manager to update iDescriptor.")
     }
 
     function updatePromptText() {
-        if (root.packageManagerManaged)
+        switch (root.profile.delivery_kind) {
+        case "flatpak":
+            return qsTr("A newer version is available. Update iDescriptor through Flatpak or your software center.")
+        case "windowsStore":
+            return qsTr("A newer version is available. Update iDescriptor through Microsoft Store.")
+        case "packageManager":
             return root.packageManagerText()
+        case "releasePage":
+            return qsTr("A newer version is available, but this build has no configured direct-update package.")
+        }
+
         if (!root.canDownload)
             return qsTr("A newer version is available, but no matching download was found for this system.")
         return qsTr("Download and install when you are ready. Your current settings and connected devices will not be changed.")
+    }
+
+    function externalActionText() {
+        switch (root.profile.delivery_kind) {
+        case "flatpak":
+            return qsTr("Open Flatpak Page")
+        case "windowsStore":
+            return qsTr("Open Microsoft Store")
+        default:
+            return ""
+        }
+    }
+
+    function openExternalUpdatePage() {
+        var updateUrl = root.profile.external_update_url || ""
+        var fallbackUrl = root.profile.external_update_fallback_url || ""
+
+        if (updateUrl.length > 0 && Qt.openUrlExternally(updateUrl))
+            return
+
+        if (fallbackUrl.length > 0)
+            Qt.openUrlExternally(fallbackUrl)
     }
 
     Connections {
@@ -447,6 +481,13 @@ DefaultWindow {
                         visible: root.canDownload
                         text: qsTr("Download Update")
                         onClicked: root.startDownload()
+                    }
+
+                    PrimaryButton {
+                        Layout.fillWidth: true
+                        visible: root.hasExternalUpdateAction
+                        text: root.externalActionText()
+                        onClicked: root.openExternalUpdatePage()
                     }
                 }
             }

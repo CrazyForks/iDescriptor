@@ -40,6 +40,24 @@ pub enum Architecture {
     Arm,
 }
 
+/// Controls whether and how a GitHub release asset is selected.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum AssetPolicy {
+    /// Select the normal asset for the configured platform and portability mode.
+    #[default]
+    PlatformDefault,
+    /// Select a Windows installer package.
+    WindowsInstaller,
+    /// Select a Windows portable archive.
+    WindowsPortable,
+    /// Select a macOS disk image.
+    MacDmg,
+    /// Select a directly executable Linux AppImage.
+    LinuxAppImage,
+    /// Return release metadata without attaching a directly downloadable asset.
+    NoDirectDownload,
+}
+
 /// Describes how the host application normally wants to handle a downloaded update.
 #[derive(Clone, Debug, Default, Builder)]
 #[builder(setter(into), default)]
@@ -73,6 +91,8 @@ pub struct UpdaterConfig {
     pub is_portable: bool,
     /// Whether the app was installed by a package manager.
     pub package_manager_managed: bool,
+    /// Policy used to select a downloadable release asset.
+    pub asset_policy: AssetPolicy,
     /// Whether prerelease GitHub releases should be ignored.
     pub skip_prerelease: bool,
     /// Frontend instructions associated with this updater setup.
@@ -106,6 +126,9 @@ pub struct Updater {
     /// Mark this install as package-manager-managed.
     #[builder(default)]
     package_manager_managed: bool,
+    /// Choose which kind of release asset, if any, should be attached to an update.
+    #[builder(default)]
+    asset_policy: AssetPolicy,
     /// Ignore prerelease GitHub releases.
     #[builder(default = "true")]
     skip_prerelease: bool,
@@ -174,6 +197,7 @@ impl Updater {
             architecture: self.architecture,
             is_portable: self.is_portable,
             package_manager_managed: self.package_manager_managed,
+            asset_policy: self.asset_policy,
             skip_prerelease: self.skip_prerelease,
             update_procedure: self.update_procedure.clone(),
             package_manager_managed_message: self.package_manager_managed_message.clone(),
@@ -188,11 +212,12 @@ impl Updater {
             return Ok(None);
         };
 
-        let asset = if self.package_manager_managed {
-            None
-        } else {
-            Some(self.matching_asset(&release)?)
-        };
+        let asset =
+            if self.package_manager_managed || self.asset_policy == AssetPolicy::NoDirectDownload {
+                None
+            } else {
+                Some(self.matching_asset(&release)?)
+            };
 
         let update = Update {
             application_name: self.application_name.clone(),
@@ -209,6 +234,7 @@ impl Updater {
             architecture: self.architecture,
             is_portable: self.is_portable,
             package_manager_managed: self.package_manager_managed,
+            asset_policy: self.asset_policy,
             update_procedure: self.update_procedure.clone(),
             package_manager_managed_message: self.package_manager_managed_message.clone(),
             client: self.client.clone(),
@@ -281,7 +307,12 @@ impl Updater {
     }
 
     fn matching_asset(&self, release: &GitHubRelease) -> Result<UpdateAsset> {
-        let pattern = asset_pattern(self.platform, self.architecture, self.is_portable)?;
+        let pattern = asset_pattern(
+            self.platform,
+            self.architecture,
+            self.is_portable,
+            self.asset_policy,
+        )?;
         let asset_regex = Regex::new(&pattern).expect("asset pattern should be valid regex");
 
         release
@@ -334,6 +365,8 @@ pub struct Update {
     pub is_portable: bool,
     /// Whether this install should be updated through a package manager.
     pub package_manager_managed: bool,
+    /// Policy used to select this update's downloadable asset.
+    pub asset_policy: AssetPolicy,
     /// Frontend instructions associated with this update.
     pub update_procedure: UpdateProcedure,
     /// Optional frontend message for package-manager-managed installs.
@@ -539,7 +572,22 @@ fn asset_pattern(
     platform: Platform,
     architecture: Architecture,
     is_portable: bool,
+    asset_policy: AssetPolicy,
 ) -> Result<String> {
+    let (platform, is_portable) = match asset_policy {
+        AssetPolicy::PlatformDefault => (platform, is_portable),
+        AssetPolicy::WindowsInstaller => (Platform::Windows, false),
+        AssetPolicy::WindowsPortable => (Platform::Windows, true),
+        AssetPolicy::MacDmg => (Platform::MacOs, false),
+        AssetPolicy::LinuxAppImage => (Platform::Linux, false),
+        AssetPolicy::NoDirectDownload => {
+            return Err(ZUpdaterError::NoMatchingAsset {
+                platform,
+                architecture,
+            });
+        }
+    };
+
     let pattern = match platform {
         Platform::Windows => {
             let arch = match architecture {
@@ -566,7 +614,7 @@ fn asset_pattern(
                 Architecture::Arm => return Err(ZUpdaterError::UnsupportedArchitecture),
             };
 
-            format!(r"(?i).*-Linux_{arch}\.AppImage\.zip$")
+            format!(r"(?i).*-Linux_{arch}\.AppImage$")
         }
     };
 
@@ -622,11 +670,46 @@ mod tests {
 
     #[test]
     fn detects_windows_portable_asset_pattern() {
-        let pattern = asset_pattern(Platform::Windows, Architecture::X86_64, true).unwrap();
+        let pattern = asset_pattern(
+            Platform::Windows,
+            Architecture::X86_64,
+            true,
+            AssetPolicy::PlatformDefault,
+        )
+        .unwrap();
         let regex = Regex::new(&pattern).unwrap();
 
         assert!(regex.is_match("iDescriptor-Windows_x86_64.portable.zip"));
         assert!(!regex.is_match("iDescriptor-Windows_x86_64.msi"));
+    }
+
+    #[test]
+    fn explicit_asset_policy_overrides_detected_platform() {
+        let pattern = asset_pattern(
+            Platform::Windows,
+            Architecture::Arm64,
+            false,
+            AssetPolicy::LinuxAppImage,
+        )
+        .unwrap();
+        let regex = Regex::new(&pattern).unwrap();
+
+        assert!(regex.is_match("iDescriptor-v1.0.0-Linux_arm64.AppImage"));
+        assert!(!regex.is_match("iDescriptor-v1.0.0-Linux_arm64.AppImage.zip"));
+        assert!(!regex.is_match("iDescriptor-v1.0.0-Windows_arm64.msi"));
+    }
+
+    #[test]
+    fn no_direct_download_policy_does_not_select_an_asset_pattern() {
+        assert!(
+            asset_pattern(
+                Platform::Linux,
+                Architecture::X86_64,
+                false,
+                AssetPolicy::NoDirectDownload,
+            )
+            .is_err()
+        );
     }
 
     #[test]

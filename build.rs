@@ -8,6 +8,7 @@ fn main() {
 
     println!("cargo:rerun-if-changed=src/native.rs");
     println!("cargo:rerun-if-changed=src/status_window_controller.rs");
+    println!("cargo:rerun-if-env-changed=IDESCRIPTOR_PACKAGE_MANAGER_MESSAGE");
 
     println!("cargo:rerun-if-changed=src/live_reload.cpp");
     println!("cargo:rerun-if-changed=lib/uxplay/uxplay.h");
