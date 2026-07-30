@@ -1,5 +1,5 @@
 #![recursion_limit = "4096"]
-#![windows_subsystem = "windows"]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use crate::qquickimageprovider_imp::AddImageProvider;
 use once_cell::sync::Lazy;
@@ -163,7 +163,6 @@ fn main() {
             }
         }
 
-        crate::qrc::windows_rsrc();
         #[cfg(not(debug_assertions))]
         crate::ui_qrc::windows_qml();
     }
