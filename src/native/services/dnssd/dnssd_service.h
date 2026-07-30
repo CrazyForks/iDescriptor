@@ -53,12 +53,16 @@ public:
 signals:
     void deviceAdded(const NetworkDevice &device);
     void deviceRemoved(const QString &macAddress);
+    void started();
+    void failed(const QString &message);
 
 private slots:
     void processDnssdEvents();
 
 private:
     void cleanupDnssd();
+    void failBrowsing(const QString &message);
+    void clearDevices();
 
     static void DNSSD_API browseCallback(
         DNSServiceRef sdRef, DNSServiceFlags flags, uint32_t interfaceIndex,

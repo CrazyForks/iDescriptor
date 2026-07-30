@@ -34,30 +34,28 @@ AvahiService::~AvahiService() { stopBrowsing(); }
 
 void AvahiService::startBrowsing()
 {
-    if (m_running)
+    if (m_running || m_starting)
         return;
 
     qDebug() << "Starting Avahi browsing for Apple devices";
+    m_starting = true;
     initializeAvahi();
 
-    if (m_simplePoll) {
-        m_running = true;
+    if (m_simplePoll && (m_running || m_starting))
         m_pollTimer->start(100); // Poll every 100ms
-    }
 }
 
 void AvahiService::stopBrowsing()
 {
-    if (!m_running)
-        return;
+    if (m_running || m_starting || m_simplePoll || m_client || m_serviceBrowser)
+        qDebug() << "Stopping Avahi browsing";
 
-    qDebug() << "Stopping Avahi browsing";
     m_running = false;
+    m_starting = false;
+    m_failurePending = false;
     m_pollTimer->stop();
     cleanupAvahi();
-
-    QMutexLocker locker(&m_devicesMutex);
-    m_networkDevices.clear();
+    clearDevices();
 }
 
 QMap<QString, NetworkDevice> AvahiService::getNetworkDevices() const
@@ -75,7 +73,7 @@ AvahiService::getNetworkDeviceByMac(const QString &macAddress) const
 
 void AvahiService::pollAvahi()
 {
-    if (m_simplePoll && m_running) {
+    if (m_simplePoll && (m_running || m_starting)) {
         avahi_simple_poll_iterate(m_simplePoll, 0); // Non-blocking
     }
 }
@@ -87,6 +85,7 @@ void AvahiService::initializeAvahi()
     m_simplePoll = avahi_simple_poll_new();
     if (!m_simplePoll) {
         qWarning() << "Failed to create Avahi simple poll";
+        scheduleFailure(QStringLiteral("Failed to create Avahi simple poll"));
         return;
     }
 
@@ -94,10 +93,55 @@ void AvahiService::initializeAvahi()
         avahi_client_new(avahi_simple_poll_get(m_simplePoll),
                          (AvahiClientFlags)0, clientCallback, this, &error);
     if (!m_client) {
-        qWarning() << "Failed to create Avahi client:" << avahi_strerror(error);
+        const QString message = QStringLiteral("Failed to create Avahi client: %1")
+                                    .arg(QString::fromUtf8(avahi_strerror(error)));
+        qWarning() << message;
         cleanupAvahi();
+        scheduleFailure(message);
         return;
     }
+}
+
+void AvahiService::clearDevices()
+{
+    QList<QString> macAddresses;
+    {
+        QMutexLocker locker(&m_devicesMutex);
+        macAddresses = m_networkDevices.keys();
+        m_networkDevices.clear();
+    }
+
+    for (const QString &macAddress : macAddresses)
+        emit deviceRemoved(macAddress);
+}
+
+void AvahiService::scheduleFailure(const QString &message)
+{
+    if (m_failurePending)
+        return;
+
+    m_failurePending = true;
+    m_failureMessage = message;
+    m_running = false;
+    m_starting = false;
+    m_pollTimer->stop();
+    QTimer::singleShot(0, this, &AvahiService::failBrowsing);
+}
+
+void AvahiService::failBrowsing()
+{
+    if (!m_failurePending)
+        return;
+
+    m_failurePending = false;
+    const QString message = m_failureMessage;
+    m_failureMessage.clear();
+    m_running = false;
+    m_starting = false;
+    m_pollTimer->stop();
+    cleanupAvahi();
+    clearDevices();
+    emit failed(message);
 }
 
 void AvahiService::cleanupAvahi()
@@ -130,13 +174,23 @@ void AvahiService::clientCallback(AvahiClient *client, AvahiClientState state,
             nullptr, (AvahiLookupFlags)0, browseCallback, userdata);
 
         if (!service->m_serviceBrowser) {
-            qWarning() << "Failed to create service browser:"
-                       << avahi_strerror(avahi_client_errno(client));
+            const QString message =
+                QStringLiteral("Failed to create service browser: %1")
+                    .arg(QString::fromUtf8(
+                        avahi_strerror(avahi_client_errno(client))));
+            qWarning() << message;
+            service->scheduleFailure(message);
+        } else if (service->m_starting) {
+            service->m_starting = false;
+            service->m_running = true;
+            emit service->started();
         }
     } else if (state == AVAHI_CLIENT_FAILURE) {
-        qWarning() << "Avahi client failure:"
-                   << avahi_strerror(avahi_client_errno(client));
-        service->m_running = false;
+        const QString message = QStringLiteral("Avahi client failure: %1")
+                                    .arg(QString::fromUtf8(
+                                        avahi_strerror(avahi_client_errno(client))));
+        qWarning() << message;
+        service->scheduleFailure(message);
     }
 }
 
@@ -175,6 +229,7 @@ void AvahiService::browseCallback(AvahiServiceBrowser *browser,
 
     case AVAHI_BROWSER_FAILURE:
         qWarning() << "Browser failure";
+        service->scheduleFailure(QStringLiteral("Avahi service browser failure"));
         break;
 
     default:

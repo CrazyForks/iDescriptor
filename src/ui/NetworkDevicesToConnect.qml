@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import iDescriptor
 import "." as App
 import "./base"
 
@@ -12,8 +13,16 @@ Item {
     // property var networkDeviceCards : ({})
     ListModel { id: deviceModel }
 
-    property string statusText: deviceModel.count === 0 ? qsTr("No network devices found") : qsTr("Found %1 network device(s)").arg(deviceModel.count)
-
+    property string statusText: {
+        switch (NetworkDeviceProvider.state) {
+            case NetworkDeviceProvider.Loading:
+                return qsTr("Network device provider is loading")
+            case NetworkDeviceProvider.Failed:
+                return qsTr("Network device provider failed to start")
+            default:
+                return deviceModel.count === 0 ? qsTr("No network devices found") : qsTr("Found %1 network device(s)").arg(deviceModel.count)
+        }
+    }
     function normalizeDevice(mac, dev) {
         return {
             mac: mac || dev.macAddress || "",
@@ -208,13 +217,33 @@ Item {
         anchors.margins: 6
         spacing: 10
 
-        Label {
+        RowLayout {
             Layout.fillWidth: true
-            text: root.statusText
-            horizontalAlignment: Text.AlignHCenter
-            font.pointSize: 12
-            font.weight: Font.Medium
-            wrapMode: Text.WordWrap
+            spacing: 3
+
+            Item {
+                visible: retryButton.visible
+                Layout.preferredWidth: retryButton.implicitWidth
+            }
+
+            Label {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                text: root.statusText
+                horizontalAlignment: Text.AlignHCenter
+                font.pointSize: 12
+                font.weight: Font.Medium
+                wrapMode: Text.WordWrap
+            }
+
+            Button {
+                id: retryButton
+                Layout.alignment: Qt.AlignVCenter
+                visible: NetworkDeviceProvider.state === NetworkDeviceProvider.Failed
+                enabled: NetworkDeviceProvider.state === NetworkDeviceProvider.Failed
+                text: qsTr("Retry")
+                onClicked: NetworkDeviceProvider.restartBrowsing()
+            }
         }
 
         SectionBox {
@@ -281,7 +310,7 @@ Item {
                                         Layout.fillWidth: true
 
 
-                                        spacing: 1
+                                        spacing: Qt.platform.os === "windows" ? 3 : 0
 
                                         RowLayout {
                                             Layout.fillWidth: true

@@ -50,13 +50,18 @@ public:
 signals:
     void deviceAdded(const NetworkDevice &device);
     void deviceRemoved(const QString &macAddress);
+    void started();
+    void failed(const QString &message);
 
 private slots:
     void pollAvahi();
+    void failBrowsing();
 
 private:
     void initializeAvahi();
     void cleanupAvahi();
+    void clearDevices();
+    void scheduleFailure(const QString &message);
 
     static void clientCallback(AvahiClient *client, AvahiClientState state,
                                void *userdata);
@@ -82,6 +87,9 @@ private:
     mutable QMutex m_devicesMutex;
     QMap<QString, NetworkDevice> m_networkDevices;
     bool m_running;
+    bool m_starting = false;
+    bool m_failurePending = false;
+    QString m_failureMessage;
 };
 
 #endif // AVAHI_SERVICE_H

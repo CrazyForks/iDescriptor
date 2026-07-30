@@ -53,35 +53,40 @@ void DnssdService::startBrowsing()
                          browseCallback, this);
 
     if (err != kDNSServiceErr_NoError) {
-        qWarning() << "DNSServiceBrowse failed:" << err;
+        const QString message =
+            QStringLiteral("DNSServiceBrowse failed: %1").arg(err);
+        qWarning() << message;
         // FIXME: Show a warning message
         // QMessageBox::warning(nullptr, "DNSSD failed to launch",
         //                      "Failed to start DNSSD browsing this means you "
         //                      "cannot use wireless devices and AirPlay please "
         //                      "solve this issue from dependency check area");
+        failBrowsing(message);
         return;
     }
 
     int fd = DNSServiceRefSockFD(m_browseRef);
+    if (fd < 0) {
+        failBrowsing(QStringLiteral("DNS-SD browsing returned an invalid socket"));
+        return;
+    }
+
     m_socketNotifier = new QSocketNotifier(fd, QSocketNotifier::Read, this);
     connect(m_socketNotifier, &QSocketNotifier::activated, this,
             &DnssdService::processDnssdEvents);
 
     m_running = true;
+    emit started();
 }
 
 void DnssdService::stopBrowsing()
 {
-    if (!m_running)
-        return;
+    if (m_running || m_browseRef || m_socketNotifier)
+        qDebug() << "Stopping DNS-SD browsing";
 
-    qDebug() << "Stopping DNS-SD browsing";
     m_running = false;
     cleanupDnssd();
-
-    QMutexLocker locker(&m_devicesMutex);
-    m_networkDevices.clear();
-    m_pendingDevices.clear();
+    clearDevices();
 }
 
 QMap<QString, NetworkDevice> DnssdService::getNetworkDevices() const
@@ -100,8 +105,34 @@ DnssdService::getNetworkDeviceByMac(const QString &macAddress) const
 void DnssdService::processDnssdEvents()
 {
     if (m_browseRef && m_running) {
-        DNSServiceProcessResult(m_browseRef);
+        const DNSServiceErrorType error = DNSServiceProcessResult(m_browseRef);
+        if (error != kDNSServiceErr_NoError) {
+            failBrowsing(
+                QStringLiteral("DNS-SD browsing failed: %1").arg(error));
+        }
     }
+}
+
+void DnssdService::failBrowsing(const QString &message)
+{
+    m_running = false;
+    cleanupDnssd();
+    clearDevices();
+    emit failed(message);
+}
+
+void DnssdService::clearDevices()
+{
+    QList<QString> macAddresses;
+    {
+        QMutexLocker locker(&m_devicesMutex);
+        macAddresses = m_networkDevices.keys();
+        m_networkDevices.clear();
+        m_pendingDevices.clear();
+    }
+
+    for (const QString &macAddress : macAddresses)
+        emit deviceRemoved(macAddress);
 }
 
 void DnssdService::cleanupDnssd()
@@ -123,13 +154,16 @@ void DNSSD_API DnssdService::browseCallback(
     const char *replyDomain, void *context)
 {
     Q_UNUSED(sdRef)
-    Q_UNUSED(regtype)
-    Q_UNUSED(replyDomain)
-
-    if (errorCode != kDNSServiceErr_NoError)
-        return;
 
     DnssdService *service = static_cast<DnssdService *>(context);
+    if (errorCode != kDNSServiceErr_NoError) {
+        service->failBrowsing(
+            QStringLiteral("DNS-SD browse callback failed: %1").arg(errorCode));
+        return;
+    }
+
+    Q_UNUSED(regtype)
+    Q_UNUSED(replyDomain)
 
     if (flags & kDNSServiceFlagsAdd) {
         // Start resolving the service

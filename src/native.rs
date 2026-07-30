@@ -5,6 +5,7 @@ cpp! {{
     #include <QQuickStyle>
     #include <QQuickWindow>
     #include <QQmlContext>
+    #include <QtQml/qqml.h>
     #include <QLoggingCategory>
     #include <QtGui/QGuiApplication>
     #include <QFont>
@@ -109,11 +110,9 @@ pub fn initialize_engine(engine: &mut QmlEngine) {
         }
 
 
-        static NetworkDeviceProvider* s_networkProvider = nullptr;
-        if (!s_networkProvider) {
-            s_networkProvider = new NetworkDeviceProvider(QCoreApplication::instance());
-        }
-        engine_ptr->rootContext()->setContextProperty("NetworkDeviceProvider", s_networkProvider);
+        qmlRegisterSingletonInstance(
+            "iDescriptor", 1, 0, "NetworkDeviceProvider",
+            NetworkDeviceProvider::sharedInstance());
 
         static SystemAppearance* s_systemAppearance = nullptr;
         if (!s_systemAppearance) {
