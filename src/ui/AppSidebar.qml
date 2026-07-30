@@ -27,10 +27,11 @@ Rectangle {
             IconImage {
                 visible: Qt.platform.os !== "osx"
                 id: welcomeLogo
-                Layout.preferredWidth: 35
-                Layout.preferredHeight: 35
+                Layout.preferredWidth: 40
+                Layout.preferredHeight: 40
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 10
+                Layout.topMargin:10
                 color: palette.text
                 source: "qrc:/resources/icons/plain-icon.svg"
                 fillMode: Image.PreserveAspectFit

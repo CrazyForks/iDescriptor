@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
 <g transform="translate(0,1024) scale(0.1,-0.1)"
-fill="#ffffff" fill-rule="evenodd" stroke="none">
+fill="#ffffff" fill-rule="evenodd" stroke="#ffffff" stroke-width="80" stroke-linejoin="round">
 <path d="M2760 9163 c-578 -18 -1009 -230 -1266 -623 -142 -217 -223 -474
 -256 -810 -18 -185 -17 -4983 1 -5190 31 -350 81 -561 187 -787 68 -147 138
 -247 250 -359 235 -234 553 -369 959 -403 167 -15 4840 -15 4973 -1 489 53
