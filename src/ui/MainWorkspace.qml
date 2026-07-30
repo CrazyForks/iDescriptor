@@ -67,10 +67,7 @@ Item {
 
                 Rectangle {
                     anchors.fill: parent
-                    // color: App.Theme.windowBackground
-                    // color: Qt.rgba(0.961, 0.961, 0.969, 0.85)
-                    color: App.Theme.darkMode ? Qt.rgba(0.122, 0.122, 0.133, 0.85) : Qt.rgba(0.961, 0.961, 0.969, 0.85)
-                    // color: Qt.lighter(App.Theme.windowBackground, 1.1)
+                    color: Qt.platform.os !== "osx" ? App.Theme.windowBackground : App.Theme.windowBackgroundMacOS
                 }
 
                 ColumnLayout {
