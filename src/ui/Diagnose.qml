@@ -78,8 +78,8 @@ Item {
         anchors.centerIn: Overlay.overlay
         title: qsTr("Dependency Check")
         standardButtons: Dialog.Ok
-        onAccepted: DiagnoseImpl.clear_notice()
-        onRejected: DiagnoseImpl.clear_notice()
+        onAccepted: Qt.callLater(DiagnoseImpl.clear_notice)
+        onRejected: Qt.callLater(DiagnoseImpl.clear_notice)
 
         Label {
             width: 360

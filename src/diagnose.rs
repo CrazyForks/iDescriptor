@@ -6,6 +6,17 @@ use log::{error, warn};
 use macros::QtThreading;
 use qmetaobject::prelude::*;
 use qttypes::{QVariantList, QVariantMap};
+#[cfg(target_os = "windows")]
+use std::mem::MaybeUninit;
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::{
+    Foundation::{ERROR_SERVICE_DOES_NOT_EXIST, GetLastError},
+    System::Services::{
+        CloseServiceHandle, OpenSCManagerW, OpenServiceW, QueryServiceStatusEx, SC_HANDLE,
+        SC_MANAGER_CONNECT, SC_STATUS_PROCESS_INFO, SERVICE_QUERY_STATUS, SERVICE_RUNNING,
+        SERVICE_STATUS_PROCESS,
+    },
+};
 
 cpp::cpp! {{
     #ifdef IDESCRIPTOR_FLATPAK
@@ -464,9 +475,11 @@ async fn install_linux_dependency(dependency_id: &str) -> Result<String> {
 
 #[cfg(target_os = "windows")]
 async fn check_windows_dependencies() -> Result<Vec<DependencyStatus>> {
-    let bonjour = windows_service_status("Bonjour Service").await;
-    let apple_mobile = windows_service_status("Apple Mobile Device Service").await;
-    let winfsp = windows_service_status("WinFsp.Launcher").await;
+    let (bonjour, apple_mobile, winfsp) = tokio::join!(
+        windows_service_status("Bonjour Service"),
+        windows_service_status("Apple Mobile Device Service"),
+        windows_service_status("WinFsp.Launcher"),
+    );
 
     Ok(vec![
         DependencyStatus {
@@ -509,30 +522,78 @@ async fn check_windows_dependencies() -> Result<Vec<DependencyStatus>> {
 }
 
 #[cfg(target_os = "windows")]
+struct ServiceHandle(SC_HANDLE);
+
+#[cfg(target_os = "windows")]
+impl Drop for ServiceHandle {
+    fn drop(&mut self) {
+        unsafe {
+            CloseServiceHandle(self.0);
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
 async fn windows_service_status(service: &str) -> Availability {
-    match tokio::process::Command::new("sc")
-        .args(["query", service])
-        .output()
+    let service_name = service.to_string();
+    let service_to_query = service_name.clone();
+
+    match tokio::task::spawn_blocking(move || windows_service_status_native(&service_to_query))
         .await
     {
-        Ok(output) if output.status.success() => {
-            let text = String::from_utf8_lossy(&output.stdout);
-            if text.contains("RUNNING") {
-                Availability::Available
-            } else {
-                Availability::AvailableButNotRunning
-            }
-        }
-        Ok(output) => {
-            log::debug!(
-                "service check failed for {service}: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            Availability::Unavailable
-        }
+        Ok(status) => status,
         Err(err) => {
-            warn!("unable to query service {service}: {err}");
+            error!("Windows service check task failed for {service_name}: {err}");
             Availability::UnableToCheck
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_service_status_native(service: &str) -> Availability {
+    let service_name: Vec<u16> = service.encode_utf16().chain(Some(0)).collect();
+
+    unsafe {
+        let manager = OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT);
+        if manager.is_null() {
+            let error_code = GetLastError();
+            warn!("Unable to open the Windows Service Control Manager: {error_code}");
+            return Availability::UnableToCheck;
+        }
+        let _manager = ServiceHandle(manager);
+
+        let service_handle = OpenServiceW(manager, service_name.as_ptr(), SERVICE_QUERY_STATUS);
+        if service_handle.is_null() {
+            let error_code = GetLastError();
+            if error_code == ERROR_SERVICE_DOES_NOT_EXIST {
+                log::debug!("Windows service is not installed: {service}");
+                return Availability::Unavailable;
+            }
+
+            warn!("Unable to open Windows service {service}: {error_code}");
+            return Availability::UnableToCheck;
+        }
+        let _service = ServiceHandle(service_handle);
+
+        let mut status = MaybeUninit::<SERVICE_STATUS_PROCESS>::zeroed();
+        let mut bytes_needed = 0_u32;
+        if QueryServiceStatusEx(
+            service_handle,
+            SC_STATUS_PROCESS_INFO,
+            status.as_mut_ptr().cast(),
+            std::mem::size_of::<SERVICE_STATUS_PROCESS>() as u32,
+            &mut bytes_needed,
+        ) == 0
+        {
+            let error_code = GetLastError();
+            warn!("Unable to query Windows service {service}: {error_code}");
+            return Availability::UnableToCheck;
+        }
+
+        if status.assume_init().dwCurrentState == SERVICE_RUNNING {
+            Availability::Available
+        } else {
+            Availability::AvailableButNotRunning
         }
     }
 }
@@ -545,7 +606,7 @@ async fn install_windows_dependency(dependency_id: &str) -> Result<String> {
                 == Availability::AvailableButNotRunning
             {
                 start_windows_service("Bonjour Service").await?;
-                Ok("Bonjour Service start command was sent.".to_string())
+                Ok("Bonjour Service started successfully.".to_string())
             } else {
                 install_bonjour().await
             }
@@ -555,11 +616,11 @@ async fn install_windows_dependency(dependency_id: &str) -> Result<String> {
                 == Availability::AvailableButNotRunning
             {
                 start_windows_service("Apple Mobile Device Service").await?;
-                Ok("Apple Mobile Device Service start command was sent.".to_string())
+                Ok("Apple Mobile Device Service started successfully.".to_string())
             } else {
                 run_bundled_elevated_script("install-apple-drivers.ps1")
                     .await
-                    .map(|_| "Apple Mobile Device Support installer was started.".to_string())
+                    .map(|_| "Apple Mobile Device Support installation completed.".to_string())
             }
         }
         "winfsp" => {
@@ -567,11 +628,11 @@ async fn install_windows_dependency(dependency_id: &str) -> Result<String> {
                 == Availability::AvailableButNotRunning
             {
                 start_windows_service("WinFsp.Launcher").await?;
-                Ok("WinFsp service start command was sent.".to_string())
+                Ok("WinFsp service started successfully.".to_string())
             } else {
                 run_bundled_elevated_script("install-win-fsp.silent.bat")
                     .await
-                    .map(|_| "WinFsp installer was started.".to_string())
+                    .map(|_| "WinFsp installation completed.".to_string())
             }
         }
         _ => bail!("Unknown dependency: {dependency_id}"),
@@ -627,12 +688,12 @@ async fn install_bonjour() -> Result<String> {
         .context("Failed to extract Bonjour64.msi")?;
 
     run_powershell_elevated(&format!(
-        "Start-Process -FilePath '{}' -Verb RunAs",
+        "& \"$env:SystemRoot\\System32\\msiexec.exe\" /i '{}'; if ($LASTEXITCODE -notin @(0, 1641, 3010)) {{ exit $LASTEXITCODE }}; exit 0",
         powershell_quote_path(&msi_path)
     ))
     .await?;
 
-    Ok("Bonjour installer was started. Refresh the check after installation finishes.".to_string())
+    Ok("Bonjour installation completed.".to_string())
 }
 
 #[cfg(target_os = "windows")]
@@ -648,13 +709,10 @@ async fn run_bundled_elevated_script(script_name: &str) -> Result<()> {
     }
 
     let command = if script_name.ends_with(".ps1") {
-        format!(
-            "Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"{}\"' -Verb RunAs",
-            powershell_quote_path(&script_path)
-        )
+        format!("& '{}'", powershell_quote_path(&script_path))
     } else {
         format!(
-            "Start-Process -FilePath '{}' -Verb RunAs",
+            "& '{}'; exit $LASTEXITCODE",
             powershell_quote_path(&script_path)
         )
     };
@@ -662,15 +720,30 @@ async fn run_bundled_elevated_script(script_name: &str) -> Result<()> {
     run_powershell_elevated(&command).await
 }
 
+
+
 #[cfg(target_os = "windows")]
 async fn run_powershell_elevated(command: &str) -> Result<()> {
+    use base64::Engine;
+
+    let encoded_command = base64::engine::general_purpose::STANDARD.encode(
+        command
+            .encode_utf16()
+            .flat_map(|unit| unit.to_le_bytes())
+            .collect::<Vec<_>>(),
+    );
+    let elevation_command = format!(
+        "$process = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', '{encoded_command}'); exit $process.ExitCode"
+    );
+
     let status = tokio::process::Command::new("powershell.exe")
         .args([
             "-NoProfile",
+            "-NonInteractive",
             "-ExecutionPolicy",
             "Bypass",
             "-Command",
-            command,
+            &elevation_command,
         ])
         .status()
         .await
@@ -686,7 +759,7 @@ async fn run_powershell_elevated(command: &str) -> Result<()> {
 async fn start_windows_service(service: &str) -> Result<()> {
     let service = service.replace('\'', "''");
     run_powershell_elevated(&format!(
-        "Set-Service -Name '{service}' -StartupType Automatic; Start-Service -Name '{service}'"
+        "$ErrorActionPreference = 'Stop'; Set-Service -Name '{service}' -StartupType Automatic; Start-Service -Name '{service}'"
     ))
     .await
 }

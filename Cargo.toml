@@ -61,6 +61,7 @@ zupdater = { path= "lib/zupdater"}
 [target.'cfg(target_os = "windows")'.dependencies]
 compress-tools = { version = "0.16", features = ["tokio_support"] }
 md-5 = "0.10"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Services"] }
 
 [build-dependencies]
 cc = "1.2.61"
