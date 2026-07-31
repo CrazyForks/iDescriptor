@@ -21,14 +21,17 @@ extern "C" void afc_reader_read_at(const void *reader_ptr, int64_t offset,
                                    int32_t *out_len);
 
 QImage generate_thumbnail_with_reader_ffi(const void *reader_ptr,
-                                          int32_t file_size,
+                                          int64_t file_size,
                                           int32_t requested_w,
                                           int32_t requested_h)
 {
+    if (!reader_ptr || file_size <= 0)
+        return {};
+
     struct StreamContext {
         const void *readerPtr;
-        int32_t fileSize;
-        int currentPos;
+        int64_t fileSize;
+        int64_t currentPos;
     };
 
     auto *streamCtx = new StreamContext{reader_ptr, file_size, 0};
@@ -38,7 +41,9 @@ QImage generate_thumbnail_with_reader_ffi(const void *reader_ptr,
         if (ctx->currentPos >= ctx->fileSize)
             return AVERROR_EOF;
 
-        int toRead = std::min<int>(bufSize, ctx->fileSize - ctx->currentPos);
+        const int64_t remaining = ctx->fileSize - ctx->currentPos;
+        int32_t toRead = static_cast<int32_t>(
+            std::min<int64_t>(static_cast<int64_t>(bufSize), remaining));
         int32_t got = 0;
         afc_reader_read_at(ctx->readerPtr, ctx->currentPos, toRead, buf, &got);
 
@@ -54,22 +59,28 @@ QImage generate_thumbnail_with_reader_ffi(const void *reader_ptr,
         if (whence == AVSEEK_SIZE)
             return ctx->fileSize;
 
-        int newPos = 0;
-        switch (whence) {
+        int64_t newPos = 0;
+        switch (whence & ~AVSEEK_FORCE) {
         case SEEK_SET:
-            newPos = (int)offset;
+            newPos = offset;
             break;
         case SEEK_CUR:
-            newPos = ctx->currentPos + (int)offset;
+            if ((offset > 0 && ctx->currentPos > INT64_MAX - offset) ||
+                (offset < 0 && ctx->currentPos < INT64_MIN - offset))
+                return AVERROR(EINVAL);
+            newPos = ctx->currentPos + offset;
             break;
         case SEEK_END:
-            newPos = ctx->fileSize + (int)offset;
+            if ((offset > 0 && ctx->fileSize > INT64_MAX - offset) ||
+                (offset < 0 && ctx->fileSize < INT64_MIN - offset))
+                return AVERROR(EINVAL);
+            newPos = ctx->fileSize + offset;
             break;
         default:
-            return -1;
+            return AVERROR(EINVAL);
         }
         if (newPos < 0 || newPos > ctx->fileSize)
-            return -1;
+            return AVERROR(EINVAL);
         ctx->currentPos = newPos;
         return newPos;
     };

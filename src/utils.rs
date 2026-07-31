@@ -1,5 +1,6 @@
 use crate::{POSSIBLE_ROOT, run_sync};
 use ::log::{debug, error, warn};
+use anyhow::Context;
 use cpp::*;
 use idevice::{
     IdeviceError, IdeviceService,
@@ -751,6 +752,15 @@ pub fn create_image_from_buffer(buf: &[u8], width: u32, height: u32) -> QImage {
     })
 }
 
+pub fn scale_image_to_fit(img: QImage, width: u32, height: u32) -> QImage {
+    cpp!(unsafe [img as "QImage", width as "int", height as "int"] -> QImage as "QImage" {
+        if (img.isNull() || width <= 0 || height <= 0) {
+            return img;
+        }
+        return img.scaled(width, height, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    })
+}
+
 pub fn qt_queued_callback<T: QObject + 'static, T2: Send + 'static, F: FnMut(&T, T2) + 'static>(
     qptr: QPointer<T>,
     mut cb: F,
@@ -943,13 +953,13 @@ impl AfcReader {
         }
     }
 
-    pub async fn get_size(&self) -> i32 {
+    pub async fn get_size(&self) -> anyhow::Result<i64> {
         let mut afc = self.afc_arc.lock().await;
-
-        match afc.get_file_info(self.path.clone()).await {
-            Ok(info) => info.size as i32,
-            Err(_) => 0,
-        }
+        let info = afc
+            .get_file_info(self.path.clone())
+            .await
+            .with_context(|| format!("Failed to get file size for {}", self.path))?;
+        i64::try_from(info.size).context("Video file size exceeds FFmpeg's signed 64-bit limit")
     }
 
     pub fn read_at(&self, offset: i64, size: i32) -> Vec<u8> {
@@ -1014,7 +1024,7 @@ pub extern "C" fn afc_reader_read_at(
 
 pub fn generate_thumbnail(
     reader: &AfcReader,
-    file_size: i32,
+    file_size: i64,
     requested_w: i32,
     requested_h: i32,
 ) -> QImage {
@@ -1022,7 +1032,7 @@ pub fn generate_thumbnail(
 
     cpp!(unsafe [
         reader_ptr  as "const void*",
-        file_size   as "int32_t",
+        file_size   as "int64_t",
         requested_w as "int32_t",
         requested_h as "int32_t"
     ] -> QImage as "QImage" {
