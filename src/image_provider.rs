@@ -53,39 +53,43 @@ fn parse_image_id(id: &str) -> Option<(String, u32, String, bool)> {
 }
 
 fn requested_cache_size(requested_size: &QSize) -> (u32, u32) {
-    (requested_size.width, requested_size.height)
+    fn normalize_dimension(value: u32) -> u32 {
+        // qttypes represents QSize dimensions as u32, so Qt's -1 sentinel for
+        // an unspecified sourceSize crosses the FFI boundary as a large value.
+        if value > i32::MAX as u32 { 0 } else { value }
+    }
+
+    (
+        normalize_dimension(requested_size.width),
+        normalize_dimension(requested_size.height),
+    )
+}
+
+fn image_response(image: QImage) -> (QSize, QImage) {
+    let size = image.size();
+    (size, image)
 }
 
 impl QQuickImageProvider for ImageProvider {
     fn request_image(&self, id: &str, requested_size: &QSize) -> (QSize, QImage) {
-        let placeholder = (
-            QSize {
-                width: 500,
-                height: 500,
-            },
-            QImage::load_from_file(QString::from(
+        let placeholder = || {
+            image_response(QImage::load_from_file(QString::from(
                 ":/resources/icons/material-symbols_image-outline-sharp.svg",
-            )),
-        );
+            )))
+        };
 
         let (udid, index, path, afc2) = match parse_image_id(id) {
             Some(v) => v,
             None => {
                 println!("Failed to parse image id: {}", id);
-                return placeholder;
+                return placeholder();
             }
         };
 
         let (width, height) = requested_cache_size(requested_size);
 
         if let Some(img) = crate::image_cache::get(&udid, &path, afc2, width, height) {
-            return (
-                QSize {
-                    width: 500,
-                    height: 500,
-                },
-                img,
-            );
+            return image_response(img);
         }
 
         self.loader.pinned().borrow().request_thumbnail(
@@ -97,6 +101,6 @@ impl QQuickImageProvider for ImageProvider {
             height,
         );
 
-        placeholder
+        placeholder()
     }
 }
