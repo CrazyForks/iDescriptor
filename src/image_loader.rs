@@ -3,9 +3,10 @@ use crate::device_ctx;
 use crate::qt_threading::{QtThread, QtThreading};
 use crate::utils::{
     AfcReader, MediaFileType, create_image_from_buffer, generate_thumbnail, heic_to_qimage,
-    media_file_type,
+    media_file_type, scale_image_to_fit,
 };
 use ::log::{debug, error};
+use anyhow::Context;
 use idevice::afc::AfcClient;
 use idevice::afc::opcode::AfcFopenMode;
 use macros::QtThreading;
@@ -34,6 +35,7 @@ pub struct ImageLoader {
 }
 
 static POOL_SEM: Lazy<Arc<Semaphore>> = Lazy::new(|| Arc::new(Semaphore::new(10)));
+static DECODE_SEM: Lazy<Arc<Semaphore>> = Lazy::new(|| Arc::new(Semaphore::new(10)));
 static SCHEDULER: Lazy<Arc<Scheduler>> = Lazy::new(|| {
     let scheduler = Arc::new(Scheduler::new());
     let worker_scheduler = Arc::clone(&scheduler);
@@ -59,10 +61,15 @@ struct JobPayload {
     qt_thread: QtThread<ImageLoader>,
 }
 
+struct InFlightJob {
+    cancellation: CancellationToken,
+    payloads: Vec<JobPayload>,
+}
+
 struct QueueState {
     pq: PriorityQueue<JobKey, (u32, Reverse<u64>)>,
-    payloads: HashMap<JobKey, JobPayload>,
-    in_flight: HashMap<JobKey, CancellationToken>,
+    payloads: HashMap<JobKey, Vec<JobPayload>>,
+    in_flight: HashMap<JobKey, InFlightJob>,
 }
 
 struct Scheduler {
@@ -88,11 +95,14 @@ impl Scheduler {
 
         {
             let mut guard = self.state.lock().expect("scheduler mutex poisoned");
-            if guard.in_flight.contains_key(&key) {
+            if let Some(job) = guard.in_flight.get_mut(&key) {
+                if !job.cancellation.is_cancelled() {
+                    job.payloads.push(payload);
+                }
                 return;
             }
 
-            guard.payloads.insert(key.clone(), payload);
+            guard.payloads.entry(key.clone()).or_default().push(payload);
 
             if guard.pq.get_priority(&key).is_some() {
                 guard.pq.change_priority(&key, priority);
@@ -104,21 +114,29 @@ impl Scheduler {
         self.notify.notify_one();
     }
 
-    fn pop_next(&self) -> Option<(JobKey, JobPayload, CancellationToken)> {
+    fn pop_next(&self) -> Option<(JobKey, CancellationToken)> {
         let mut guard = self.state.lock().expect("scheduler mutex poisoned");
         let (key, _) = guard.pq.pop()?;
-        let payload = guard.payloads.remove(&key)?;
+        let payloads = guard.payloads.remove(&key)?;
         let cancellation = CancellationToken::new();
-        guard.in_flight.insert(key.clone(), cancellation.clone());
-        Some((key, payload, cancellation))
+        guard.in_flight.insert(
+            key.clone(),
+            InFlightJob {
+                cancellation: cancellation.clone(),
+                payloads,
+            },
+        );
+        Some((key, cancellation))
     }
 
-    fn finish(&self, key: &JobKey) {
+    fn finish(&self, key: &JobKey) -> Vec<JobPayload> {
         self.state
             .lock()
             .expect("scheduler mutex poisoned")
             .in_flight
-            .remove(key);
+            .remove(key)
+            .map(|job| job.payloads)
+            .unwrap_or_default()
     }
 
     fn cancel_for_udid(&self, udid: &str) {
@@ -140,7 +158,7 @@ impl Scheduler {
                 .in_flight
                 .iter()
                 .filter(|(key, _)| key.udid == udid)
-                .map(|(_, cancellation)| cancellation.clone())
+                .map(|(_, job)| job.cancellation.clone())
                 .collect::<Vec<_>>();
 
             (queued_keys.len(), active_cancellations)
@@ -158,21 +176,21 @@ impl Scheduler {
 
     async fn run(self: Arc<Self>) {
         loop {
-            let Some((key, payload, cancellation)) = self.pop_next() else {
+            let Some((key, cancellation)) = self.pop_next() else {
                 self.notify.notified().await;
                 continue;
             };
 
             let permit = tokio::select! {
                 _ = cancellation.cancelled() => {
-                    self.finish(&key);
+                    let _ = self.finish(&key);
                     continue;
                 }
                 result = POOL_SEM.clone().acquire_owned() => {
                     match result {
                         Ok(permit) => permit,
                         Err(err) => {
-                            self.finish(&key);
+                            let _ = self.finish(&key);
                             error!("image_loader: semaphore acquire failed: {err}");
                             continue;
                         }
@@ -183,9 +201,9 @@ impl Scheduler {
             let scheduler = Arc::clone(&self);
             RUNTIME.spawn(async move {
                 let _permit = permit;
-                let result: anyhow::Result<()> = async {
+                let result: anyhow::Result<bool> = async {
                     if cancellation.is_cancelled() {
-                        return Ok(());
+                        return Ok(false);
                     }
 
                     let device = device_ctx::get_device(key.udid.as_str()).await?;
@@ -204,51 +222,77 @@ impl Scheduler {
                             let reader =
                                 AfcReader::new(key.udid.clone(), key.path.clone(), afc_arc);
 
-                            // let reader_for_block = reader;
-                            let f_size = reader.get_size().await;
+                            let f_size = reader.get_size().await?;
                             if cancellation.is_cancelled() {
-                                return Ok(());
+                                return Ok(false);
                             }
                             if !(f_size > 0) {
                                 anyhow::bail!("File size is invalid for {}", key.path);
                             };
 
-                            tokio::task::spawn_blocking(move || {
+                            let Some(img) = decode_image(&cancellation, move || {
                                 generate_thumbnail(
                                     &reader,
-                                    f_size, // FIXME: use consts for sizes
+                                    f_size,
                                     key.width as i32,
                                     key.height as i32,
                                 )
                             })
-                            .await
-                            .unwrap_or_default()
+                            .await?
+                            else {
+                                return Ok(false);
+                            };
+                            img
                         }
                         MediaFileType::Heic => {
-                            let mut afc = afc_arc.lock().await;
-                            if cancellation.is_cancelled() {
-                                return Ok(());
-                            }
+                            let buf = {
+                                let mut afc = afc_arc.lock().await;
+                                if cancellation.is_cancelled() {
+                                    return Ok(false);
+                                }
 
-                            let mut fd = afc.open(&key.path, AfcFopenMode::RdOnly).await?;
-                            let read_result = fd.read_entire().await;
-                            let close_result = fd.close().await;
-                            let buf = read_result?;
-                            close_result?;
+                                file_to_buffer(&mut afc, &key.path).await?
+                            };
 
                             if cancellation.is_cancelled() {
-                                return Ok(());
+                                return Ok(false);
                             }
 
-                            heic_to_qimage(&buf)
+                            let width = key.width;
+                            let height = key.height;
+                            let Some(img) = decode_image(&cancellation, move || {
+                                scale_image_to_fit(heic_to_qimage(&buf), width, height)
+                            })
+                            .await?
+                            else {
+                                return Ok(false);
+                            };
+                            img
                         }
                         MediaFileType::Image => {
-                            let mut afc = afc_arc.lock().await;
+                            let buf = {
+                                let mut afc = afc_arc.lock().await;
+                                if cancellation.is_cancelled() {
+                                    return Ok(false);
+                                }
+
+                                file_to_buffer(&mut afc, &key.path).await?
+                            };
+
                             if cancellation.is_cancelled() {
-                                return Ok(());
+                                return Ok(false);
                             }
 
-                            file_to_image(&mut afc, &key.path, key.width, key.height).await
+                            let width = key.width;
+                            let height = key.height;
+                            let Some(img) = decode_image(&cancellation, move || {
+                                create_image_from_buffer(&buf, width, height)
+                            })
+                            .await?
+                            else {
+                                return Ok(false);
+                            };
+                            img
                         }
                         MediaFileType::Unsupported => {
                             anyhow::bail!("Unsupported media file {}", key.path);
@@ -263,30 +307,33 @@ impl Scheduler {
                         .await
                         .is_none()
                     {
-                        return Ok(());
+                        return Ok(false);
                     }
 
                     crate::image_cache::insert(
                         &key.udid, &key.path, key.afc2, key.width, key.height, img,
                     );
 
-                    let row = payload.row;
-                    let path_for_qt = payload.path_for_qt;
-                    let qt_thread = payload.qt_thread;
-                    let afc2 = key.afc2;
-
-                    qt_thread.queue(move |backend_qobj| {
-                        backend_qobj.thumbnailReady(path_for_qt, row, afc2);
-                    });
-
-                    Ok(())
+                    Ok(true)
                 }
                 .await;
 
-                scheduler.finish(&key);
-
-                if let Err(err) = result {
-                    error!("image_loader: thumbnail job failed: {err}");
+                let payloads = scheduler.finish(&key);
+                match result {
+                    Ok(true) => {
+                        let afc2 = key.afc2;
+                        for payload in payloads {
+                            let row = payload.row;
+                            let path_for_qt = payload.path_for_qt;
+                            payload.qt_thread.queue(move |backend_qobj| {
+                                backend_qobj.thumbnailReady(path_for_qt, row, afc2);
+                            });
+                        }
+                    }
+                    Ok(false) => {}
+                    Err(err) => {
+                        error!("image_loader: thumbnail job failed: {err}");
+                    }
                 }
             });
         }
@@ -299,28 +346,46 @@ pub fn cancel_for_udid(udid: &str) {
     }
 }
 
-//FIXME: move
-async fn file_to_image(afc: &mut AfcClient, path: &str, width: u32, height: u32) -> QImage {
-    let mut buf = Vec::new();
-
-    let mut fd = match afc.open(path, AfcFopenMode::RdOnly).await {
-        Ok(f) => f,
-        Err(e) => {
-            error!("file_to_image: failed to open {path}: {e}");
-            return QImage::default();
+async fn decode_image<F>(
+    cancellation: &CancellationToken,
+    decode: F,
+) -> anyhow::Result<Option<QImage>>
+where
+    F: FnOnce() -> QImage + Send + 'static,
+{
+    let permit = tokio::select! {
+        _ = cancellation.cancelled() => return Ok(None),
+        result = DECODE_SEM.clone().acquire_owned() => {
+            result.context("image_loader: decoder semaphore is closed")?
         }
     };
 
-    // FIXME: optimize chunk
+    let image = tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        decode()
+    })
+    .await
+    .context("image_loader: decoder task failed")?;
+
+    Ok(Some(image))
+}
+
+async fn file_to_buffer(afc: &mut AfcClient, path: &str) -> anyhow::Result<Vec<u8>> {
+    let mut buf = Vec::new();
+
+    let mut fd = afc
+        .open(path, AfcFopenMode::RdOnly)
+        .await
+        .with_context(|| format!("file_to_buffer: failed to open {path}"))?;
+
     let mut chunk = vec![0u8; crate::io_manager::DEFAULT_CHUNK_SIZE];
 
     loop {
         let n = match fd.read(&mut chunk).await {
             Ok(n) => n,
             Err(e) => {
-                error!("file_to_image: failed to read {path}: {e}");
-                buf.clear();
-                break;
+                fd.close().await.ok();
+                return Err(e).with_context(|| format!("file_to_buffer: failed to read {path}"));
             }
         };
         if n == 0 {
@@ -328,9 +393,11 @@ async fn file_to_image(afc: &mut AfcClient, path: &str, width: u32, height: u32)
         }
         buf.extend_from_slice(&chunk[..n]);
     }
-    fd.close().await.ok();
+    fd.close()
+        .await
+        .with_context(|| format!("file_to_buffer: failed to close {path}"))?;
 
-    create_image_from_buffer(&buf, width, height)
+    Ok(buf)
 }
 
 impl ImageLoader {
