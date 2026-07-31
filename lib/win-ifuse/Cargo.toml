@@ -1,0 +1,22 @@
+[package]
+name = "win-ifuse"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "Mount iOS AFC filesystems on Windows using WinFsp"
+repository = "https://github.com/iDescriptor/iDescriptor"
+
+[lib]
+name = "win_ifuse"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+idevice = { version = "0.1.65", default-features = false, features = ["afc", "house_arrest", "usbmuxd", "tcp", "openssl"] }
+log = "0.4"
+plist = "1"
+tokio = { version = "1", features = ["rt", "sync"] }
+widestring = "1"
+windows = { version = "0.61.1", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+winfsp = { git = "https://github.com/uncor3/winfsp-rs.git", rev = "23a582913c70f3addc6102344dc9cd539b2bfbe7", default-features = false }
+winfsp-sys = { git = "https://github.com/uncor3/winfsp-rs.git", rev = "23a582913c70f3addc6102344dc9cd539b2bfbe7" }

@@ -3,99 +3,71 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import "../base"
-import "../"
+import "../" as App
 
 ToolWindow {
     id: root
     width: 560
-    height: 360
+    height: 330
     minimumWidth: 420
-    minimumHeight: 300
+    minimumHeight: 280
     title: qsTr("iFuse Mount - iDescriptor")
 
-    property string selectedUdid: ""
     property string mountPath: ""
     property bool openedCurrentMount: false
-    readonly property bool hasUsbDevice: usbDeviceModel.count > 0
+    property var mountState: ({
+        busy: false,
+        mounted: false,
+        mountPath: "",
+        message: "",
+        isError: false
+    })
 
-    ListModel { id: usbDeviceModel }
-
-    function isWirelessDevice(dev) {
-        return dev && dev.info && dev.info.connection_type === "Wireless"
+    function updateMountState() {
+        root.mountState = iFuse.state_for_device(root.udid)
     }
 
-    function deviceName(dev) {
-        if (!dev)
-            return qsTr("Unknown Device")
-        if (dev.info && dev.info.product_type)
-            return dev.info.product_type
-        return dev.text || qsTr("Unknown Device")
+    function deviceName() {
+        if (root.device.info && root.device.info.marketing_name)
+            return root.device.info.marketing_name
+        if (root.device.info && root.device.info.product_type)
+            return root.device.info.product_type
+        return root.device.text || qsTr("Unknown Device")
     }
 
-    function rebuildDeviceModel() {
-        usbDeviceModel.clear()
-
-        for (let i = 0; i < DeviceContext.devices.count; ++i) {
-            const dev = DeviceContext.devices.get(i)
-            if (isWirelessDevice(dev))
-                continue // Skip wireless devices since ifuse only works with USB
-
-            usbDeviceModel.append({
-                udid: dev.udid,
-                text: deviceName(dev) + " / " + dev.udid,
-                productType: deviceName(dev)
-            })
-        }
-
-        if (usbDeviceModel.count === 0) {
-            selectedUdid = ""
-            mountPath = qsTr("No device connected.")
-            stateView.viewState = StateView.State.Content
-            return
-        }
-
-        let index = 0
-        for (let j = 0; j < usbDeviceModel.count; ++j) {
-            if (usbDeviceModel.get(j).udid === root.udid) {
-                index = j
-                break
-            }
-        }
-
-        deviceCombo.currentIndex = index
-        applyDeviceAt(index)
-        stateView.viewState = StateView.State.Content
-
-        console.log(usbDeviceModel.count + " USB device(s) found.")
+    function productType() {
+        if (root.device.info && root.device.info.product_type)
+            return root.device.info.product_type
+        return root.deviceName()
     }
 
-    function applyDeviceAt(index) {
-        if (index < 0 || index >= usbDeviceModel.count)
-            return
-
-        const item = usbDeviceModel.get(index)
-        selectedUdid = item.udid
-        mountPath = iFuse.default_mount_path(item.productType)
+    function parentPath(path) {
+        const normalized = String(path || "").replace(/\\/g, "/")
+        const separator = normalized.lastIndexOf("/")
+        return separator > 0 ? normalized.substring(0, separator) : normalized
     }
 
-    
     Component.onCompleted: {
         // FIXME: skipped WinFsp DiagnoseDialog check from QWidget port.
         // The original code showed DiagnoseDialog when IsWinFspInstalled() != SERVICE_AVAILABLE on Windows.
-        rebuildDeviceModel()
+        root.mountPath = iFuse.default_mount_path(root.productType())
+        root.updateMountState()
+        stateView.viewState = StateView.State.Content
     }
 
     Connections {
-        target: DeviceContext.devices
-        function onCountChanged() {
-            root.rebuildDeviceModel()
+        target: App.DeviceContext
+
+        function onDeviceRemoved(removedUdid) {
+            if (root.udid === removedUdid && root.mountState.mounted)
+                iFuse.unmount_device_path(removedUdid, root.mountState.mountPath)
         }
     }
 
     FolderDialog {
         id: linuxFolderDialog
         title: qsTr("Select Mount Directory")
-        currentFolder: root.mountPath ? Helpers.toFileUrl(root.mountPath) : ""
+        currentFolder: root.mountPath ? App.Helpers.toFileUrl(root.mountPath) : ""
         onAccepted: root.mountPath = QmlUtils.url_to_path(selectedFolder)
     }
 
@@ -103,7 +75,7 @@ ToolWindow {
         id: windowsMountDialog
         title: qsTr("Select Mount Directory")
         fileMode: FileDialog.SaveFile
-        currentFolder: root.mountPath ? Helpers.toFileUrl(root.mountPath.substring(0, root.mountPath.lastIndexOf("/"))) : ""
+        currentFolder: root.mountPath ? App.Helpers.toFileUrl(root.parentPath(root.mountPath)) : ""
         onAccepted: root.mountPath = QmlUtils.url_to_path(selectedFile)
     }
 
@@ -117,58 +89,34 @@ ToolWindow {
             anchors.margins: 20
             spacing: 15
 
-            // Description label
             Label {
                 Layout.fillWidth: true
-                text: qsTr("This tool allows you to mount your iPhone's disk as a drive on your PC")
+                text: qsTr("Mount %1's media as a drive on your PC.").arg(root.deviceName())
                 wrapMode: Text.WordWrap
                 font.pixelSize: 14
                 opacity: 0.72
                 bottomPadding: 10
             }
 
-            // Status label
             Rectangle {
                 Layout.fillWidth: true
-                visible: iFuse.state.message && iFuse.state.message.length > 0
+                visible: root.mountState.message && root.mountState.message.length > 0
                 radius: 4
-                color: iFuse.state.isError ? "#ffe6e6" : "#e6ffe6"
-                border.color: iFuse.state.isError ? "#ffcccc" : "#ccffcc"
+                color: root.mountState.isError ? "#ffe6e6" : "#e6ffe6"
+                border.color: root.mountState.isError ? "#ffcccc" : "#ccffcc"
                 implicitHeight: statusLabel.implicitHeight + 16
 
                 Label {
                     id: statusLabel
                     anchors.fill: parent
                     anchors.margins: 8
-                    text: iFuse.state.message || ""
-                    color: iFuse.state.isError ? "#dd0000" : "#006600"
+                    text: root.mountState.message || ""
+                    color: root.mountState.isError ? "#dd0000" : "#006600"
                     wrapMode: Text.WordWrap
                     verticalAlignment: Text.AlignVCenter
                 }
             }
 
-            // Device selection
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-
-                Label {
-                    text: qsTr("Select Device:")
-                    Layout.minimumWidth: 100
-                }
-
-                ComboBox {
-                    id: deviceCombo
-                    Layout.fillWidth: true
-                    enabled: root.hasUsbDevice && !iFuse.state.busy
-                    model: usbDeviceModel
-                    textRole: "text"
-                    valueRole: "udid"
-                    onActivated: (index) => root.applyDeviceAt(index)
-                }
-            }
-
-            // Mount path selection
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10
@@ -190,17 +138,15 @@ ToolWindow {
 
                     MouseArea {
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (root.mountPath && !iFuse.state.busy)
-                                Qt.openUrlExternally(Helpers.toFileUrl(root.mountPath))
-                        }
+                        enabled: root.mountState.mounted && !root.mountState.busy
+                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        onClicked: Qt.openUrlExternally(App.Helpers.toFileUrl(root.mountPath))
                     }
                 }
 
                 Button {
                     text: qsTr("Browse...")
-                    enabled: root.hasUsbDevice && !iFuse.state.busy
+                    enabled: !root.mountState.busy && !root.mountState.mounted
                     onClicked: {
                         if (Qt.platform.os === "windows")
                             windowsMountDialog.open()
@@ -210,13 +156,21 @@ ToolWindow {
                 }
             }
 
-            // Mount button
             Button {
                 Layout.fillWidth: true
                 implicitHeight: 40
-                text: iFuse.state.busy ? qsTr("Mounting...") : qsTr("Mount Device")
-                enabled: root.hasUsbDevice && !iFuse.state.busy
-                onClicked: iFuse.mount(root.selectedUdid, root.mountPath)
+                text: {
+                    if (root.mountState.busy)
+                        return root.mountState.mounted ? qsTr("Unmounting...") : qsTr("Mounting...")
+                    return root.mountState.mounted ? qsTr("Unmount Device") : qsTr("Mount Device")
+                }
+                enabled: !root.mountState.busy && root.mountPath.length > 0
+                onClicked: {
+                    if (root.mountState.mounted)
+                        iFuse.unmount_device_path(root.udid, root.mountState.mountPath)
+                    else
+                        iFuse.mount(root.udid, root.mountPath)
+                }
             }
 
             Item { Layout.fillHeight: true }
@@ -225,13 +179,19 @@ ToolWindow {
 
     Connections {
         target: iFuse
-        function onState_changed() {
-            if (!iFuse.state.mounted)
+
+        function onDeviceStateChanged(changedUdid) {
+            if (changedUdid !== root.udid)
+                return
+
+            root.updateMountState()
+            if (!root.mountState.mounted)
                 root.openedCurrentMount = false
 
-            if (iFuse.state.mounted && !iFuse.state.busy && iFuse.state.mountPath && !root.openedCurrentMount) {
+            if (root.mountState.mounted && !root.mountState.busy
+                    && root.mountState.mountPath && !root.openedCurrentMount) {
                 root.openedCurrentMount = true
-                Qt.openUrlExternally(Helpers.toFileUrl(iFuse.state.mountPath))
+                Qt.openUrlExternally(App.Helpers.toFileUrl(root.mountState.mountPath))
             }
         }
     }

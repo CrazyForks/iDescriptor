@@ -2,11 +2,11 @@
 set -euo pipefail
 
 
-#Example 
+#Example
 #mkdir -p "target/deploy"
 #cd target/deploy
 #cp ../release/idescriptor.exe ./
-#../../scripts/deploy-exe.sh --executable="./idescriptor.exe" --qt-bin-path="C:\Qt\6.9.3\mingw_64\bin" --win-ifuse="./" --project-source-dir="../../" --qml-source-dir="/c/Users/uncore/Desktop/iDescriptor/src/ui"
+#../../scripts/deploy-exe.sh --executable="./idescriptor.exe" --qt-bin-path="C:\Qt\6.9.3\mingw_64\bin" --project-source-dir="../../" --qml-source-dir="/c/Users/uncore/Desktop/iDescriptor/src/ui"
 
 
 # Parse arguments
@@ -16,7 +16,6 @@ QT_BIN_PATH=""
 MSYS2_BIN_PATH="/c/msys64/mingw64/bin"  # default
 QML_SOURCE_DIR=""
 PROJECT_SOURCE_DIR=""
-WIN_IFUSE=""
 
 for arg in "$@"; do
     case $arg in
@@ -25,14 +24,13 @@ for arg in "$@"; do
         --qt-bin-path=*) QT_BIN_PATH="${arg#*=}" ;;
         --msys2-bin-path=*) MSYS2_BIN_PATH="${arg#*=}" ;;
         --qml-source-dir=*) QML_SOURCE_DIR="${arg#*=}" ;;
-        --project-source-dir=*) PROJECT_SOURCE_DIR="${arg#*=}" ;; 
-        --win-ifuse=*) WIN_IFUSE="${arg#*=}" ;;
+        --project-source-dir=*) PROJECT_SOURCE_DIR="${arg#*=}" ;;
         *) echo "Unknown argument: $arg"; exit 1 ;;
     esac
 done
 
 # Validate required args
-for var_name in EXECUTABLE_PATH OUTPUT_DIR QT_BIN_PATH QML_SOURCE_DIR PROJECT_SOURCE_DIR WIN_IFUSE; do
+for var_name in EXECUTABLE_PATH OUTPUT_DIR QT_BIN_PATH QML_SOURCE_DIR PROJECT_SOURCE_DIR; do
     if [ -z "${!var_name}" ]; then
         echo "Error: --$(echo $var_name | tr '[:upper:]' '_' | tr '_' '-' | tr '[:upper:]' '[:lower:]') is required"
         exit 1
@@ -252,6 +250,10 @@ ADDITIONAL_DLLS=(
     "libcryptopp.dll"
     "libde265-0.dll"
     "libbz2-1.dll"
+    # libplist for uxplay
+    "libplist-2.0.dll"
+    # libssl for openssl (idevice crate uses the system openssl)
+    "libssl-3-x64.dll"
     #gl plugins dependencies
     "libgstapp-1.0-0.dll"
     "libgstgl-1.0-0.dll"
@@ -271,27 +273,6 @@ for DLL_NAME in "${ADDITIONAL_DLLS[@]}"; do
     fi
 done
 
-# Required for win-ifuse and iproxy since we moved from libimobiledevice
-# and these are not dependencies of the main executable
-LIBIMOBILEDEVICE_DLLS=(
-    # "libimobiledevice-1.0.dll"
-    # "libimobiledevice-glue-1.0.dll"
-    # "libusbmuxd-2.0.dll"
-    "libplist-2.0.dll"
-    "libssl-3-x64.dll"
-)
-
-for DLL_NAME in "${LIBIMOBILEDEVICE_DLLS[@]}"; do
-    DLL_PATH="${MSYS2_BIN_PATH}/${DLL_NAME}"
-    if [ -f "${DLL_PATH}" ]; then
-        echo "Copying libimobiledevice DLL: ${DLL_NAME}"
-        cp "${DLL_PATH}" "${OUTPUT_DIR}/"
-    else
-        echo "Error: libimobiledevice DLL not found: ${DLL_NAME} (searched ${MSYS2_BIN_PATH})"
-        exit 1
-    fi
-done
-
 echo "Copying GStreamer helper executables..."
 GST_LIBEXEC_PATH="${MSYS2_BIN_PATH}/../libexec/gstreamer-1.0"
 mkdir -p "${OUTPUT_DIR}/gstreamer-1.0/libexec"
@@ -303,10 +284,6 @@ echo "Copying executables"
 echo "Copying required scripts"
 cp "${PROJECT_SOURCE_DIR}/install-apple-drivers.ps1" "${OUTPUT_DIR}/"
 cp "${PROJECT_SOURCE_DIR}/install-win-fsp.silent.bat" "${OUTPUT_DIR}/"
-
-echo "Copying win-ifuse executable"
-# FIXME
-# cp "${WIN_IFUSE}" "${OUTPUT_DIR}/"
 
 echo "Copying winfsp-x64.dll"
 cp "/c/Program Files (x86)/WinFsp/bin/winfsp-x64.dll" "${OUTPUT_DIR}/"

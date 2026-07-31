@@ -62,6 +62,10 @@ zupdater = { path= "lib/zupdater"}
 compress-tools = { version = "0.16", features = ["tokio_support"] }
 md-5 = "0.10"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Services"] }
+win-ifuse = { path = "lib/win-ifuse" }
+
+[patch.crates-io]
+idevice = { path = "lib/idevice-rs/idevice" }
 
 [build-dependencies]
 cc = "1.2.61"

@@ -59,7 +59,7 @@ Item {
             Item { Layout.fillWidth: true }
 
             Loader {
-                active: Qt.platform.os === "linux"
+                active: Qt.platform.os === "linux" || Qt.platform.os === "windows"
                 visible: active
                 sourceComponent: Component {
                     RowLayout {

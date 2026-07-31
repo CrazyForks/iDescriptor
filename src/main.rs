@@ -27,7 +27,7 @@ pub mod gallery_sqlite_provider;
 pub mod gallery_sqlite_vfs;
 #[cfg(not(target_os = "macos"))]
 pub mod ifuse;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod ifuse_manager;
 pub mod image_cache;
 pub mod image_loader;
@@ -273,9 +273,9 @@ fn main() {
     let ifuse = QObjectBox::new(ifuse::IFuse::new_with_state());
     #[cfg(not(target_os = "macos"))]
     engine.set_object_property("iFuse".into(), ifuse.pinned());
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     let ifuse_manager = QObjectBox::new(ifuse_manager::IFuseManager::default());
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     engine.set_object_property("IFuseManager".into(), ifuse_manager.pinned());
     #[cfg(not(target_os = "macos"))]
     let diagnose = QObjectBox::new(diagnose::Diagnose::new_with_state());
@@ -338,4 +338,7 @@ fn main() {
     }
 
     engine.exec();
+
+    #[cfg(target_os = "windows")]
+    ifuse::shutdown_all_mounts();
 }

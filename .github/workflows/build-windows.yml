@@ -267,7 +267,6 @@ jobs:
             --executable="./idescriptor.exe" \
             --output-dir="./" \
             --qt-bin-path="${qt_root_dir}/bin" \
-            --win-ifuse="./" \
             --project-source-dir="../../" \
             --qml-source-dir="${qml_source_dir}"
           popd

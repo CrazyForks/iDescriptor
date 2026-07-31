@@ -446,7 +446,7 @@ Item {
         {
             toolId: 6,
             title: qsTr("iFuse Mount"),
-            description: qsTr("Mount your iPhone's filesystem on your PC"),
+            description: qsTr("Mount your iDevice's filesystem on your PC"),
             requiresDevice: true,
             iconSource: "qrc:/resources/icons/fuse.svg",
             visible: (Qt.platform.os !== "osx" && Qt.platform.os !== "darwin"),

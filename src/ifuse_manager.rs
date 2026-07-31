@@ -6,10 +6,13 @@ use macros::QtThreading;
 use qmetaobject::prelude::*;
 use qttypes::QStringList;
 use std::sync::Arc;
+#[cfg(target_os = "linux")]
 use std::time::Duration;
+#[cfg(target_os = "linux")]
 use tokio::process::Command;
 use tokio::sync::Mutex;
 
+#[cfg(target_os = "linux")]
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[allow(non_snake_case)]
@@ -107,33 +110,42 @@ impl IFuseManager {
 }
 
 async fn discover_mount_points() -> Result<Vec<String>, String> {
-    let output = tokio::time::timeout(
-        COMMAND_TIMEOUT,
-        Command::new("mount").args(["-t", "fuse.ifuse"]).output(),
-    )
-    .await
-    .map_err(|_| "Timed out while discovering iFuse mount points".to_string())?
-    .map_err(|error| format!("Failed to run mount: {error}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(if stderr.is_empty() {
-            format!("mount exited with status {}", output.status)
-        } else {
-            stderr
-        });
+    #[cfg(target_os = "windows")]
+    {
+        return Ok(crate::ifuse::mounted_paths());
     }
 
-    let output = String::from_utf8_lossy(&output.stdout);
-    let mut mount_points = output
-        .lines()
-        .filter_map(parse_mount_point)
-        .collect::<Vec<_>>();
-    mount_points.sort();
-    mount_points.dedup();
-    Ok(mount_points)
+    #[cfg(target_os = "linux")]
+    {
+        let output = tokio::time::timeout(
+            COMMAND_TIMEOUT,
+            Command::new("mount").args(["-t", "fuse.ifuse"]).output(),
+        )
+        .await
+        .map_err(|_| "Timed out while discovering iFuse mount points".to_string())?
+        .map_err(|error| format!("Failed to run mount: {error}"))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(if stderr.is_empty() {
+                format!("mount exited with status {}", output.status)
+            } else {
+                stderr
+            });
+        }
+
+        let output = String::from_utf8_lossy(&output.stdout);
+        let mut mount_points = output
+            .lines()
+            .filter_map(parse_mount_point)
+            .collect::<Vec<_>>();
+        mount_points.sort();
+        mount_points.dedup();
+        Ok(mount_points)
+    }
 }
 
+#[cfg(target_os = "linux")]
 fn parse_mount_point(line: &str) -> Option<String> {
     let (_, remainder) = line.split_once(" on ")?;
     let (mount_path, _) = remainder.split_once(" type ")?;
@@ -161,8 +173,10 @@ fn without_path(paths: &QStringList, excluded_path: &str) -> QStringList {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "linux")]
     use super::parse_mount_point;
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn parses_ifuse_mount_output() {
         assert_eq!(
@@ -173,6 +187,7 @@ mod tests {
         );
     }
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn ignores_unrecognized_mount_output() {
         assert_eq!(parse_mount_point("not a mount line"), None);
