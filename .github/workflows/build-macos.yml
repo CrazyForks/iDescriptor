@@ -73,6 +73,8 @@ jobs:
             gst-plugins-ugly \
             gstreamer \
             jpeg-xl \
+            libheif \
+            openssl \
             sqlite
 
       - name: Setup Rust toolchain
