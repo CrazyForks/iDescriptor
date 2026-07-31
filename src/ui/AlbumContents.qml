@@ -294,6 +294,7 @@ Item {
 
                         Image {
                             cache: false
+                            asynchronous: true
                             anchors.fill: parent
                             source: "image://thumb/" + encodeURIComponent(filePath)
                                     + "?udid=" + root.udid
