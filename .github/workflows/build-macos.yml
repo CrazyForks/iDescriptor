@@ -74,8 +74,41 @@ jobs:
             gstreamer \
             jpeg-xl \
             libheif \
+            meson \
+            ninja \
             openssl \
             sqlite
+
+      - name: Build qml6glsink
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(pkg-config --modversion gstreamer-1.0)"
+          archive="gst-plugins-good-${version}.tar.xz"
+          source_url="https://gstreamer.freedesktop.org/src/gst-plugins-good"
+
+          cd "$RUNNER_TEMP"
+          curl --fail --location --retry 3 --output "$archive" \
+            "${source_url}/${archive}"
+          curl --fail --location --retry 3 --output "${archive}.sha256sum" \
+            "${source_url}/${archive}.sha256sum"
+          shasum -a 256 --check "${archive}.sha256sum"
+          tar -xf "$archive"
+          cd "gst-plugins-good-${version}"
+
+          meson setup build-qml6 . \
+            --auto-features=disabled \
+            -Dqt-method=qmake \
+            -Dqt6=enabled \
+            -Dqt5=disabled \
+            -Dtests=disabled \
+            -Dexamples=disabled \
+            -Dnls=disabled
+          ninja -C build-qml6
+
+          plugin_dir="$(brew --prefix)/lib/gstreamer-1.0"
+          cp build-qml6/ext/qt6/libgstqml6.dylib "$plugin_dir/"
+          gst-inspect-1.0 qml6glsink >/dev/null
 
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
