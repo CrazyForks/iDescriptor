@@ -4,36 +4,52 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Build version (e.g., v1.2.3)"
+        description: "Build version (for example, v1.2.3)"
         required: true
         default: "dev"
+        type: string
   workflow_call:
     inputs:
       version:
-        description: "Build version (e.g., v1.2.3)"
+        description: "Build version (for example, v1.2.3)"
         required: true
         type: string
-        default: "dev"
 env:
   QT_VERSION: "6.9.2"
-  GO_VERSION: "1.23.4"
   LIBPLIST_VER: "2.7.0"
   LIBTATSU_VER: "1.0.5"
   LIBIMOBILEDEVICE_GLUE_VER: "1.3.2"
   LIBIMOBILEDEVICE_VER: "1.4.0"
-  LIBIRECOVERY_VER: "1.3.1"
   IFUSE_VER: "1.2.0"
   LIBUSBMUXD_VER: "2.1.1"
 
 jobs:
   build-linux:
-    runs-on: ubuntu-22.04
+    name: Linux ${{ matrix.asset_arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            asset_arch: x86_64
+            qt_host: linux
+            gst_good_version: 1.22.12
+            gst_good_sha256: 9c1913f981900bd8867182639b20907b28ed78ef7a222cfbf2d8ba9dab992fa7
+            patch_gstreamer: true
+            # Qt for Linux Arm is only available on Ubuntu 24.04 and later
+          - runner: ubuntu-24.04-arm
+            asset_arch: arm64
+            qt_host: linux_arm64
+            gst_good_version: 1.24.13
+            gst_good_sha256: 574ac6f9fd84b32eb04e80572391d6762df6f9802a47bc0386cd6cc48c14d08b
+            patch_gstreamer: false
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: "recursive"
+          submodules: recursive
 
       - name: Install Linux dependencies
         run: |
@@ -80,7 +96,7 @@ jobs:
             libavcodec-dev \
             libavutil-dev \
             libswscale-dev \
-            python3-pip 
+            python3-pip
 
       - name: Install Meson
         run: |
@@ -91,104 +107,93 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+        uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
+          host: ${{ matrix.qt_host }}
           modules: "qtmultimedia qtlocation qtpositioning qtserialport qt5compat qtshadertools"
           dir: ${{ github.workspace }}
 
-      - name: Build qml6glsink for GStreamer 1.20
+      - name: Build qml6glsink
         shell: bash
         run: |
           set -euo pipefail
-
-          archive="gst-plugins-good-1.22.12.tar.xz"
+          version="${{ matrix.gst_good_version }}"
+          archive="gst-plugins-good-${version}.tar.xz"
           wget "https://gstreamer.freedesktop.org/src/gst-plugins-good/${archive}"
-          echo "9c1913f981900bd8867182639b20907b28ed78ef7a222cfbf2d8ba9dab992fa7  ${archive}" | sha256sum --check
+          echo "${{ matrix.gst_good_sha256 }}  ${archive}" | sha256sum --check
           tar -xf "${archive}"
-          cd gst-plugins-good-1.22.12
+          cd "gst-plugins-good-${version}"
 
-          patch -p1 < "${GITHUB_WORKSPACE}/.github/patches/gst-plugins-good-1.22-gstreamer-1.20.patch"
+          if [[ "${{ matrix.patch_gstreamer }}" == "true" ]]; then
+            patch -p1 < "${GITHUB_WORKSPACE}/.github/patches/gst-plugins-good-1.22-gstreamer-1.20.patch"
+          fi
 
           meson setup build-qml6 . \
             --prefix=/usr \
             --libdir="lib/$(uname -m)-linux-gnu" \
             --auto-features=disabled \
+            -Dqt-method=qmake \
             -Dqt6=enabled \
             -Dqt5=disabled \
             -Dqt-x11=enabled \
+            -Dqt-wayland=disabled \
+            -Dqt-egl=disabled \
             -Dtests=disabled \
             -Dexamples=disabled \
             -Dnls=disabled
 
           ninja -C build-qml6
-          GST_PLUGIN_PATH_1_0="${PWD}/build-qml6/ext/qt6" \
-            gst-inspect-1.0 qml6glsink >/dev/null
-          sudo cp build-qml6/ext/qt6/libgstqml6.so \
-            "/usr/lib/$(uname -m)-linux-gnu/gstreamer-1.0/"
+          GST_PLUGIN_PATH_1_0="${PWD}/build-qml6/ext/qt6" gst-inspect-1.0 qml6glsink >/dev/null
+          sudo install -Dm755 build-qml6/ext/qt6/libgstqml6.so \
+            "/usr/lib/$(uname -m)-linux-gnu/gstreamer-1.0/libgstqml6.so"
 
-      - name: Build libimobiledevice suite (versioned tarballs)
+      # FIXME: we still use ifuse on Linux so this step is still needed.
+      - name: Build libimobiledevice suite
+        shell: bash
         run: |
           set -euo pipefail
           workspace="$PWD"
-          tmp="$PWD/_tmp_libs"
+          tmp="$RUNNER_TEMP/idescriptor-libs"
           mkdir -p "$tmp"
           cd "$tmp"
-
           base_url="https://github.com/libimobiledevice"
-
-          libs=( "libplist" "libtatsu" "libimobiledevice-glue" "libusbmuxd" "libimobiledevice" "libirecovery"  "ifuse" )
+          libs=(libplist libtatsu libimobiledevice-glue libusbmuxd libimobiledevice ifuse)
 
           for name in "${libs[@]}"; do
-            ver_var=$(echo "${name^^}_VER" | sed 's/-/_/g')   # e.g. LIBPLIST_VER
+            ver_var=$(echo "${name^^}_VER" | sed 's/-/_/g')
             ver="${!ver_var:-}"
             if [ -z "$ver" ]; then
-              echo "Version for $name not set (env var $ver_var)"
+              echo "Version for $name not set (environment variable $ver_var)"
               exit 1
             fi
-
             archive="${name}-${ver}.tar.bz2"
-            url="${base_url}/${name}/releases/download/${ver}/${archive}"
-            echo "=== Processing $name $ver ==="
-            echo "URL: $url"
-            curl --retry 3 --retry-delay 5 -L -o "$archive" "$url"
-
-            echo "Extracting $archive"
+            curl --retry 3 --retry-delay 5 -L -o "$archive" \
+              "${base_url}/${name}/releases/download/${ver}/${archive}"
             tar xjf "$archive"
-
-            srcdir="${name}-${ver}"
-            pushd "$srcdir"
-
+            pushd "${name}-${ver}"
             ./configure
-
-
-            make -j"$(nproc)" && sudo make install
+            make -j"$(nproc)"
+            sudo make install
             popd
-            echo "Installed $name $ver"
           done
-
-          # cleanup
           cd "$workspace"
-          rm -rf "$tmp"
 
       - name: Update linker cache
         run: sudo ldconfig
 
-      - name: Build
-        run: |
-          RUSTFLAGS="" cargo build --release --features appimage
-          
+      - name: Build iDescriptor
+        run: RUSTFLAGS="" cargo build --release --features appimage
 
-      - name: Build AppImage
+      - name: Build and validate AppImage
+        shell: bash
         run: |
-          export VERSION=${{ inputs.version }}
-          # linuxdeployqt tries to bundle SQL drivers which we don't need
-          rm -rf ${{ github.workspace }}/Qt/{${{ env.QT_VERSION }}/gcc_64/plugins/sqldrivers/**
-          ./scripts/deploy-appimage.sh ${{ inputs.version }}
+          bash packaging/linux/appimage/deploy.sh "${{ inputs.version }}" "${{ matrix.asset_arch }}"
+          test -x "iDescriptor-${{ inputs.version }}-Linux_${{ matrix.asset_arch }}.AppImage"
 
-      - name: Upload Artifact (Linux)
-        if: runner.os == 'Linux'
+      - name: Upload updater artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iDescriptor-AppImage
-          path: iDescriptor-*.AppImage.zip
+          name: release-linux-${{ matrix.asset_arch }}
+          path: iDescriptor-${{ inputs.version }}-Linux_${{ matrix.asset_arch }}.AppImage
+          if-no-files-found: error
