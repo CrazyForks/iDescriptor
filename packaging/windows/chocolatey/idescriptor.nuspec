@@ -2,18 +2,17 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
     <metadata>
         <id>idescriptor</id>
-        <version>0.1.0</version>
+        <version>__VERSION__</version>
         <title>iDescriptor</title>
         <authors>The iDescriptor Project contributors</authors>
         <owners>iDescriptor</owners>
         <licenseUrl>https://github.com/iDescriptor/iDescriptor/blob/main/LICENSE</licenseUrl>
         <projectUrl>https://github.com/iDescriptor/iDescriptor</projectUrl>
-        <iconUrl>
-            https://raw.githubusercontent.com/iDescriptor/iDescriptor/main/resources/icons/app-icon/icon.png</iconUrl>
+        <iconUrl>https://raw.githubusercontent.com/iDescriptor/iDescriptor/main/packaging/shared/resources/app-icon/icon.png</iconUrl>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
-        <description>A free, open-source, and cross-platform iDevice management tool written in C++.</description>
-        <summary>Cross platform, open-source and free idevice management tool written in C++.</summary>
-        <releaseNotes>https://github.com/iDescriptor/iDescriptor/releases/tag/v0.1.0</releaseNotes>
+        <description>A free, open-source, and cross-platform iDevice management tool written in Rust.</description>
+        <summary>Cross-platform, open-source and free iDevice management tool written in Rust.</summary>
+        <releaseNotes>https://github.com/iDescriptor/iDescriptor/releases/tag/v__VERSION__</releaseNotes>
         <tags>idescriptor idevice apple ios ipad iphone admin foss cross-platform</tags>
         <packageSourceUrl>https://github.com/iDescriptor/iDescriptor</packageSourceUrl>
         <projectSourceUrl>https://github.com/iDescriptor/iDescriptor</projectSourceUrl>

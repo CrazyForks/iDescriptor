@@ -6,7 +6,7 @@ set -euo pipefail
 #mkdir -p "target/deploy"
 #cd target/deploy
 #cp ../release/idescriptor.exe ./
-#../../scripts/deploy-exe.sh --executable="./idescriptor.exe" --qt-bin-path="C:\Qt\6.9.3\mingw_64\bin" --project-source-dir="../../" --qml-source-dir="/c/Users/uncore/Desktop/iDescriptor/src/ui"
+#bash ../../packaging/windows/portable/deploy.sh --executable="./idescriptor.exe" --qt-bin-path="C:\Qt\6.9.3\mingw_64\bin" --project-source-dir="../../" --qml-source-dir="/c/Users/uncore/Desktop/iDescriptor/src/ui"
 
 
 # Parse arguments

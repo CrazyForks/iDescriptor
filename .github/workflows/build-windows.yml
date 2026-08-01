@@ -6,14 +6,13 @@ on:
       version:
         description: "Build version (e.g., v1.2.3)"
         required: true
-        default: "dev"
+        default: "v0.0.0"
   workflow_call:
     inputs:
       version:
         description: "Build version (e.g., v1.2.3)"
         required: true
         type: string
-        default: "dev"
 env:
   QT_VERSION: "6.9.3"
   GST_PLUGINS_GOOD_VERSION: "1.26.2"
@@ -26,6 +25,9 @@ env:
 
 jobs:
   build-windows:
+    environment: release
+    env:
+      HAS_WINDOWS_SIGNING: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 != '' }}
     runs-on: windows-2022
     defaults:
       run:
@@ -66,9 +68,6 @@ jobs:
           mingw-w64-x86_64-meson \
           mingw-w64-x86_64-ninja \
           mingw-w64-x86_64-pkgconf \
-          mingw-w64-x86_64-pugixml \
-          mingw-w64-x86_64-libusb \
-          mingw-w64-x86_64-qrencode \
           mingw-w64-x86_64-curl \
           mingw-w64-x86_64-openssl \
           mingw-w64-x86_64-libzip \
@@ -263,13 +262,26 @@ jobs:
           qml_source_dir="$(cygpath -au "$GITHUB_WORKSPACE")/src/ui"
 
           pushd target/deploy
-          ../../scripts/deploy-exe.sh \
+          bash ../../packaging/windows/portable/deploy.sh \
             --executable="./idescriptor.exe" \
             --output-dir="./" \
             --qt-bin-path="${qt_root_dir}/bin" \
             --project-source-dir="../../" \
             --qml-source-dir="${qml_source_dir}"
           popd
+
+      - name: Sign portable executable
+        if: ${{ env.HAS_WINDOWS_SIGNING == 'true' }}
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+          WINDOWS_SIGNING_TIMESTAMP_URL: ${{ vars.WINDOWS_SIGNING_TIMESTAMP_URL }}
+        run: |
+          $certificate = Join-Path $env:RUNNER_TEMP "idescriptor-signing.pfx"
+          [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERTIFICATE_BASE64))
+          $timestamp = if ($env:WINDOWS_SIGNING_TIMESTAMP_URL) { $env:WINDOWS_SIGNING_TIMESTAMP_URL } else { "http://timestamp.digicert.com" }
+          signtool sign /fd SHA256 /td SHA256 /tr $timestamp /f $certificate /p $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD target\deploy\idescriptor.exe
 
       - name: Create portable ZIP
         id: portable_zip
@@ -284,8 +296,81 @@ jobs:
           "zip_name=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "zip_path=$((Resolve-Path $zipName).Path)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Upload Portable Artifact
+      - name: Install WiX 4
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 4.0.6
+          wix extension add WixToolset.UI.wixext/4.0.6
+          wix extension add WixToolset.Util.wixext/4.0.6
+
+      - name: Build MSI
+        id: msi
+        shell: pwsh
+        run: |
+          $output = "iDescriptor-${{ inputs.version }}-Windows_x86_64.msi"
+          ./packaging/windows/msi/build.ps1 `
+            -DeployDir "target/deploy" `
+            -Version "${{ inputs.version }}" `
+            -OutputPath $output
+          "msi_path=$((Resolve-Path $output).Path)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Sign MSI
+        if: ${{ env.HAS_WINDOWS_SIGNING == 'true' }}
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+          WINDOWS_SIGNING_TIMESTAMP_URL: ${{ vars.WINDOWS_SIGNING_TIMESTAMP_URL }}
+        run: |
+          $certificate = Join-Path $env:RUNNER_TEMP "idescriptor-signing.pfx"
+          if (-not (Test-Path $certificate)) {
+            [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERTIFICATE_BASE64))
+          }
+          $timestamp = if ($env:WINDOWS_SIGNING_TIMESTAMP_URL) { $env:WINDOWS_SIGNING_TIMESTAMP_URL } else { "http://timestamp.digicert.com" }
+          signtool sign /fd SHA256 /td SHA256 /tr $timestamp /f $certificate /p $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD "${{ steps.msi.outputs.msi_path }}"
+
+      - name: Build Microsoft Store executable
+        run: |
+          CARGO_TARGET_DIR=target/windows-store RUSTFLAGS="" cargo build --release --features windows_store
+          rm -rf target/store-deploy
+          cp -R target/deploy target/store-deploy
+          cp target/windows-store/release/idescriptor.exe target/store-deploy/idescriptor.exe
+
+      - name: Install MSIX asset tooling
+        shell: pwsh
+        run: choco install imagemagick.app -y --no-progress
+
+      - name: Build and validate MSIX
+        id: msix
+        shell: pwsh
+        env:
+          MS_STORE_IDENTITY_NAME: ${{ vars.MS_STORE_IDENTITY_NAME }}
+          MS_STORE_PUBLISHER: ${{ vars.MS_STORE_PUBLISHER }}
+        run: |
+          # TODO: Confirm both values against the final Partner Center product identity.
+          $identity = if ($env:MS_STORE_IDENTITY_NAME) { $env:MS_STORE_IDENTITY_NAME } else { "com.idescriptor.idescriptor" }
+          $publisher = if ($env:MS_STORE_PUBLISHER) { $env:MS_STORE_PUBLISHER } else { "CN=iDescriptor" }
+          $output = "iDescriptor-${{ inputs.version }}-Windows_x86_64.msix"
+          ./packaging/windows/msix/build.ps1 `
+            -DeployDir "target/store-deploy" `
+            -Version "${{ inputs.version }}" `
+            -OutputPath $output `
+            -IdentityName $identity `
+            -Publisher $publisher
+          "msix_path=$((Resolve-Path $output).Path)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Upload updater artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.portable_zip.outputs.zip_name }}
-          path: ${{ steps.portable_zip.outputs.zip_path }}
+          name: release-windows-x86_64
+          path: |
+            ${{ steps.portable_zip.outputs.zip_path }}
+            ${{ steps.msi.outputs.msi_path }}
+          if-no-files-found: error
+
+      - name: Upload Microsoft Store artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-windows-x86_64
+          path: ${{ steps.msix.outputs.msix_path }}
+          if-no-files-found: error

@@ -1,0 +1,89 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package Name="iDescriptor"
+           Manufacturer="iDescriptor"
+           Version="$(var.Version)"
+           UpgradeCode="D6C5B4A3-F2E1-D0C9-B8A7-F6E5D4C3B2A1"
+           Language="1033"
+           Scope="perMachine"
+           InstallerVersion="500">
+    <SummaryInformation Description="iDescriptor Application" />
+    <MajorUpgrade Schedule="afterInstallInitialize"
+                  DowngradeErrorMessage="A newer version of iDescriptor is already installed."
+                  IgnoreRemoveFailure="no" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="iDescriptorIcon" SourceFile="$(var.SharedResources)\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="iDescriptorIcon" />
+    <Property Id="ARPCOMMENTS" Value="A free, open-source, and cross-platform iDevice management tool written in Rust." />
+    <Property Id="ARPHELPLINK" Value="https://github.com/iDescriptor/iDescriptor/issues" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/iDescriptor/iDescriptor" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/iDescriptor/iDescriptor/releases" />
+
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Start iDescriptor" />
+    <Property Id="WixUnelevatedShellExecTarget" Value="[#MainExecutable]" />
+    <Property Id="PREVIOUSINSTALLFOLDER">
+      <RegistrySearch Id="PreviousInstallFolderSearch"
+                      Root="HKLM"
+                      Key="Software\iDescriptor\iDescriptor"
+                      Name="InstallDir"
+                      Type="raw" />
+    </Property>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="iDescriptor" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="iDescriptor" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Component Id="InstallerMetadata" Directory="INSTALLFOLDER" Guid="7A6FA662-70D4-49E6-A584-9B15213D7E73">
+      <RegistryValue Root="HKLM"
+                     Key="Software\iDescriptor\iDescriptor"
+                     Name="InstallDir"
+                     Value="[INSTALLFOLDER]"
+                     Type="string"
+                     KeyPath="yes" />
+      <util:RemoveFolderEx Id="RemoveInstallFolderContents"
+                           Property="PREVIOUSINSTALLFOLDER"
+                           On="uninstall" />
+      <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+      <RemoveFolder Id="RemoveProgramMenuFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+    </Component>
+
+    <util:CloseApplication Id="CloseRunningIDescriptor"
+                           Target="idescriptor.exe"
+                           Description="iDescriptor must close before setup can continue."
+                           CloseMessage="yes"
+                           ElevatedCloseMessage="yes"
+                           RebootPrompt="no"
+                           Timeout="5"
+                           TerminateProcess="1" />
+
+    <Feature Id="MainFeature" Title="iDescriptor" Level="1">
+      <ComponentGroupRef Id="ApplicationFiles" />
+      <ComponentRef Id="InstallerMetadata" />
+    </Feature>
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.MsiResources)\LICENSE.rtf" />
+    <WixVariable Id="WixUIBannerBmp" Value="$(var.MsiResources)\banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="$(var.MsiResources)\dialog.bmp" />
+
+    <CustomAction Id="LaunchIDescriptor"
+                  BinaryRef="Wix4UtilCA_X64"
+                  DllEntry="WixUnelevatedShellExec"
+                  Execute="immediate"
+                  Return="asyncNoWait" />
+    <UI>
+      <Publish Dialog="ExitDialog"
+               Control="Finish"
+               Event="DoAction"
+               Value="LaunchIDescriptor"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+    </UI>
+  </Package>
+</Wix>
