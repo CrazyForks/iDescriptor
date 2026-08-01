@@ -1,18 +1,40 @@
 #!/bin/bash
 # if you get errors try
-# QMAKE=/usr/lib/qt6/bin/qmake  NO_STRIP=1 ./scripts/deploy-appimage.sh v1.0.0
+# QMAKE=/usr/lib/qt6/bin/qmake NO_STRIP=1 ./packaging/linux/appimage/deploy.sh v1.0.0
 # or even more explicit
 #export QT_HOME=~/Qt/$YOUR_QT_VERSION/gcc_64
 #export PATH="$QT_HOME/bin:$PATH"
 #export LD_LIBRARY_PATH="$QT_HOME/lib"
 #export QML2_IMPORT_PATH="$QT_HOME/qml"
 #export QT_PLUGIN_PATH="$QT_HOME/plugins"
-#QMAKE="$QT_HOME/bin/qmake6" ./scripts/deploy-appimage.sh v0.1.0
+#QMAKE="$QT_HOME/bin/qmake6" ./packaging/linux/appimage/deploy.sh v0.1.0
 
-set -e
-VERSION=$1
+set -euo pipefail
+
+VERSION="${1:-}"
+EXPECTED_ARCH="${2:-}"
 if [ -z "$VERSION" ]; then
     echo "No version specified"
+    exit 1
+fi
+
+case "$(uname -m)" in
+    x86_64)
+        LINUXDEPLOY_ARCH="x86_64"
+        ASSET_ARCH="x86_64"
+        ;;
+    aarch64|arm64)
+        LINUXDEPLOY_ARCH="aarch64"
+        ASSET_ARCH="arm64"
+        ;;
+    *)
+        echo "Unsupported AppImage build architecture: $(uname -m)"
+        exit 1
+        ;;
+esac
+
+if [ -n "$EXPECTED_ARCH" ] && [ "$EXPECTED_ARCH" != "$ASSET_ARCH" ]; then
+    echo "Architecture mismatch: runner is $ASSET_ARCH but workflow requested $EXPECTED_ARCH"
     exit 1
 fi
 
@@ -20,15 +42,20 @@ export VERSION=$VERSION
 export APPDIR=$PWD/AppDir
 export GSTREAMER_VERSION=1.0
 
+rm -rf "$APPDIR"
+
 # Download linuxdeploy and linuxdeploy-plugin-qt if not already present
-if [ ! -f linuxdeploy-x86_64.AppImage ]; then
-    wget -c -nv "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-    chmod a+x linuxdeploy-x86_64.AppImage 
+LINUXDEPLOY="linuxdeploy-${LINUXDEPLOY_ARCH}.AppImage"
+LINUXDEPLOY_QT="linuxdeploy-plugin-qt-${LINUXDEPLOY_ARCH}.AppImage"
+
+if [ ! -f "$LINUXDEPLOY" ]; then
+    wget -c -nv "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/${LINUXDEPLOY}"
+    chmod a+x "$LINUXDEPLOY"
 fi
 
-if [ ! -f linuxdeploy-plugin-qt-x86_64.AppImage ]; then
-    wget -c -nv "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
-    chmod a+x linuxdeploy-plugin-qt-x86_64.AppImage 
+if [ ! -f "$LINUXDEPLOY_QT" ]; then
+    wget -c -nv "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/${LINUXDEPLOY_QT}"
+    chmod a+x "$LINUXDEPLOY_QT"
 fi
 
 # Ensure patchelf is installed
@@ -40,11 +67,16 @@ fi
 # Prepare AppDir structure
 mkdir -p "$APPDIR/usr/bin"
 mkdir -p "$APPDIR/usr/share/applications"
-mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+for size in 16 32 256 512; do
+    mkdir -p "$APPDIR/usr/share/icons/hicolor/${size}x${size}/apps"
+done
 
 # Copy executable and icon
 cp target/release/idescriptor "$APPDIR/usr/bin/iDescriptor"
-cp packaging/shared/resources/app-icon/icon.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/iDescriptor.png"
+cp packaging/shared/resources/app-icon/icon-16.png "$APPDIR/usr/share/icons/hicolor/16x16/apps/iDescriptor.png"
+cp packaging/shared/resources/app-icon/icon-32.png "$APPDIR/usr/share/icons/hicolor/32x32/apps/iDescriptor.png"
+cp packaging/shared/resources/app-icon/icon-256.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/iDescriptor.png"
+cp packaging/shared/resources/app-icon/icon-512.png "$APPDIR/usr/share/icons/hicolor/512x512/apps/iDescriptor.png"
 
 
 # Copy ifuse
@@ -163,7 +195,7 @@ chmod +x "$APPDIR/apprun-hooks/linuxdeploy-plugin-env.sh"
 cp iDescriptor.desktop "$APPDIR/usr/share/applications/"
 
 # Manually deploy geoservices plugins (workaround for linuxdeploy-plugin-qt not finding them)
-if [ -n "$Qt6_DIR" ] && [ -d "$Qt6_DIR/plugins/geoservices" ]; then
+if [ -n "${Qt6_DIR:-}" ] && [ -d "$Qt6_DIR/plugins/geoservices" ]; then
     echo "Manually deploying geoservices plugins from $Qt6_DIR/plugins/geoservices"
     mkdir -p "$APPDIR/usr/plugins/geoservices"
     cp -v "$Qt6_DIR/plugins/geoservices"/*.so "$APPDIR/usr/plugins/geoservices/" || echo "Warning: Could not copy geoservices plugins"
@@ -177,17 +209,17 @@ if [ -n "$Qt6_DIR" ] && [ -d "$Qt6_DIR/plugins/geoservices" ]; then
     done
 else
     echo "Warning: Could not find geoservices plugins directory"
-    echo "Qt6_DIR=$Qt6_DIR"
-    echo "QT_HOME=$QT_HOME"
+    echo "Qt6_DIR=${Qt6_DIR:-}"
+    echo "QT_HOME=${QT_HOME:-}"
 fi
 
-export LD_LIBRARY_PATH="$APPDIR/usr/local/lib:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$APPDIR/usr/local/lib:${LD_LIBRARY_PATH:-}"
 export LINUXDEPLOY_EXCLUDED_LIBRARIES="*sql*"
 export QML_SOURCES_PATHS="./src/ui"
 export EXTRA_QT_MODULES="geoservices;position;multimedia"
 
 
- ./linuxdeploy-x86_64.AppImage \
+ "./${LINUXDEPLOY}" \
             --appdir ./AppDir \
             --desktop-file AppDir/usr/share/applications/iDescriptor.desktop \
             --executable "$APPDIR/usr/lib/gstreamer-1.0/gst-plugin-scanner" \
@@ -197,13 +229,22 @@ export EXTRA_QT_MODULES="geoservices;position;multimedia"
             --output appimage
 
 # Find the generated AppImage and rename it
-APPIMAGE_FILE=$(find . -maxdepth 1 -name "iDescriptor*.AppImage")
-if [ -n "$APPIMAGE_FILE" ]; then
-    mv "$APPIMAGE_FILE" "iDescriptor-${VERSION}-Linux_x86_64.AppImage"
-    chmod +x "iDescriptor-${VERSION}-Linux_x86_64.AppImage"
-    zip -r "iDescriptor-${VERSION}-Linux_x86_64.AppImage.zip" "iDescriptor-${VERSION}-Linux_x86_64.AppImage"
-    echo "AppImage created and zipped: iDescriptor-${VERSION}-Linux_x86_64.AppImage.zip"
+mapfile -t APPIMAGE_FILES < <(find . -maxdepth 1 -type f -name 'iDescriptor*.AppImage')
+if [ "${#APPIMAGE_FILES[@]}" -eq 1 ]; then
+    APPIMAGE_FILE="${APPIMAGE_FILES[0]}"
+    OUTPUT="iDescriptor-${VERSION}-Linux_${ASSET_ARCH}.AppImage"
+    mv "$APPIMAGE_FILE" "$OUTPUT"
+    chmod +x "$OUTPUT"
+    case "$ASSET_ARCH" in
+        x86_64) FILE_PATTERN='x86-64|x86_64' ;;
+        arm64) FILE_PATTERN='aarch64|ARM aarch64' ;;
+    esac
+    file "$OUTPUT" | grep -Eq "$FILE_PATTERN" || {
+        echo "Generated AppImage architecture does not match $ASSET_ARCH"
+        exit 1
+    }
+    echo "AppImage created: $OUTPUT"
 else
-    echo "Error: Could not find generated AppImage file."
+    echo "Error: Expected exactly one generated iDescriptor AppImage, found ${#APPIMAGE_FILES[@]}."
     exit 1
 fi
