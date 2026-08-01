@@ -77,7 +77,7 @@
                   BinaryRef="Wix4UtilCA_X64"
                   DllEntry="WixUnelevatedShellExec"
                   Execute="immediate"
-                  Return="asyncNoWait" />
+                  Return="check" />
     <UI>
       <Publish Dialog="ExitDialog"
                Control="Finish"
