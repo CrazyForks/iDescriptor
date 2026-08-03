@@ -9,6 +9,7 @@ Item {
     property string title: ""
     property string deviceId: ""
     required property string mode
+    required property string iconPath
     readonly property bool selectedDevice:
         App.DeviceContext.currentDestination === "recoveryDevice"
         && App.DeviceContext.currentDestinationId === deviceId
@@ -27,64 +28,71 @@ Item {
         width: root.width
         implicitHeight: contentColumn.implicitHeight + 10
         radius: App.Theme.sidebarCornerRadius
-        color: root.selectedDevice ? App.Theme.hover : App.Theme.controlFill
-        border.color: root.selectedDevice ? App.Theme.focus : App.Theme.controlStroke
-        border.width: 1
+        color: root.selectedDevice
+            ? App.Theme.sidebarSelection
+            : cardHover.hovered ? App.Theme.hover : "transparent"
 
         Behavior on color {
             ColorAnimation { duration: App.Theme.fastAnimation }
         }
 
-        ColumnLayout {
-            id: contentColumn
+        HoverHandler { id: cardHover }
+
+        RowLayout {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: 5
-            spacing: 5
 
-            Item {
-                Layout.fillWidth: true
-                Layout.preferredHeight: headerColumn.implicitHeight
+            Image {
+                source: root.iconPath
+                sourceSize.width: 30
+                sourceSize.height: 30
+                Layout.preferredWidth: 30
+                Layout.preferredHeight: 30
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+            }
 
-                HoverHandler { id: headerHover }
+            ColumnLayout {
+                id: contentColumn
+                spacing: 5
 
-                TapHandler {
-                    acceptedButtons: Qt.LeftButton
-                    onTapped: root.selectDevice()
-                }
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: headerColumn.implicitHeight
 
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 5
-                    color: headerHover.hovered ? App.Theme.hover : "transparent"
-                }
-
-                ColumnLayout {
-                    id: headerColumn
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 4
-
-                    Label {
-                        Layout.fillWidth: true
-                        Layout.minimumWidth: 0
-                        text: root.displayTitle
-                        color: App.Theme.text
-                        font.bold: true
-                        font.pixelSize: 13
-                        wrapMode: Text.WordWrap
-                        maximumLineCount: 2
-                        elide: Text.ElideRight
+                    TapHandler {
+                        acceptedButtons: Qt.LeftButton
+                        onTapped: root.selectDevice()
                     }
 
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.mode
-                        color: App.Theme.textMuted
-                        font.pixelSize: 11
-                        elide: Text.ElideRight
+                    ColumnLayout {
+                        id: headerColumn
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 4
+
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            text: root.displayTitle
+                            color: App.Theme.text
+                            font.bold: true
+                            font.pixelSize: 13
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: root.mode
+                            color: App.Theme.textMuted
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                        }
                     }
                 }
             }

@@ -16,7 +16,7 @@ Item {
         : root.udid
 
     implicitWidth: 175
-    implicitHeight: 58
+    implicitHeight: 42
 
     function selectDevice() {
         App.DeviceContext.selectPendingDevice(root.udid)
@@ -27,10 +27,8 @@ Item {
         anchors.fill: parent
         radius: App.Theme.sidebarCornerRadius
         color: root.selectedDevice
-            ? App.Theme.selectionSoft
-            : headerHover.hovered ? App.Theme.hover : App.Theme.controlFill
-        border.color: root.selectedDevice ? App.Theme.focus : App.Theme.controlStroke
-        border.width: 1
+            ? App.Theme.sidebarSelection
+            : headerHover.hovered ? App.Theme.hover : "transparent"
 
         Behavior on color {
             ColorAnimation { duration: App.Theme.fastAnimation }
@@ -84,8 +82,8 @@ Item {
 
             Spinner {
                 Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                Layout.preferredWidth: 25
-                Layout.preferredHeight: 25
+                Layout.preferredWidth: Qt.platform.os == "osx" ? 15 : 25
+                Layout.preferredHeight: Qt.platform.os == "osx" ? 15 : 25
                 running: true
             }
         }
