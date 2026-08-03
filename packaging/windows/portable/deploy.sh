@@ -282,6 +282,7 @@ echo "Copying executables"
 # cp "${MSYS2_BIN_PATH}/iproxy.exe" "${OUTPUT_DIR}/"
 
 echo "Copying required scripts"
+cp "${PROJECT_SOURCE_DIR}/install-bonjour.ps1" "${OUTPUT_DIR}/"
 cp "${PROJECT_SOURCE_DIR}/install-apple-drivers.ps1" "${OUTPUT_DIR}/"
 cp "${PROJECT_SOURCE_DIR}/install-win-fsp.silent.bat" "${OUTPUT_DIR}/"
 

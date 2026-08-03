@@ -35,6 +35,8 @@ Item {
     }
 
     function actionText(modelData) {
+        if (modelData.actionMode === "instructions")
+            return qsTr("View Instructions")
         if (modelData.id === "udev_rules")
             return qsTr("View Instructions")
         if (modelData.availability === 1)
@@ -209,7 +211,12 @@ Item {
                                     visible: modelData.actionVisible && root.diagnoseState.installingId !== modelData.id
                                     enabled: !root.diagnoseState.checking && root.diagnoseState.installingId.length === 0
                                     text: root.actionText(modelData)
-                                    onClicked: DiagnoseImpl.install(modelData.id)
+                                    onClicked: {
+                                        if (modelData.actionMode === "instructions")
+                                            Qt.openUrlExternally(modelData.documentationUrl)
+                                        else
+                                            DiagnoseImpl.install(modelData.id)
+                                    }
                                 }
                             }
                         }

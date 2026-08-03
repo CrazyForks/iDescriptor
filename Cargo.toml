@@ -59,11 +59,9 @@ lru = "0.18.0"
 zupdater = { path= "lib/zupdater"}
 
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
-ifuse = { version = "0.1.0", default-features = false, features = ["openssl"] }
+ifuse = { version = "0.1.1", default-features = false, features = ["openssl"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-compress-tools = { version = "0.16", features = ["tokio_support"] }
-md-5 = "0.10"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Services"] }
 
 [patch.crates-io]

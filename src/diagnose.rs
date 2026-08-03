@@ -1,5 +1,10 @@
 use crate::{RUNTIME, qt_threading::QtThreading, qvariantmap_insert};
-use anyhow::{Context, Result, anyhow, bail};
+#[cfg(any(
+    target_os = "linux",
+    all(target_os = "windows", not(feature = "windows_store"))
+))]
+use anyhow::{Context, bail};
+use anyhow::{Result, anyhow};
 #[cfg(all(target_os = "linux", feature = "flatpak"))]
 use cpp::cpp;
 use log::{error, warn};
@@ -72,6 +77,8 @@ struct DependencyStatus {
     optional: bool,
     availability: Availability,
     action_text: &'static str,
+    action_mode: &'static str,
+    documentation_url: &'static str,
 }
 
 #[derive(QObject, Default, QtThreading)]
@@ -264,6 +271,12 @@ fn items_to_variant_list(items: Vec<DependencyStatus>) -> QVariantList {
             QString::from(status_kind(item.availability))
         );
         qvariantmap_insert!(map, "actionText", QString::from(item.action_text));
+        qvariantmap_insert!(map, "actionMode", QString::from(item.action_mode));
+        qvariantmap_insert!(
+            map,
+            "documentationUrl",
+            QString::from(item.documentation_url)
+        );
         let action_visible = item.availability != Availability::Available
             && !(cfg!(all(target_os = "linux", feature = "flatpak")) && item.id == "avahi");
         qvariantmap_insert!(map, "actionVisible", action_visible);
@@ -314,9 +327,17 @@ async fn check_dependencies() -> Result<Vec<DependencyStatus>> {
 }
 
 async fn install_dependency(dependency_id: &str) -> Result<String> {
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", not(feature = "windows_store")))]
     {
         return install_windows_dependency(dependency_id).await;
+    }
+
+    #[cfg(all(target_os = "windows", feature = "windows_store"))]
+    {
+        let _ = dependency_id;
+        return Err(anyhow!(
+            "Install actions are not available in the Microsoft Store build"
+        ));
     }
 
     #[cfg(target_os = "linux")]
@@ -372,6 +393,8 @@ async fn check_linux_dependencies() -> Result<Vec<DependencyStatus>> {
         } else {
             "Install"
         },
+        action_mode: "install",
+        documentation_url: "",
     }];
 
     #[cfg(not(feature = "flatpak"))]
@@ -382,6 +405,8 @@ async fn check_linux_dependencies() -> Result<Vec<DependencyStatus>> {
         optional: true,
         availability: udev_rules,
         action_text: "View Instructions",
+        action_mode: "install",
+        documentation_url: "",
     });
 
     Ok(dependencies)
@@ -481,6 +506,10 @@ async fn check_windows_dependencies() -> Result<Vec<DependencyStatus>> {
         windows_service_status("WinFsp.Launcher"),
     );
 
+    let bonjour_action = windows_dependency_action("bonjour", bonjour);
+    let apple_action = windows_dependency_action("apple_mobile_device_support", apple_mobile);
+    let winfsp_action = windows_dependency_action("winfsp", winfsp);
+
     Ok(vec![
         DependencyStatus {
             id: "bonjour",
@@ -488,11 +517,9 @@ async fn check_windows_dependencies() -> Result<Vec<DependencyStatus>> {
             description: "Required for AirPlay, wireless devices and network service discovery.",
             optional: false,
             availability: bonjour,
-            action_text: if bonjour == Availability::AvailableButNotRunning {
-                "Start"
-            } else {
-                "Install"
-            },
+            action_text: bonjour_action.0,
+            action_mode: bonjour_action.1,
+            documentation_url: bonjour_action.2,
         },
         DependencyStatus {
             id: "apple_mobile_device_support",
@@ -500,11 +527,9 @@ async fn check_windows_dependencies() -> Result<Vec<DependencyStatus>> {
             description: "Required for iOS device communication.",
             optional: false,
             availability: apple_mobile,
-            action_text: if apple_mobile == Availability::AvailableButNotRunning {
-                "Start"
-            } else {
-                "Install"
-            },
+            action_text: apple_action.0,
+            action_mode: apple_action.1,
+            documentation_url: apple_action.2,
         },
         DependencyStatus {
             id: "winfsp",
@@ -512,13 +537,90 @@ async fn check_windows_dependencies() -> Result<Vec<DependencyStatus>> {
             description: "Optional. Required for mounting the device as a drive.",
             optional: true,
             availability: winfsp,
-            action_text: if winfsp == Availability::AvailableButNotRunning {
-                "Start"
-            } else {
-                "Install"
-            },
+            action_text: winfsp_action.0,
+            action_mode: winfsp_action.1,
+            documentation_url: winfsp_action.2,
         },
     ])
+}
+
+#[cfg(target_os = "windows")]
+fn windows_dependency_action(
+    _dependency_id: &str,
+    _availability: Availability,
+) -> (&'static str, &'static str, &'static str) {
+    #[cfg(feature = "windows_store")]
+    {
+        // FIXME: Change these Windows dependency guide URLs from dev to main after this work is merged.
+        let documentation_url = match _dependency_id {
+            "bonjour" => {
+                "https://github.com/iDescriptor/iDescriptor/blob/dev/docs/WINDOWS_DEPENDENCIES.md#bonjour"
+            }
+            "apple_mobile_device_support" => {
+                "https://github.com/iDescriptor/iDescriptor/blob/dev/docs/WINDOWS_DEPENDENCIES.md#apple-mobile-device-support"
+            }
+            "winfsp" => {
+                "https://github.com/iDescriptor/iDescriptor/blob/dev/docs/WINDOWS_DEPENDENCIES.md#winfsp"
+            }
+            _ => "",
+        };
+        return ("View Instructions", "instructions", documentation_url);
+    }
+
+    #[cfg(not(feature = "windows_store"))]
+    {
+        let action_text = if _availability == Availability::AvailableButNotRunning {
+            "Start"
+        } else {
+            "Install"
+        };
+        (action_text, "install", "")
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_dependency_actions_match_the_distribution() {
+        let dependencies = [
+            (
+                "bonjour",
+                "https://github.com/iDescriptor/iDescriptor/blob/dev/docs/WINDOWS_DEPENDENCIES.md#bonjour",
+            ),
+            (
+                "apple_mobile_device_support",
+                "https://github.com/iDescriptor/iDescriptor/blob/dev/docs/WINDOWS_DEPENDENCIES.md#apple-mobile-device-support",
+            ),
+            (
+                "winfsp",
+                "https://github.com/iDescriptor/iDescriptor/blob/dev/docs/WINDOWS_DEPENDENCIES.md#winfsp",
+            ),
+        ];
+
+        for (dependency_id, documentation_url) in dependencies {
+            let missing = windows_dependency_action(dependency_id, Availability::Unavailable);
+            let stopped =
+                windows_dependency_action(dependency_id, Availability::AvailableButNotRunning);
+
+            #[cfg(feature = "windows_store")]
+            {
+                assert_eq!(
+                    missing,
+                    ("View Instructions", "instructions", documentation_url)
+                );
+                assert_eq!(stopped, missing);
+            }
+
+            #[cfg(not(feature = "windows_store"))]
+            {
+                let _ = documentation_url;
+                assert_eq!(missing, ("Install", "install", ""));
+                assert_eq!(stopped, ("Start", "install", ""));
+            }
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -598,7 +700,7 @@ fn windows_service_status_native(service: &str) -> Availability {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(feature = "windows_store")))]
 async fn install_windows_dependency(dependency_id: &str) -> Result<String> {
     match dependency_id {
         "bonjour" => {
@@ -608,7 +710,9 @@ async fn install_windows_dependency(dependency_id: &str) -> Result<String> {
                 start_windows_service("Bonjour Service").await?;
                 Ok("Bonjour Service started successfully.".to_string())
             } else {
-                install_bonjour().await
+                run_bundled_elevated_script("install-bonjour.ps1")
+                    .await
+                    .map(|_| "Bonjour installation completed.".to_string())
             }
         }
         "apple_mobile_device_support" => {
@@ -639,7 +743,8 @@ async fn install_windows_dependency(dependency_id: &str) -> Result<String> {
     }
 }
 
-#[cfg(target_os = "windows")]
+// Bonjour installation is handled by install-bonjour.ps1 for direct distributions.
+#[cfg(any())]
 async fn install_bonjour() -> Result<String> {
     use md5::{Digest, Md5};
 
@@ -696,7 +801,7 @@ async fn install_bonjour() -> Result<String> {
     Ok("Bonjour installation completed.".to_string())
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(feature = "windows_store")))]
 async fn run_bundled_elevated_script(script_name: &str) -> Result<()> {
     let exe_dir = std::env::current_exe()
         .context("Failed to locate current executable")?
@@ -720,9 +825,7 @@ async fn run_bundled_elevated_script(script_name: &str) -> Result<()> {
     run_powershell_elevated(&command).await
 }
 
-
-
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(feature = "windows_store")))]
 async fn run_powershell_elevated(command: &str) -> Result<()> {
     use base64::Engine;
 
@@ -755,7 +858,7 @@ async fn run_powershell_elevated(command: &str) -> Result<()> {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(feature = "windows_store")))]
 async fn start_windows_service(service: &str) -> Result<()> {
     let service = service.replace('\'', "''");
     run_powershell_elevated(&format!(
@@ -764,12 +867,12 @@ async fn start_windows_service(service: &str) -> Result<()> {
     .await
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(feature = "windows_store")))]
 fn powershell_quote_path(path: &std::path::Path) -> String {
     path.to_string_lossy().replace('\'', "''")
 }
 
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "linux")]
 async fn command_success(program: &str, args: &[&str]) -> bool {
     tokio::process::Command::new(program)
         .args(args)
