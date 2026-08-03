@@ -332,10 +332,17 @@ jobs:
 
       - name: Build Microsoft Store executable
         run: |
-          CARGO_TARGET_DIR=target/windows-store RUSTFLAGS="" cargo build --release --features windows_store
+          RUSTFLAGS="" cargo build --release --features windows_store
           rm -rf target/store-deploy
-          cp -R target/deploy target/store-deploy
-          cp target/windows-store/release/idescriptor.exe target/store-deploy/idescriptor.exe
+          mkdir -p target/store-deploy
+          pushd target/deploy
+          find . -type f \
+            ! -iname '*.ps1' \
+            ! -iname '*.bat' \
+            ! -iname '*.cmd' \
+            -exec cp --parents '{}' ../store-deploy/ \;
+          popd
+          cp target/release/idescriptor.exe target/store-deploy/idescriptor.exe
 
       - name: Install MSIX asset tooling
         shell: pwsh
