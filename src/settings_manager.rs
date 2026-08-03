@@ -51,6 +51,58 @@ cpp! {{
     }
 }}
 
+#[cfg(target_os = "macos")]
+pub(crate) fn idevice_default_pairing_file(mac_address: &str) -> Option<String> {
+    let mac_address = QString::from(mac_address);
+    let pairing_file = cpp!(unsafe [mac_address as "QString"] -> QString as "QString" {
+        QSettings settings;
+        const QString prefix = QStringLiteral("_macos_idevice_");
+        const QString exactKey = prefix + mac_address;
+        if (settings.contains(exactKey)) {
+            return settings.value(exactKey, QString()).toString();
+        }
+
+        // handle mac address normalization
+        // 44:F2:1B:95:46:06
+        // 44-f2-1b-95-46-06
+        // 44f21b954606
+        auto normalizeMacAddress = [](const QString &value) {
+            QString normalized;
+            for (const QChar character : value) {
+                const QChar lower = character.toLower();
+                if ((lower >= QChar('0') && lower <= QChar('9')) ||
+                    (lower >= QChar('a') && lower <= QChar('f'))) {
+                    normalized.append(lower);
+                }
+            }
+            return normalized;
+        };
+
+        const QString normalizedMacAddress = normalizeMacAddress(mac_address);
+        for (const QString &key : settings.allKeys()) {
+            if (key.startsWith(prefix) &&
+                normalizeMacAddress(key.mid(prefix.length())) == normalizedMacAddress) {
+                return settings.value(key, QString()).toString();
+            }
+        }
+        return QString();
+    });
+
+    let pairing_file = pairing_file.to_string();
+    (!pairing_file.is_empty()).then_some(pairing_file)
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn cache_idevice_default_pairing_file(mac_address: &str, pairing_file: &str) {
+    let mac_address = QString::from(mac_address);
+    let pairing_file = QString::from(pairing_file);
+    cpp!(unsafe [mac_address as "QString", pairing_file as "QString"] {
+        QSettings settings;
+        settings.setValue(QStringLiteral("_macos_idevice_") + mac_address, pairing_file);
+        settings.sync();
+    });
+}
+
 #[allow(non_snake_case)]
 #[derive(QObject, Default)]
 pub struct SettingsManager {

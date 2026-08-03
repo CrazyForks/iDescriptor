@@ -758,7 +758,9 @@ fn prioritize_pairing_candidates(candidates: &mut [PairingCandidate], requested_
 }
 
 #[cfg(not(target_os = "macos"))]
-async fn discover_pairing_candidates() -> anyhow::Result<Vec<PairingCandidate>> {
+async fn discover_pairing_candidates(
+    _requested_mac: &str,
+) -> anyhow::Result<Vec<PairingCandidate>> {
     tokio::task::spawn_blocking(|| {
         let lockdown_path = utils::get_lockdown_path();
         let entries = std::fs::read_dir(&lockdown_path).with_context(|| {
@@ -807,30 +809,76 @@ async fn discover_pairing_candidates() -> anyhow::Result<Vec<PairingCandidate>> 
 }
 
 #[cfg(target_os = "macos")]
-async fn discover_pairing_candidates() -> anyhow::Result<Vec<PairingCandidate>> {
-    let mut usbmuxd = UsbmuxdConnection::default()
-        .await
-        .context("failed to connect to usbmuxd for pairing records")?;
-    let devices = usbmuxd
-        .get_devices()
-        .await
-        .context("failed to list usbmuxd devices for pairing records")?;
-
+async fn discover_pairing_candidates(requested_mac: &str) -> anyhow::Result<Vec<PairingCandidate>> {
     let mut candidates = Vec::new();
+
+    // macOS denies directory enumeration for /var/db/lockdown but permits reading a
+    // pairing record when its full path is known. Here we try the path cached during an earlier
+    // usbmuxd enumeration before relying on the device still being visible to usbmuxd.
+    if let Some(path) = crate::settings_manager::idevice_default_pairing_file(requested_mac) {
+        match PairingFile::read_from_file(&path) {
+            Ok(pairing_file) => {
+                info!(
+                    "Loaded saved macOS pairing record requested_mac={} path={}",
+                    requested_mac, path
+                );
+                candidates.push(PairingCandidate { pairing_file, path });
+            }
+            Err(error) => {
+                warn!(
+                    "Failed to read saved macOS pairing record requested_mac={} path={} error={}",
+                    requested_mac, path, error
+                );
+            }
+        }
+    }
+
+    let mut usbmuxd = match UsbmuxdConnection::default().await {
+        Ok(usbmuxd) => usbmuxd,
+        Err(error) if !candidates.is_empty() => {
+            debug!("Using saved macOS pairing record because usbmuxd is unavailable: {error}");
+            return Ok(candidates);
+        }
+        Err(error) => {
+            return Err(error).context("failed to connect to usbmuxd for pairing records");
+        }
+    };
+    let devices = match usbmuxd.get_devices().await {
+        Ok(devices) => devices,
+        Err(error) if !candidates.is_empty() => {
+            debug!(
+                "Using saved macOS pairing record because usbmuxd device enumeration failed: {error}"
+            );
+            return Ok(candidates);
+        }
+        Err(error) => {
+            return Err(error).context("failed to list usbmuxd devices for pairing records");
+        }
+    };
+
     for device in devices {
         use std::path::PathBuf;
 
-        use idevice::pairing_file;
-
         match usbmuxd.get_pair_record(&device.udid).await {
-            Ok(pairing_file) => candidates.push(PairingCandidate {
-                pairing_file,
-                path: PathBuf::new()
+            Ok(pairing_file) => {
+                let path = PathBuf::new()
                     .join(utils::get_lockdown_path())
-                    .join(&device.udid)
+                    .join(format!("{}.plist", device.udid))
                     .to_string_lossy()
-                    .into_owned(),
-            }),
+                    .into_owned();
+                info!("Caching {}", path);
+                crate::settings_manager::cache_idevice_default_pairing_file(
+                    &pairing_file.wifi_mac_address,
+                    &path,
+                );
+
+                let already_loaded = candidates.iter().any(|candidate| {
+                    candidate.pairing_file.udid == pairing_file.udid || candidate.path == path
+                });
+                if !already_loaded {
+                    candidates.push(PairingCandidate { pairing_file, path });
+                }
+            }
             Err(error) => {
                 debug!(
                     "Skipping unavailable usbmuxd pairing record udid={}: {error}",
@@ -855,7 +903,7 @@ async fn init_wireless_device_from_candidates(
         ));
     }
 
-    let mut candidates = discover_pairing_candidates().await?;
+    let mut candidates = discover_pairing_candidates(requested_mac).await?;
     if candidates.is_empty() {
         return Err(anyhow!("no pairing records found"));
     }
@@ -1309,6 +1357,26 @@ async fn collect_info(
         .unwrap_or_else(|e| {
             debug!("Failed to insert battery info: {e:?}");
         });
+
+    #[cfg(target_os = "macos")]
+    if !is_wireless {
+        if let (Some(mac_address), Some(udid)) = (
+            def_vals_dict
+                .get("WiFiAddress")
+                .and_then(|value| value.as_string())
+                .filter(|value| !value.is_empty()),
+            def_vals_dict
+                .get("UniqueDeviceID")
+                .and_then(|value| value.as_string())
+                .filter(|value| !value.is_empty()),
+        ) {
+            let path = crate::utils::join_with_lockdown_path(&format!("{udid}.plist"))
+                .display()
+                .to_string();
+            crate::settings_manager::cache_idevice_default_pairing_file(&mac_address, &path);
+            info!("Cached pairing file for macOS, udid: {udid}, path: {path}");
+        }
+    }
 
     Ok(info)
 }

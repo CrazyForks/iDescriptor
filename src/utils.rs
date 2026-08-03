@@ -572,6 +572,10 @@ pub fn get_lockdown_path() -> PathBuf {
     }
 }
 
+pub fn join_with_lockdown_path(path: &str) -> PathBuf {
+    get_lockdown_path().join(path)
+}
+
 /// Ensure `PublicStaging` exists on device via AFC
 pub async fn ensure_public_staging(afc: &mut AfcClient) -> Result<(), IdeviceError> {
     // Try to stat and if it fails, create directory
