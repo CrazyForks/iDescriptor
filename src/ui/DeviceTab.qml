@@ -43,7 +43,7 @@ Item {
                     // Layout.topMargin: Qt.platform.os === "windows" ? 5 : 0
                     Layout.alignment: Qt.AlignHCenter
 
-                    currentSection: root.selectedDeviceSection
+                    currentSection: deviceDelegate.model.currentSection
                     onSectionRequested: function(sectionIndex) {
                         App.DeviceContext.selectDeviceSection(sectionIndex)
                     }
