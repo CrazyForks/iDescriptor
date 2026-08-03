@@ -202,6 +202,7 @@ Rectangle {
                                 title: recoveryDelegate.model.text
                                 deviceId: recoveryDelegate.model.id
                                 mode: recoveryDelegate.info.mode
+                                iconPath: recoveryDelegate.info.placeholder_path
                             }
                         }
                     }
