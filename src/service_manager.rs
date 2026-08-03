@@ -41,6 +41,7 @@ pub struct ServiceManager {
     restart: qt_method!(fn(&self) -> bool),
     shutdown: qt_method!(fn(&self) -> bool),
     enter_recovery_mode: qt_method!(fn(&self) -> bool),
+    unpair: qt_method!(fn(&self)),
     install_ipa: qt_method!(fn(&self, ipa_path: QString)),
     enable_wifi_connections: qt_method!(fn(&self)),
     get_battery_info: qt_method!(fn(&self, raw_product_type: QString)),
@@ -65,6 +66,7 @@ pub struct ServiceManager {
     installIpaProgress: qt_signal!(progress: f64, state: QString),
     enableWifiConnectionsResult: qt_signal!(success: bool),
     locationSimulationCompleted: qt_signal!(success: bool, code: i32, action: QString),
+    unpairCompleted: qt_signal!(success: bool, error: QString),
 
     udid: String,
     ios_version: u32,
@@ -617,6 +619,61 @@ impl ServiceManager {
             }
             return true;
         })
+    }
+
+    fn unpair(&self) {
+        let udid = self.udid.clone();
+        let device = self.device.as_ref().unwrap().clone();
+        let q_thread = self.qt_thread();
+
+        RUNTIME.spawn(async move {
+            let result: anyhow::Result<()> = async {
+                let pairing_file = {
+                    let provider = device.provider.lock().await;
+                    provider.get_pairing_file().await?
+                };
+
+                {
+                    let mut lockdown = device.lockdown.lock().await;
+                    lockdown.unpair(pairing_file.host_id).await?;
+                }
+
+                // The device-side trust relationship is authoritative. Removing the
+                // usbmuxd record is best-effort because custom wireless providers may
+                // not have a corresponding record in the local usbmuxd instance.
+                match idevice::usbmuxd::UsbmuxdConnection::default().await {
+                    Ok(mut usbmuxd) => {
+                        if let Err(error) = usbmuxd.delete_pair_record(&udid).await {
+                            log::warn!(
+                                "unpair: device {udid} was unpaired, but its host pairing record could not be deleted: {error}"
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        log::warn!(
+                            "unpair: device {udid} was unpaired, but usbmuxd was unavailable for host-record cleanup: {error}"
+                        );
+                    }
+                }
+
+                log::info!("Unpaired device {udid}");
+                Ok(())
+            }
+            .await;
+
+            match result {
+                Ok(()) => q_thread.queue(|t| {
+                    t.unpairCompleted(true, QString::default());
+                }),
+                Err(error) => {
+                    log::error!("unpair: Failed to unpair device {udid}: {error}");
+                    let error = QString::from(error.to_string());
+                    q_thread.queue(move |t| {
+                        t.unpairCompleted(false, error);
+                    });
+                }
+            }
+        });
     }
 
     fn install_ipa(&self, local_ipa_path: QString) {

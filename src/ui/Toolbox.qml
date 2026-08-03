@@ -30,6 +30,7 @@ Item {
     property var ifuseInstance: null
     property var networkDevicesInstance: null
     property var backupManagerInstance: null
+    property var pendingUnpairs: ({})
     readonly property bool hasDevice: App.DeviceContext.devices && App.DeviceContext.devices.count > 0
 
     Component.onCompleted: Qt.callLater(root.syncNormalDeviceSelection)
@@ -56,8 +57,95 @@ Item {
             })
     }
 
+    function requestDeviceAction(action, udid) {
+        if (!udid || !App.DeviceContext.getDevice(udid)) {
+            root.showError(qsTr("The selected device is no longer connected."))
+            return
+        }
+
+        switch (action) {
+            case "restart":
+                root.confirmDeviceAction(
+                    action,
+                    qsTr("Restart Device"),
+                    qsTr("Are you sure you want to restart this device?"),
+                    true,
+                    udid)
+                break
+            case "shutdown":
+                root.confirmDeviceAction(
+                    action,
+                    qsTr("Shut Down Device"),
+                    qsTr("Are you sure you want to shut down this device?"),
+                    true,
+                    udid)
+                break
+            case "recovery":
+                root.confirmDeviceAction(
+                    action,
+                    qsTr("Enter Recovery Mode"),
+                    qsTr("Are you sure you want to put this device into recovery mode?"),
+                    true,
+                    udid)
+                break
+            case "unpair":
+                root.confirmDeviceAction(
+                    action,
+                    qsTr("Unpair iDevice"),
+                    qsTr("Are you sure you want to unpair this device? You will need to trust and pair it again before reconnecting."),
+                    false,
+                    udid)
+                break
+            case "unpairAndRemove":
+                root.confirmDeviceAction(
+                    "unpair",
+                    qsTr("Unpair and Remove iDevice"),
+                    qsTr("Are you sure you want to unpair this device and remove it from iDescriptor? You will need to trust and pair it again before reconnecting."),
+                    true,
+                    udid)
+                break
+            default:
+                root.showError(qsTr("Unknown device action."))
+        }
+    }
+
+    function performUnpair(device, udid, removeDevice) {
+        if (root.pendingUnpairs[udid]) {
+            root.showError(qsTr("An unpair operation is already in progress for this device."))
+            return
+        }
+
+        const serviceManager = device.service_manager
+        const completed = function(success, error) {
+            serviceManager.unpairCompleted.disconnect(completed)
+            delete root.pendingUnpairs[udid]
+
+            if (!success) {
+                root.showError(error && error.length
+                    ? qsTr("Failed to unpair the device: %1").arg(error)
+                    : qsTr("Failed to unpair the device."))
+                return
+            }
+
+            root.showInfo(qsTr("The device was unpaired successfully."))
+            if (removeDevice && App.DeviceContext.getDevice(udid))
+                App.DeviceContext.removeDevice(udid)
+        }
+
+        root.pendingUnpairs[udid] = {
+            serviceManager: serviceManager,
+            completed: completed
+        }
+        serviceManager.unpairCompleted.connect(completed)
+        serviceManager.unpair()
+    }
+
     function performDeviceAction(action, udid, removeDevice) {
         const device = App.DeviceContext.getDevice(udid)
+        if (!device) {
+            root.showError(qsTr("The selected device is no longer connected."))
+            return
+        }
 
         let success = false
         switch (action) {
@@ -70,6 +158,9 @@ Item {
             case "recovery":
                 success = device.service_manager.enter_recovery_mode()
                 break
+            case "unpair":
+                root.performUnpair(device, udid, removeDevice)
+                return
             default:
                 showError(qsTr("Unknown device action."))
                 return
@@ -133,7 +224,7 @@ Item {
     // 0 Airplayer, 1 SimulateLocation, 2 LiveScreen, 3 QueryMobileGestalt, 4 DeveloperDiskImages,
     // 5 WirelessGalleryImport, 6 iFuse, 7 CableInfo, 8 NetworkDevices, 9 EnableDevMode,
     // 10 Restart, 11 Shutdown, 12 RecoveryMode, 13 EnableWifiConnections, 14 BackupManager,
-    // 15 TransferSpeedTest
+    // 15 TransferSpeedTest, 16 Unpair, 17 UnpairAndRemove
     // signal toolClicked(int toolId, bool requiresDevice)
     function toolClicked(toolId, requiresDevice, wirelessNotAllowed) {
         const device = App.DeviceContext.getDevice(currentDeviceUdid)
@@ -305,31 +396,13 @@ Item {
                 break
             }
             case 10:
-                confirmDeviceAction(
-                    "restart",
-                    qsTr("Restart Device"),
-                    qsTr("Are you sure you want to restart this device?"),
-                    true,
-                    currentDeviceUdid
-                )
+                requestDeviceAction("restart", currentDeviceUdid)
                 break;
             case 11:
-                confirmDeviceAction(
-                    "shutdown",
-                    qsTr("Shut Down Device"),
-                    qsTr("Are you sure you want to shut down this device?"),
-                    true,
-                    currentDeviceUdid
-                )
+                requestDeviceAction("shutdown", currentDeviceUdid)
                 break;
             case 12:
-                confirmDeviceAction(
-                    "recovery",
-                    qsTr("Enter Recovery Mode"),
-                    qsTr("Are you sure you want to put this device into recovery mode?"),
-                    true,
-                    currentDeviceUdid
-                )
+                requestDeviceAction("recovery", currentDeviceUdid)
                 break;
             case 13:
                 App.DeviceContext.enableWifiConnections(device, root)
@@ -339,6 +412,12 @@ Item {
                 break;
             case 15:
                 createCompWrapped("./tools/TransferSpeedTest.qml")
+                break;
+            case 16:
+                requestDeviceAction("unpair", currentDeviceUdid)
+                break;
+            case 17:
+                requestDeviceAction("unpairAndRemove", currentDeviceUdid)
                 break;
             default:
             console.log(`No tool for id ${toolId}`)
@@ -526,6 +605,22 @@ Item {
             requiresDevice: true,
             wirelessNotAllowed: true,
             iconSource: "qrc:/resources/icons/streamline-freehand_charging-flash-wireless.svg",
+            visible: true
+        },
+        {
+            toolId: 16,
+            title: qsTr("Unpair iDevice"),
+            description: qsTr("Remove this computer's trust relationship with the device"),
+            requiresDevice: true,
+            iconSource: "qrc:/resources/icons/idescriptor-unpair.svg",
+            visible: true
+        },
+        {
+            toolId: 17,
+            title: qsTr("Unpair and Remove iDevice"),
+            description: qsTr("Unpair the device and remove it from iDescriptor"),
+            requiresDevice: true,
+            iconSource: "qrc:/resources/icons/idescriptor-unpair.svg",
             visible: true
         }
     ])

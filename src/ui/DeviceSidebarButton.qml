@@ -28,6 +28,40 @@ Item {
         id: contextMenu
 
         MenuItem {
+            text: qsTr("Restart")
+            enabled: root.udid.length > 0
+            onTriggered: App.Toolbox.requestDeviceAction("restart", root.udid)
+        }
+
+        MenuItem {
+            text: qsTr("Shut Down")
+            enabled: root.udid.length > 0
+            onTriggered: App.Toolbox.requestDeviceAction("shutdown", root.udid)
+        }
+
+        MenuItem {
+            text: qsTr("Recovery Mode")
+            enabled: root.udid.length > 0
+            onTriggered: App.Toolbox.requestDeviceAction("recovery", root.udid)
+        }
+
+        MenuSeparator {}
+
+        MenuItem {
+            text: qsTr("Unpair")
+            enabled: root.udid.length > 0
+            onTriggered: App.Toolbox.requestDeviceAction("unpair", root.udid)
+        }
+
+        MenuItem {
+            text: qsTr("Unpair and Remove")
+            enabled: root.udid.length > 0
+            onTriggered: App.Toolbox.requestDeviceAction("unpairAndRemove", root.udid)
+        }
+
+        MenuSeparator {}
+
+        MenuItem {
             text: qsTr("Remove")
             enabled: root.udid.length > 0
             onTriggered: App.DeviceContext.removeDevice(root.udid)
