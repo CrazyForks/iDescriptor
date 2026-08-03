@@ -580,20 +580,33 @@ pub async fn export_afc_file(
     local_path: &Path,
 ) -> anyhow::Result<()> {
     let mut remote_file = afc.open(remote_path, AfcFopenMode::RdOnly).await?;
-    let mut local_file = tokio::fs::File::create(local_path).await?;
-    let mut chunk = vec![0u8; 1024 * 1024];
+    let transfer_result: anyhow::Result<()> = async {
+        let mut local_file = tokio::fs::File::create(local_path).await?;
+        let mut chunk = vec![0u8; crate::io_manager::DEFAULT_CHUNK_SIZE];
 
-    loop {
-        let n = remote_file.read(&mut chunk).await?;
-        if n == 0 {
-            break;
+        loop {
+            let n = remote_file.read(&mut chunk).await?;
+            if n == 0 {
+                break;
+            }
+            local_file.write_all(&chunk[..n]).await?;
         }
-        local_file.write_all(&chunk[..n]).await?;
-    }
 
-    local_file.flush().await?;
-    remote_file.close().await.ok();
-    Ok(())
+        local_file.flush().await?;
+        Ok(())
+    }
+    .await;
+
+    let close_result = remote_file.close().await;
+    match (transfer_result, close_result) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Ok(()), Err(close_error)) => Err(close_error.into()),
+        (Err(transfer_error), Ok(())) => Err(transfer_error),
+        (Err(transfer_error), Err(close_error)) => {
+            warn!("Failed to close {remote_path} after transfer error: {close_error}");
+            Err(transfer_error)
+        }
+    }
 }
 
 pub fn is_apple_dcim_folder(name: &str) -> bool {
