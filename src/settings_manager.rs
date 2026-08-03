@@ -148,6 +148,10 @@ pub struct SettingsManager {
 
 #[allow(non_snake_case)]
 impl SettingsManager {
+    pub(crate) fn unmount_ifuse_on_exit_enabled() -> bool {
+        read_bool("unmountiFuseOnExit", false)
+    }
+
     pub fn clear_all() {
         cpp!(unsafe [] {
             auto &settings = settings_manager_settings();
@@ -448,7 +452,7 @@ impl SettingsManager {
     }
 
     fn unmount_ifuse_on_exit(&self) -> bool {
-        read_bool("unmountiFuseOnExit", false)
+        Self::unmount_ifuse_on_exit_enabled()
     }
 
     fn set_unmount_ifuse_on_exit(&self, enabled: bool) {

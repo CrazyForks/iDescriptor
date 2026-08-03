@@ -58,13 +58,17 @@ irecovery = { version = "0.2.1", features = ["tokio"] }
 lru = "0.18.0"
 zupdater = { path= "lib/zupdater"}
 
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+ifuse = { version = "0.1.0", default-features = false, features = ["openssl"] }
+
 [target.'cfg(target_os = "windows")'.dependencies]
 compress-tools = { version = "0.16", features = ["tokio_support"] }
 md-5 = "0.10"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Services"] }
-win-ifuse = { path = "lib/win-ifuse" }
 
 [patch.crates-io]
+winfsp = { git = "https://github.com/uncor3/winfsp-rs.git", rev = "23a582913c70f3addc6102344dc9cd539b2bfbe7" }
+winfsp-sys = { git = "https://github.com/uncor3/winfsp-rs.git", rev = "23a582913c70f3addc6102344dc9cd539b2bfbe7" }
 idevice = { path = "lib/idevice-rs/idevice" }
 
 [build-dependencies]

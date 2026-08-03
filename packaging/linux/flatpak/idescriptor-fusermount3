@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+if test -n "${_FUSE_COMMFD:-}"; then
+    exec flatpak-spawn \
+        --host \
+        --forward-fd="${_FUSE_COMMFD}" \
+        --env="_FUSE_COMMFD=${_FUSE_COMMFD}" \
+        /usr/bin/env fusermount3 "$@"
+fi
+
+exec flatpak-spawn --host /usr/bin/env fusermount3 "$@"

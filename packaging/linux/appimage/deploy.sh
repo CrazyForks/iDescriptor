@@ -79,12 +79,6 @@ cp packaging/shared/resources/app-icon/icon-256.png "$APPDIR/usr/share/icons/hic
 cp packaging/shared/resources/app-icon/icon-512.png "$APPDIR/usr/share/icons/hicolor/512x512/apps/iDescriptor.png"
 
 
-# Copy ifuse
-cp /usr/local/bin/ifuse "$APPDIR/usr/bin"
-
-# Copy iproxy
-cp /usr/local/bin/iproxy "$APPDIR/usr/bin"
-
 # Bundle GStreamer plugins and helpers
 plugins_target_dir="$APPDIR/usr/lib/gstreamer-$GSTREAMER_VERSION"
 
@@ -117,7 +111,7 @@ plugins=(
     "libgstflac.so"
     "libgstfaad.so"
     "libgstfdkaac.so"
-    "libgstmatroska.so" 
+    "libgstmatroska.so"
     "libgstlibav.so"
     "libgstapp.so"
     "libgstautodetect.so"
@@ -185,8 +179,6 @@ export GST_PLUGIN_PATH_1_0="${APPDIR}/usr/lib/gstreamer-1.0"
 export GST_PLUGIN_SCANNER_1_0="${APPDIR}/usr/lib/gstreamer-1.0/gst-plugin-scanner"
 export GST_PTP_HELPER_1_0="${APPDIR}/usr/lib/gstreamer-1.0/gst-ptp-helper"
 
-export IPROXY_BIN_APPIMAGE="${APPDIR}/usr/bin/iproxy"
-export IFUSE_BIN_APPIMAGE="${APPDIR}/usr/bin/ifuse"
 EOF
 
 chmod +x "$APPDIR/apprun-hooks/linuxdeploy-plugin-env.sh"

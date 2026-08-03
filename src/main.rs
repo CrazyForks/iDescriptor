@@ -65,10 +65,6 @@ pub const EV_DISCONNECTED: u32 = 2;
 pub const EV_PAIRING_PENDING: u32 = 3;
 pub const EV_FAIL: u32 = 4;
 
-// TODO
-// #[global_allocator]
-// static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -101,7 +97,13 @@ fn main() {
         .from_env_lossy()
         // debug logs from idevice crate is so frequent and it even logs read bytes etc.
         // so we filter it out for now
-        .add_directive("idevice=warn".parse().expect("valid idevice log filter"));
+        // also filter fuse debug logs -> DEBUG fuser::request: FUSE(1482)
+        .add_directive("idevice=warn".parse().expect("valid idevice log filter"))
+        .add_directive(
+            "fuser::request=warn"
+                .parse()
+                .expect("valid fuser request log filter"),
+        );
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().compact())
         .with(filter)
@@ -113,11 +115,6 @@ fn main() {
 
     // let _ = util::install_crash_handler();
     qmetaobject::log::init_qt_to_rust();
-    // let icons_path = if ui_live_reload {
-    //     QString::from(format!("{}/resources/icons/", env!("CARGO_MANIFEST_DIR")))
-    // } else {
-    //     QString::from(":/resources/icons/")
-    // };
 
     native::configure_application(application_version);
 
@@ -339,6 +336,6 @@ fn main() {
 
     engine.exec();
 
-    #[cfg(target_os = "windows")]
-    ifuse::shutdown_all_mounts();
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    ifuse::shutdown_all_mounts(settings_manager::SettingsManager::unmount_ifuse_on_exit_enabled());
 }
