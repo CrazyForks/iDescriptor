@@ -67,6 +67,9 @@ Item {
 
                 Rectangle {
                     anchors.fill: parent
+                    radius: {
+                        Qt.platform.os === "linux" && settingsManager.z_linux_window() ?  Theme.radius : 0
+                    }
                     color: {
                         switch (Qt.platform.os) {
                             case "osx": return App.Theme.windowBackgroundMacOS
@@ -92,7 +95,8 @@ Item {
                             anchors.left: parent.left
                             anchors.leftMargin: Qt.platform.os === "osx" ? 84 : 10
                             anchors.top: parent.top
-                            anchors.topMargin: Qt.platform.os === "windows" ? 25 : 0
+                            // anchors.topMargin: Qt.platform.os === "windows" ? 25 : 0
+                            anchors.topMargin: Qt.platform.os !== "osx" ? 25 : 0
                             // anchors.verticalCenter: parent.verticalCenter
                             onClicked: App.DeviceContext.sidebarVisible = true
                         }
@@ -103,7 +107,7 @@ Item {
                                           ? collapsedSidebarButton.right : parent.left
                             anchors.leftMargin: collapsedSidebarButton.visible ? 10 : 16
                             anchors.top: parent.top
-                            anchors.topMargin: Qt.platform.os === "windows" ? 25 : 0
+                            anchors.topMargin: 25
                             // anchors.verticalCenter: parent.verticalCenter
                             text: root.destinationTitle()
                             color: App.Theme.text

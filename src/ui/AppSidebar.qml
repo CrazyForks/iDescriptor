@@ -6,7 +6,7 @@ import "." as App
 
 Rectangle {
     id: root
-    radius: 10
+    radius: App.Theme.radius
 
     property bool favoritesExpanded: true
     property bool devicesExpanded: true
@@ -52,7 +52,8 @@ Rectangle {
 
             SidebarToggleButton {
                 Layout.rightMargin: 10
-                Layout.topMargin: Qt.platform.os !== "windows" ? 0 : 25
+                // Layout.topMargin: Qt.platform.os !== "windows" ? 0 : 25
+                Layout.topMargin: Qt.platform.os !== "osx" ? 25 : 0
                 // Layout.verticalCenter: parent.verticalCenter
                 onClicked: root.toggleRequested()
             }

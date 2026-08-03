@@ -88,7 +88,7 @@ Item {
         }
     }
 
-    Dialog {
+    AnimatedDialog {
         id: diagnosticsDialog
         modal: true
         anchors.centerIn: Overlay.overlay

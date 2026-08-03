@@ -97,4 +97,5 @@ QtObject {
     readonly property int sidebarIconSize: 18 * Screen.devicePixelRatio
     readonly property int fastAnimation: 160
     readonly property int mediumAnimation: 220
+    readonly property int radius: 10
 }
