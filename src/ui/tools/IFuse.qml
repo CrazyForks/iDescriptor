@@ -14,6 +14,8 @@ ToolWindow {
     title: qsTr("iFuse Mount - iDescriptor")
 
     property string mountPath: ""
+    property string mountRootPath: ""
+    readonly property bool flatpakBuild: iFuse.is_flatpak_build()
     property bool openedCurrentMount: false
     property var mountState: ({
         busy: false,
@@ -50,6 +52,7 @@ ToolWindow {
     Component.onCompleted: {
         // FIXME: skipped WinFsp DiagnoseDialog check from QWidget port.
         // The original code showed DiagnoseDialog when IsWinFspInstalled() != SERVICE_AVAILABLE on Windows.
+        root.mountRootPath = iFuse.mount_root_path()
         root.mountPath = iFuse.default_mount_path(root.productType())
         root.updateMountState()
         stateView.viewState = StateView.State.Content
@@ -67,8 +70,24 @@ ToolWindow {
     FolderDialog {
         id: linuxFolderDialog
         title: qsTr("Select Mount Directory")
-        currentFolder: root.mountPath ? App.Helpers.toFileUrl(root.mountPath) : ""
-        onAccepted: root.mountPath = QmlUtils.url_to_path(selectedFolder)
+        options: root.flatpakBuild ? FolderDialog.DontUseNativeDialog : 0
+        currentFolder: {
+            const path = root.flatpakBuild ? root.mountRootPath : root.mountPath
+            return path ? App.Helpers.toFileUrl(path) : ""
+        }
+        onAccepted: {
+            const selectedPath = QmlUtils.url_to_path(selectedFolder)
+            if (iFuse.is_mount_path_supported(selectedPath)) {
+                root.mountPath = selectedPath
+                return
+            }
+
+            App.Helpers.showError(
+                root,
+                qsTr("This folder cannot be used by the Flatpak build. Choose a subfolder inside %1.")
+                    .arg(root.mountRootPath)
+            )
+        }
     }
 
     FileDialog {
