@@ -147,6 +147,37 @@ jobs:
           sudo install -Dm755 build-qml6/ext/qt6/libgstqml6.so \
             "/usr/lib/$(uname -m)-linux-gnu/gstreamer-1.0/libgstqml6.so"
 
+      # building from source is intentional, we want to match the version of libplist everywhere
+      - name: Build libplist
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="$PWD"
+          tmp="$RUNNER_TEMP/idescriptor-libs"
+          mkdir -p "$tmp"
+          cd "$tmp"
+          base_url="https://github.com/libimobiledevice"
+          libs=(libplist)
+
+          for name in "${libs[@]}"; do
+            ver_var=$(echo "${name^^}_VER" | sed 's/-/_/g')
+            ver="${!ver_var:-}"
+            if [ -z "$ver" ]; then
+              echo "Version for $name not set (environment variable $ver_var)"
+              exit 1
+            fi
+            archive="${name}-${ver}.tar.bz2"
+            curl --retry 3 --retry-delay 5 -L -o "$archive" \
+              "${base_url}/${name}/releases/download/${ver}/${archive}"
+            tar xjf "$archive"
+            pushd "${name}-${ver}"
+            ./configure
+            make -j"$(nproc)"
+            sudo make install
+            popd
+          done
+          cd "$workspace"
+
       - name: Update linker cache
         run: sudo ldconfig
 
