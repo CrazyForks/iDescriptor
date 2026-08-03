@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 import QtQuick.Window
 import "."
 
@@ -47,7 +48,7 @@ ApplicationWindow {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: closeButton.left
-            height: 10
+            height: 20
             acceptedButtons: Qt.LeftButton
             cursorShape: Qt.SizeAllCursor
             z: 1000
@@ -85,13 +86,13 @@ ApplicationWindow {
                 border.color: Theme.darkMode ? "#5e5c64" : "#c0bfbc"
             }
 
-            contentItem: Text {
-                text: "×"
+            contentItem: IconImage {
+                source: "qrc:/resources/icons/material-symbols_close-rounded.svg"
+                sourceSize.width: 16
+                sourceSize.height: 16
+                width: 16
+                height: 16
                 color: Theme.text
-                font.pixelSize: 17
-                font.weight: Font.Medium
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
             }
         }
 
