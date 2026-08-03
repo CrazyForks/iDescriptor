@@ -336,6 +336,8 @@ fn main() {
 
     engine.exec();
 
+    qmetaobject::log::install_message_handler(None);
+
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     ifuse::shutdown_all_mounts(settings_manager::SettingsManager::unmount_ifuse_on_exit_enabled());
 }
