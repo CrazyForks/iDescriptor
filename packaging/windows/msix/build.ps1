@@ -76,8 +76,8 @@ function Resolve-MakeAppx {
 
 $packageDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $packageDir "..\..\..")).Path
-$stagingDir = Join-Path $env:RUNNER_TEMP "iDescriptor-msix"
-$makeAppx = Resolve-MakeAppx
+$temporaryRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
+$stagingDir = Join-Path $temporaryRoot "iDescriptor-msix"
 $normalizedVersion = $Version.TrimStart('v')
 if ($normalizedVersion -notmatch '^\d+\.\d+\.\d+$') {
     throw "MSIX version must be a three-part numeric version: $Version"
@@ -89,6 +89,15 @@ if (Test-Path -LiteralPath $stagingDir) {
 }
 New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
 Copy-Item -Path (Join-Path (Resolve-Path $DeployDir).Path '*') -Destination $stagingDir -Recurse -Force
+
+$prohibitedScripts = Get-ChildItem -LiteralPath $stagingDir -Recurse -File |
+    Where-Object { $_.Extension -in @('.ps1', '.bat', '.cmd') }
+if ($prohibitedScripts) {
+    $paths = ($prohibitedScripts.FullName -join ', ')
+    throw "Microsoft Store staging contains prohibited installer scripts: $paths"
+}
+
+$makeAppx = Resolve-MakeAppx
 
 $manifest = Get-Content -LiteralPath (Join-Path $packageDir "AppxManifest.xml.in") -Raw
 $manifest = $manifest.Replace('@IDENTITY_NAME@', $IdentityName)
