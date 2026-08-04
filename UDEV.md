@@ -4,6 +4,8 @@ This document provides instructions on how to manually configure UDEV rules to g
 
 **Important Note:** iDescriptor will look for the UDEV rules specifically at the path `/etc/udev/rules.d/99-idevice.rules`. If you place them elsewhere, iDescriptor will not recognize the configuration. You don't have to define the rules in this path, it just won't be detected by iDescriptor but recovery devices should still work if the rules are correctly defined and applied.
 
+**iDescriptor doesn't check for UDEV rules on Linux Flatpak releases, but everything here still applies**.
+
 ## Manual Configuration Steps
 
 You can run the following commands step by step to set up UDEV rules and permissions. Replace `<your_username>` with your Linux username (you can run `whoami` to see it).
