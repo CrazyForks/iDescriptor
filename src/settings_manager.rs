@@ -171,6 +171,7 @@ pub struct SettingsManager {
     reset_to_defaults: qt_method!(fn(&self)),
 
     current_version: qt_method!(fn(&self) -> QString),
+    build_description: qt_method!(fn(&self) -> QString),
     app_version: qt_method!(fn(&self) -> QString),
     set_app_version: qt_method!(fn(&self, version: QString)),
     airplay_fps: qt_method!(fn(&self) -> i32),
@@ -634,6 +635,10 @@ impl SettingsManager {
 
     fn current_version(&self) -> QString {
         QString::from(env!("CARGO_PKG_VERSION"))
+    }
+
+    fn build_description(&self) -> QString {
+        QString::from(crate::updater::build_description())
     }
 
     fn app_version(&self) -> QString {
