@@ -636,7 +636,7 @@ Item {
             spacing: 10
 
             Label {
-                text: "Device:"
+                text: qsTr("Device:")
                 Layout.alignment: Qt.AlignVCenter
             }
 
@@ -678,7 +678,7 @@ Item {
 
                 /* Section: Tools */
                 Label {
-                    text: "Tools"
+                    text: qsTr("Tools")
                     font.bold: true
                     font.pixelSize: 14
                     leftPadding: 10
@@ -715,7 +715,7 @@ Item {
 
                 /* More Tools */
                 Label {
-                    text: "More Tools"
+                    text: qsTr("More Tools")
                     font.bold: true
                     font.pixelSize: 14
                     leftPadding: 10
