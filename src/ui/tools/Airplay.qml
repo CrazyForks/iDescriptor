@@ -277,13 +277,6 @@ ToolWindow {
                         streamingPage.hudVisible = true
                         hideHudTimer.restart()
                     }
-                }
-
-                WheelHandler {
-                    target: null
-                    enabled: !hudMouse.containsMouse
-                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-
                     onWheel: function (event) {
                         const steps = event.angleDelta.y !== 0
                                       ? event.angleDelta.y / 120
