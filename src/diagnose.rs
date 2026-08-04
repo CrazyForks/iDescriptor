@@ -420,7 +420,7 @@ async fn check_udev_rules_installed() -> Result<Availability> {
         Ok(content) => content,
         Err(err) => {
             log::debug!("unable to read idevice udev rules: {err}");
-            return Ok(Availability::UnableToCheck);
+            return Ok(Availability::Unavailable);
         }
     };
 
@@ -429,7 +429,7 @@ async fn check_udev_rules_installed() -> Result<Availability> {
     let has_mode = content.contains("MODE=\"0666\"");
 
     if !has_usb_subsystem || !has_apple_vendor || !has_mode {
-        return Ok(Availability::UnableToCheck);
+        return Ok(Availability::Unavailable);
     }
 
     let groups_output = match tokio::time::timeout(
@@ -441,15 +441,15 @@ async fn check_udev_rules_installed() -> Result<Availability> {
         Ok(Ok(output)) if output.status.success() => output,
         Ok(Ok(output)) => {
             log::debug!("groups command failed with status {}", output.status);
-            return Ok(Availability::UnableToCheck);
+            return Ok(Availability::Unavailable);
         }
         Ok(Err(err)) => {
             log::debug!("failed to run groups command: {err}");
-            return Ok(Availability::UnableToCheck);
+            return Ok(Availability::Unavailable);
         }
         Err(_) => {
             log::debug!("groups command timed out");
-            return Ok(Availability::UnableToCheck);
+            return Ok(Availability::Unavailable);
         }
     };
 
@@ -457,7 +457,7 @@ async fn check_udev_rules_installed() -> Result<Availability> {
     if groups.split_whitespace().any(|group| group == "idevice") {
         Ok(Availability::Available)
     } else {
-        Ok(Availability::UnableToCheck)
+        Ok(Availability::Unavailable)
     }
 }
 
@@ -477,7 +477,9 @@ async fn linux_service_status(service: &str, binaries: &[&str]) -> Result<Availa
 #[cfg(target_os = "linux")]
 async fn install_linux_dependency(dependency_id: &str) -> Result<String> {
     match dependency_id {
-        "udev_rules" => Ok("Install the iDescriptor udev rules at /etc/udev/rules.d/99-idevice.rules, reload udev, and add your user to the idevice group. Then sign out and back in before refreshing diagnostics.".to_string()),
+        "udev_rules" => {
+            Ok("You can read the UDEV.md guide (https://github.com/iDescriptor/iDescriptor/blob/main/UDEV.md) for manual configuration.".to_string())
+        }
         "avahi" => {
             if cfg!(feature = "flatpak") {
                 bail!("Starting host services is not available in the Flatpak build");
@@ -491,7 +493,10 @@ async fn install_linux_dependency(dependency_id: &str) -> Result<String> {
                     .context("Failed to start Avahi with pkexec")?;
                 Ok("Avahi start command finished. Refresh the check if the status did not update automatically.".to_string())
             } else {
-                Ok("Install and start the avahi daemon with your system package manager.".to_string())
+                Ok(
+                    "Install and start the avahi daemon with your system package manager."
+                        .to_string(),
+                )
             }
         }
         _ => bail!("Unknown dependency: {dependency_id}"),
