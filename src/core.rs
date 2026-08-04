@@ -912,17 +912,12 @@ async fn init_wireless_device_from_candidates(
     let candidate_count = candidates.len();
     for (index, candidate) in candidates.into_iter().enumerate() {
         info!(
-            "Trying wireless pairing record {}/{} target_ip={} requested_mac={} candidate_mac={} candidate_udid={} path={}",
+            "Trying wireless pairing record {}/{} target_ip={} requested_mac={} candidate_mac={} path={}",
             index + 1,
             candidate_count,
             addr,
             requested_mac,
             candidate.pairing_file.wifi_mac_address,
-            candidate
-                .pairing_file
-                .udid
-                .as_deref()
-                .unwrap_or("<unknown>"),
             candidate.path,
         );
 
