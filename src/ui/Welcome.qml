@@ -13,7 +13,6 @@ Item {
 
     CustomPairingDialog {
         id: customPairingDialog
-        anchors.centerIn: parent
     }
 
     ColumnLayout {
