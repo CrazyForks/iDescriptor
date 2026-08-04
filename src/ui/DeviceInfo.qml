@@ -111,7 +111,7 @@ Item {
             ColumnLayout {
                 DeviceImage {
                     iosVersion: info ? info.ios_version_major : 0
-                    displayName: v("product_type", "Unknown Device")
+                    displayName: v("product_type", qsTr("Unknown Device"))
                 }
                 RowLayout {
                     id: deviceActions
