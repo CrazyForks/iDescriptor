@@ -78,13 +78,18 @@ Item {
         id: noticeDialog
         modal: true
         anchors.centerIn: Overlay.overlay
+        width: 340
         title: qsTr("Dependency Check")
         standardButtons: Dialog.Ok
         onAccepted: Qt.callLater(DiagnoseImpl.clear_notice)
         onRejected: Qt.callLater(DiagnoseImpl.clear_notice)
 
-        Label {
-            width: 360
+        TextEdit {
+            readOnly: true
+            selectByMouse: true
+            persistentSelection: true
+            color: palette.text
+            width: 300
             text: root.diagnoseState.notice || ""
             wrapMode: Text.WordWrap
         }
