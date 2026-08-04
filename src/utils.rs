@@ -1,5 +1,5 @@
 use crate::{POSSIBLE_ROOT, run_sync};
-use ::log::{debug, error, warn};
+use ::log::{debug, error, info, warn};
 use anyhow::Context;
 use cpp::*;
 use idevice::{
@@ -548,7 +548,7 @@ pub fn query_gallery_usage(db_bytes: &mut Vec<u8>) -> Result<u64, rusqlite::Erro
 pub fn get_lockdown_path() -> PathBuf {
     if let Ok(val) = std::env::var("USBMUXD_PAIRING_FILES_LOCATION") {
         if !val.is_empty() {
-            eprintln!("Pulling pairing files from USBMUXD_PAIRING_FILES_LOCATION: {val}");
+            info!("Lockdown path is set via USBMUXD_PAIRING_FILES_LOCATION env var to {val}");
             return PathBuf::from(val);
         }
     }
