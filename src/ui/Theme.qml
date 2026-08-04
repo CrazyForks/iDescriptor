@@ -61,7 +61,7 @@ QtObject {
     readonly property color sidebarDivider: darkMode ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.08)
 
     readonly property color diskUsageSystem: darkMode ? "#8e8e93" : "#636366"
-    readonly property color diskUsageApps: systemOrange
+    readonly property color diskUsageApps: accent
     readonly property color diskUsageMedia: darkMode ? "#5e5ce6" : "#5856d6"
     readonly property color diskUsageGallery: darkMode ? "#ff375f" : "#ff2d55"
     readonly property color diskUsageOthers: systemGreen
