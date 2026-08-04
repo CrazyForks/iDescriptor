@@ -128,7 +128,7 @@ DefaultWindow {
     }
 
     Label {
-        text: "Export & Import processes will appear here"
+        text: qsTr("Export & Import processes will appear here")
         font.pixelSize: 12
         color: palette.text
         anchors.centerIn: parent

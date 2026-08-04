@@ -90,10 +90,10 @@ Rectangle {
             id: statusLabel
             text: {
                 if (root.status === "Running") {
-                    return root.currentFile === "" ? "Starting..." : "Running"
-                } else if (root.status === "Completed") return "Completed successfully"
-                else if (root.status === "Failed") return "Failed"
-                else if (root.status === "Cancelled") return "Cancelled"
+                    return root.currentFile === "" ? qsTr("Starting...") : qsTr("Running")
+                } else if (root.status === "Completed") return qsTr("Completed successfully")
+                else if (root.status === "Failed") return qsTr("Failed")
+                else if (root.status === "Cancelled") return qsTr("Cancelled")
                 else return ""
             }
             Layout.fillWidth: true
@@ -143,7 +143,7 @@ Rectangle {
             // Action Button
             Button {
                 id: actionButton
-                text: root.type === "Export" ? "Open Folder" : ""
+                text: root.type === "Export" ? qsTr("Open Folder") : ""
                 visible: (root.type === "Export" && root.status === "Completed")
                 onClicked: {
                         console.log("Open destination folder:", root.destinationPath)
@@ -173,8 +173,8 @@ Rectangle {
             Button {
                 id: cancelButton
                 text: {
-                    if (!enabled) return "Cancelling..."
-                    return "Cancel"
+                    if (!enabled) return qsTr("Cancelling...")
+                    return qsTr("Cancel")
                 }
                 visible: (root.status === "Running")
                 enabled: true
@@ -213,10 +213,10 @@ Rectangle {
 
     // Update stats text and speed calculation
     function updateStats() {
-        var stats = root.completedItems + " of " + root.totalItems + " items"
+        var stats = qsTr("%1 of %2 items").arg(root.completedItems).arg(root.totalItems)
 
         if (root.failedItems > 0) {
-            stats += " • " + root.failedItems + " failed"
+            stats += " • " + qsTr("%1 failed").arg(root.failedItems)
         }
 
         if (root.status === "Running" && root.transferredBytes > 0) {
