@@ -14,10 +14,6 @@ Item {
     Layout.fillWidth: true
     Layout.preferredHeight: 41
 
-    WhatsNew {
-        id: whatsNewDialog
-    }
-
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -150,7 +146,6 @@ Item {
 
     Component.onCompleted: {
         StatusWindow.registerOpener(Window.window, activityButton)
-        Qt.callLater(whatsNewDialog.showIfNeeded)
     }
     Component.onDestruction: StatusWindow.unregisterOpener(activityButton)
 }
