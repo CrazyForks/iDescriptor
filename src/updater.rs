@@ -622,6 +622,19 @@ enum InstallChannel {
 }
 
 impl InstallChannel {
+    fn display_name(self) -> &'static str {
+        match self {
+            Self::WindowsInstaller => "Windows installer",
+            Self::WindowsPortable => "Windows portable",
+            Self::WindowsStore => "Microsoft Store",
+            Self::MacDmg => "macOS",
+            Self::LinuxAppImage => "AppImage",
+            Self::Flatpak => "Flatpak",
+            Self::CustomPackageManager => "Linux package",
+            Self::NativeLinux => "Linux native",
+        }
+    }
+
     fn asset_policy(self) -> AssetPolicy {
         match self {
             Self::WindowsInstaller => AssetPolicy::WindowsInstaller,
@@ -665,6 +678,24 @@ impl InstallChannel {
             Self::WindowsStore => Some(WINDOWS_STORE_FALLBACK_URL),
             _ => None,
         }
+    }
+}
+
+pub(crate) fn build_description() -> String {
+    format!(
+        "{} · {}",
+        install_channel().display_name(),
+        architecture_display_name(std::env::consts::ARCH)
+    )
+}
+
+fn architecture_display_name(architecture: &str) -> &str {
+    match architecture {
+        "aarch64" => "ARM64",
+        "arm" => "ARM",
+        "x86" => "x86",
+        "x86_64" => "x86_64",
+        other => other,
     }
 }
 
@@ -805,6 +836,14 @@ mod tests {
             linux_install_channel(true, false, false),
             InstallChannel::LinuxAppImage
         );
+    }
+
+    #[test]
+    fn architecture_names_are_human_readable() {
+        assert_eq!(architecture_display_name("aarch64"), "ARM64");
+        assert_eq!(architecture_display_name("arm"), "ARM");
+        assert_eq!(architecture_display_name("x86_64"), "x86_64");
+        assert_eq!(architecture_display_name("riscv64"), "riscv64");
     }
 
     #[test]

@@ -658,13 +658,36 @@ DefaultWindow {
                     }
                 }
 
-                Label {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    text: qsTr("iDescriptor\nA free, open-source, cross-platform iDevice management tool.\n\n© 2026 iDescriptor Authors and Contributors")
-                    color: "#8a8a8e"
-                    font.pixelSize: 11
-                    wrapMode: Text.WordWrap
+                    spacing: 2
+
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        text: qsTr("iDescriptor")
+                        color: "#8a8a8e"
+                        font.pixelSize: 11
+                    }
+
+                    CopyableText {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: qsTr("Version %1 · %2")
+                                .arg(settingsManager.current_version())
+                                .arg(settingsManager.build_description())
+                        color: "#8a8a8e"
+                        font.pixelSize: 11
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 10
+                        horizontalAlignment: Text.AlignHCenter
+                        text: qsTr("A free, open-source, cross-platform iDevice management tool.\n\n© 2026 iDescriptor Authors and Contributors")
+                        color: "#8a8a8e"
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                    }
                 }
 
                 Item { Layout.preferredHeight: 18 }
