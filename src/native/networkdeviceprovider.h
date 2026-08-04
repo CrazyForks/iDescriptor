@@ -1,6 +1,7 @@
 #ifndef NETWORKDEVICEPROVIDER_H
 #define NETWORKDEVICEPROVIDER_H
 #include <QObject>
+#include <QOperatingSystemVersion>
 #include <QTimer>
 
 #ifdef __linux__
@@ -22,6 +23,8 @@ public:
     Q_ENUM(BrowsingState)
 
     Q_PROPERTY(BrowsingState state READ state NOTIFY stateChanged)
+    // macOS 15 introduced local network privacy
+    Q_PROPERTY(bool localNetworkPrivacyRequired READ localNetworkPrivacyRequired CONSTANT)
 
     static NetworkDeviceProvider *sharedInstance()
     {
@@ -40,7 +43,7 @@ public:
         connect(m_networkProvider, &AvahiService::started, this,
                 &NetworkDeviceProvider::_browsingStarted);
         connect(m_networkProvider, &AvahiService::failed, this,
-                &NetworkDeviceProvider::_browsingFailed);
+                [this](const QString &message) { _browsingFailed(message, 0); });
 #else
         m_networkProvider = new DnssdService(this);
         connect(m_networkProvider, &DnssdService::deviceAdded, this,
@@ -54,16 +57,30 @@ public:
 #endif
 
         /* Helps main ui load a litte faster */
+#ifndef Q_OS_MACOS
         QTimer::singleShot(std::chrono::seconds(1), this,
-                           [this]() { startBrowsing(true); });
+                           [this]() { startBrowsingInternal(true); });
+#endif
     }
 
     BrowsingState state() const { return m_state; }
 
+    bool localNetworkPrivacyRequired() const
+    {
+#ifdef Q_OS_MACOS
+        return QOperatingSystemVersion::current()
+            >= QOperatingSystemVersion(QOperatingSystemVersion::MacOS, 15);
+#else
+        return false;
+#endif
+    }
+
+    Q_INVOKABLE void startBrowsing() { startBrowsingInternal(true); }
+
     Q_INVOKABLE void restartBrowsing()
     {
         m_networkProvider->stopBrowsing();
-        startBrowsing(true);
+        startBrowsingInternal(true);
     }
 
     Q_INVOKABLE QMap<QString, QVariant> getNetworkDevices()
@@ -91,12 +108,14 @@ private:
 #endif
     BrowsingState m_state = Loading;
     int m_retryBudget = 1;
+    int m_policyRetryBudget = 30;
     quint64 m_browseGeneration = 0;
 
-    void startBrowsing(bool resetRetryBudget)
+    void startBrowsingInternal(bool resetRetryBudget)
     {
         if (resetRetryBudget) {
             m_retryBudget = 1;
+            m_policyRetryBudget = 30;
             ++m_browseGeneration;
         }
 
@@ -117,17 +136,39 @@ private:
     {
         setState(Started);
         m_retryBudget = 1;
+        m_policyRetryBudget = 30;
         emit started();
     }
 
-    void _browsingFailed(const QString &message)
+    void _browsingFailed(const QString &message, int errorCode)
     {
+#ifdef Q_OS_MACOS
+        if (errorCode == kDNSServiceErr_PolicyDenied) {
+            if (m_policyRetryBudget > 0) {
+                --m_policyRetryBudget;
+                const quint64 failureGeneration = m_browseGeneration;
+                QTimer::singleShot(std::chrono::seconds(2), this,
+                                   [this, failureGeneration]() {
+                    if (failureGeneration == m_browseGeneration)
+                        startBrowsingInternal(false);
+                });
+                return;
+            }
+
+            setState(Failed);
+            emit failed(message);
+            return;
+        }
+#else
+        Q_UNUSED(errorCode)
+#endif
+
         if (m_retryBudget > 0) {
             --m_retryBudget;
             const quint64 failureGeneration = m_browseGeneration;
             QTimer::singleShot(0, this, [this, failureGeneration]() {
                 if (failureGeneration == m_browseGeneration)
-                    startBrowsing(false);
+                    startBrowsingInternal(false);
             });
             return;
         }

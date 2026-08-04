@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import iDescriptor
 import "." as App
 
 Item {
@@ -12,6 +13,38 @@ Item {
     readonly property int selectedDeviceSection:
         root.selectedDevice ? root.selectedDevice.currentSection : 0
 
+    function continueStartup() {
+        if (Qt.platform.os === "osx")
+            NetworkDeviceProvider.startBrowsing()
+
+        Qt.callLater(whatsNewDialog.showIfNeeded)
+    }
+
+    function startStartupFlow() {
+        if (Qt.platform.os === "osx"
+                && NetworkDeviceProvider.localNetworkPrivacyRequired
+                && !settingsManager.local_network_onboarding_shown()) {
+            localNetworkPermissionDialog.open()
+            return
+        }
+
+        root.continueStartup()
+    }
+
+    WhatsNew {
+        id: whatsNewDialog
+    }
+
+    LocalNetworkPermissionDialog {
+        id: localNetworkPermissionDialog
+
+        onContinueRequested: {
+            settingsManager.set_local_network_onboarding_shown(true)
+            localNetworkPermissionDialog.close()
+            root.continueStartup()
+        }
+    }
+
     function destinationTitle() {
         switch (App.DeviceContext.currentDestination) {
         case "welcome":
@@ -22,6 +55,10 @@ Item {
             return qsTr("Toolbox")
         case "jailbroken":
             return qsTr("Jailbroken")
+        case "community":
+            return qsTr("Community")
+        case "donate":
+            return qsTr("Donate")
         case "pendingDevice":
             return qsTr("Connecting…")
         case "recoveryDevice":
@@ -141,4 +178,6 @@ Item {
             }
         }
     }
+
+    Component.onCompleted: Qt.callLater(root.startStartupFlow)
 }

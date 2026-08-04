@@ -61,13 +61,14 @@ void DnssdService::startBrowsing()
         //                      "Failed to start DNSSD browsing this means you "
         //                      "cannot use wireless devices and AirPlay please "
         //                      "solve this issue from dependency check area");
-        failBrowsing(message);
+        failBrowsing(message, err);
         return;
     }
 
     int fd = DNSServiceRefSockFD(m_browseRef);
     if (fd < 0) {
-        failBrowsing(QStringLiteral("DNS-SD browsing returned an invalid socket"));
+        failBrowsing(QStringLiteral("DNS-SD browsing returned an invalid socket"),
+                     kDNSServiceErr_Unknown);
         return;
     }
 
@@ -108,17 +109,18 @@ void DnssdService::processDnssdEvents()
         const DNSServiceErrorType error = DNSServiceProcessResult(m_browseRef);
         if (error != kDNSServiceErr_NoError) {
             failBrowsing(
-                QStringLiteral("DNS-SD browsing failed: %1").arg(error));
+                QStringLiteral("DNS-SD browsing failed: %1").arg(error), error);
         }
     }
 }
 
-void DnssdService::failBrowsing(const QString &message)
+void DnssdService::failBrowsing(const QString &message,
+                                DNSServiceErrorType errorCode)
 {
     m_running = false;
     cleanupDnssd();
     clearDevices();
-    emit failed(message);
+    emit failed(message, static_cast<int>(errorCode));
 }
 
 void DnssdService::clearDevices()
@@ -158,7 +160,8 @@ void DNSSD_API DnssdService::browseCallback(
     DnssdService *service = static_cast<DnssdService *>(context);
     if (errorCode != kDNSServiceErr_NoError) {
         service->failBrowsing(
-            QStringLiteral("DNS-SD browse callback failed: %1").arg(errorCode));
+            QStringLiteral("DNS-SD browse callback failed: %1").arg(errorCode),
+            errorCode);
         return;
     }
 

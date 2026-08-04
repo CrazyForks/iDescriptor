@@ -26,5 +26,13 @@
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>iDescriptor uses your local network to discover and connect to Apple devices over Wi-Fi.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_apple-mobdev2._tcp</string>
+        <string>_airplay._tcp</string>
+        <string>_raop._tcp</string>
+    </array>
 </dict>
 </plist>

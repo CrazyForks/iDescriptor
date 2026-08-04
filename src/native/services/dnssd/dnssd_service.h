@@ -54,14 +54,14 @@ signals:
     void deviceAdded(const NetworkDevice &device);
     void deviceRemoved(const QString &macAddress);
     void started();
-    void failed(const QString &message);
+    void failed(const QString &message, int errorCode);
 
 private slots:
     void processDnssdEvents();
 
 private:
     void cleanupDnssd();
-    void failBrowsing(const QString &message);
+    void failBrowsing(const QString &message, DNSServiceErrorType errorCode);
     void clearDevices();
 
     static void DNSSD_API browseCallback(
