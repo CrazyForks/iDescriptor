@@ -29,6 +29,20 @@ Item {
         return Theme.systemRed
     }
 
+    function activationStateText(state) {
+        switch (state) {
+            case "Activated":
+            case "WildcardActivated":
+                return "Activated"
+            case "FactoryActivated":
+                return "Factory Activated"
+            case "Unactivated":
+                return "Unactivated"
+            default:
+                return state
+        }
+    }
+
     function refreshBatteryInfo() {
         const rawProductType = v("ProductType", "")
         if (rawProductType.length > 0)
@@ -258,7 +272,7 @@ Item {
                         // Left: Activation State; Right: Hardware Platform
                         Label { text: qsTr("Activation State:"); font.bold: false }
                         CopyableText {
-                            text: v("ActivationState", qsTr("Unknown"))
+                            text: root.activationStateText(v("ActivationState", qsTr("Unknown")))
                             color: root.activationStateColor(text)
                             elide: Text.ElideRight
                             Layout.fillWidth: true
