@@ -73,17 +73,38 @@ Item {
         anchors.fill: parent
         autoSwitchContent: false
         retryable: true
+        cancelable: true
+        cancelText: qsTr("Back")
         onRetryRequested: root.fetchDetails()
+        onCancelRequested: root.backRequested()
 
-        contentItem: ScrollView {
+        contentItem: ColumnLayout {
             anchors.fill: parent
-            clip: true
-            contentWidth: availableWidth
+            spacing: 0
 
-            ColumnLayout {
-                width: Math.min(980, stateView.width)
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: 0
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.margins: 5
+
+                IconToolButton {
+                    icon.source: "qrc:/resources/icons/material-symbols_arrow-left-alt.svg"
+                    toolTipText: qsTr("Back")
+                    onClicked: root.backRequested()
+                }
+
+                Item { Layout.fillWidth: true }
+            }
+
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: availableWidth
+
+                ColumnLayout {
+                    width: Math.min(980, stateView.width)
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 0
 
                 Item {
                     id: shelfWrapper
@@ -123,14 +144,6 @@ Item {
                             GradientStop { position: 0.72; color: Qt.rgba(0, 0, 0, 0) }
                             GradientStop { position: 1.0; color: palette.window }
                         }
-                    }
-
-                    Button {
-                        anchors.left: parent.left
-                        anchors.top: parent.top
-                        anchors.margins: 20
-                        text: qsTr("Back")
-                        onClicked: root.backRequested()
                     }
 
                     RowLayout {
@@ -260,7 +273,6 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             text: details ? (details.releaseNotes || qsTr("No release notes available.")) : ""
-                            color: "#1d1d1f"
                             wrapMode: Text.WordWrap
                         }
                     }
@@ -354,6 +366,7 @@ Item {
                                 wrapMode: Text.WordWrap
                             }
                         }
+                    }
                     }
                 }
             }
