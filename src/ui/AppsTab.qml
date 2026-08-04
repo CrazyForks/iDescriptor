@@ -52,7 +52,6 @@ Item {
 
     LoginDialog {
         id: loginDialog
-        anchors.centerIn: parent
     }
 
     Loader {

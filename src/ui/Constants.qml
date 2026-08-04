@@ -3,6 +3,8 @@ import QtQml
 
 QtObject {
     readonly property string repoUrl: "https://github.com/iDescriptor/iDescriptor"
+    readonly property string linkedinUrl: "https://www.linkedin.com/company/idescriptor/"
+    readonly property string redditUrl: "https://www.reddit.com/r/iDescriptor/"
     readonly property string openCollectiveUrl: "https://opencollective.com/idescriptor"
     readonly property string githubSponsorsUrl: "https://github.com/sponsors/iDescriptor"
 

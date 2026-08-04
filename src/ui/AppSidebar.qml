@@ -8,7 +8,7 @@ Rectangle {
     id: root
     radius: App.Theme.radius
 
-    property bool favoritesExpanded: true
+    property bool exploreExpanded: true
     property bool devicesExpanded: true
 
     signal toggleRequested
@@ -77,13 +77,13 @@ Rectangle {
 
                 SidebarSectionHeader {
                     Layout.topMargin: 2
-                    text: qsTr("Favorites")
-                    expanded: root.favoritesExpanded
-                    onToggleRequested: root.favoritesExpanded = !root.favoritesExpanded
+                    text: qsTr("Explore")
+                    expanded: root.exploreExpanded
+                    onToggleRequested: root.exploreExpanded = !root.exploreExpanded
                 }
 
                 SidebarCollapsibleContent {
-                    expanded: root.favoritesExpanded
+                    expanded: root.exploreExpanded
 
                     SidebarDestinationButton {
                         text: qsTr("Welcome")
@@ -111,6 +111,20 @@ Rectangle {
                         iconSource: "qrc:/resources/icons/sidebar_jailbroken.svg"
                         selected: App.DeviceContext.currentDestination === "jailbroken"
                         onDestinationRequested: App.DeviceContext.selectJailbrokenPage()
+                    }
+
+                    SidebarDestinationButton {
+                        text: qsTr("Community")
+                        iconSource: "qrc:/resources/icons/streamline_ultimate-multiple-users-network.svg"
+                        selected: App.DeviceContext.currentDestination === "community"
+                        onDestinationRequested: App.DeviceContext.selectCommunityPage()
+                    }
+
+                    SidebarDestinationButton {
+                        text: qsTr("Donate")
+                        iconSource: "qrc:/resources/icons/material-symbols_favorite.svg"
+                        selected: App.DeviceContext.currentDestination === "donate"
+                        onDestinationRequested: App.DeviceContext.selectDonatePage()
                     }
                 }
 

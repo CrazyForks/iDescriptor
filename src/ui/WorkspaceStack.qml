@@ -21,6 +21,10 @@ Item {
             return 2
         case "jailbroken":
             return 3
+        case "community":
+            return 5
+        case "donate":
+            return 6
         case "welcome":
         default:
             return 4
@@ -74,6 +78,28 @@ Item {
             Layout.fillHeight: true
 
             Welcome {
+                anchors.fill: parent
+            }
+        }
+
+        AnimatedTab {
+            index: 5
+            currentIndex: root.currentIndex
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            Community {
+                anchors.fill: parent
+            }
+        }
+
+        AnimatedTab {
+            index: 6
+            currentIndex: root.currentIndex
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            Donate {
                 anchors.fill: parent
             }
         }

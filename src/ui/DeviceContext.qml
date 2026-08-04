@@ -115,6 +115,16 @@ QtObject {
         root.currentDestination = "jailbroken"
     }
 
+    function selectCommunityPage() {
+        root.currentDestinationId = ""
+        root.currentDestination = "community"
+    }
+
+    function selectDonatePage() {
+        root.currentDestinationId = ""
+        root.currentDestination = "donate"
+    }
+
     function selectDeviceSection(sectionIndex) {
         if (root.currentDestination !== "device")
             return

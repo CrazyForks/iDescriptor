@@ -15,11 +15,6 @@ AnimatedDialog {
     width: 460
     height: 420
 
-    function openSponsorUrl(url) {
-        Qt.openUrlExternally(url)
-        dialog.close()
-    }
-
     contentItem: ColumnLayout {
         anchors.fill: parent
         anchors.margins: 28
@@ -69,25 +64,10 @@ AnimatedDialog {
 
         Item { Layout.preferredHeight: 2 }
 
-        Button {
+        DonateActions {
             Layout.fillWidth: true
-            Layout.preferredHeight: 48
-            text: qsTr("Sponsor with GitHub")
-            icon.source: "qrc:/resources/icons/mdi_github.svg"
-            icon.color: App.Theme.textSelected
-            font.bold: true
-            highlighted: true
-            onClicked: dialog.openSponsorUrl(App.Constants.githubSponsorsUrl)
-        }
-
-        Button {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 48
-            text: qsTr("Support on Open Collective")
-            icon.source: "qrc:/resources/icons/simple-icons_opencollective.svg"
-            icon.color: App.Theme.text
-            font.bold: true
-            onClicked: dialog.openSponsorUrl(App.Constants.openCollectiveUrl)
+            horizontal: false
+            onLinkOpened: dialog.close()
         }
 
         Item { Layout.fillHeight: true }
