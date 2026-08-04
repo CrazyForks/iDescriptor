@@ -11,7 +11,7 @@ AnimatedDialog {
     focus: true
     standardButtons: Dialog.NoButton
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-    anchors.centerIn: parent
+    anchors.centerIn: Overlay.overlay
     width: 380
     height: 460
 
@@ -291,6 +291,9 @@ AnimatedDialog {
                     color: App.Theme.text
                     selectedTextColor: App.Theme.textSelected
                     selectionColor: App.Theme.selection
+                    topPadding: 0
+                    bottomPadding: 0
+                    verticalAlignment: TextInput.AlignVCenter
                     inputMethodHints: Qt.ImhEmailCharactersOnly
                     onTextChanged: {
                         dialog.email = text
@@ -344,6 +347,9 @@ AnimatedDialog {
                         color: App.Theme.text
                         selectedTextColor: App.Theme.textSelected
                         selectionColor: App.Theme.selection
+                        topPadding: 0
+                        bottomPadding: 0
+                        verticalAlignment: TextInput.AlignVCenter
                         echoMode: dialog.passwordVisible ? TextInput.Normal : TextInput.Password
                         onTextChanged: {
                             dialog.password = text

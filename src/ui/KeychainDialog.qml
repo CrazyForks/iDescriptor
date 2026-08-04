@@ -12,9 +12,9 @@ AnimatedDialog {
     focus: true
     standardButtons: Dialog.NoButton
     closePolicy: Popup.NoAutoClose
-    anchors.centerIn: parent
-    width: Math.min(parent ? parent.width - 32 : 600, 600)
-    height: Math.min(parent ? parent.height - 32 : 570, 570)
+    anchors.centerIn: Overlay.overlay
+    width: Math.min(Overlay.overlay.width - 32, 600)
+    height: Math.min(Overlay.overlay.height - 32, 570)
 
     signal continueRequested()
     signal skipRequested()
