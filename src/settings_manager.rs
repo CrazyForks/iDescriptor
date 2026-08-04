@@ -192,6 +192,8 @@ pub struct SettingsManager {
     dismiss_sleepy_device_warning: qt_method!(fn(&self)),
     backup_experimental_warning_acknowledged: qt_method!(fn(&self) -> bool),
     set_backup_experimental_warning_acknowledged: qt_method!(fn(&self, acknowledged: bool)),
+    local_network_onboarding_shown: qt_method!(fn(&self) -> bool),
+    set_local_network_onboarding_shown: qt_method!(fn(&self, shown: bool)),
     has_seen_device: qt_method!(fn(&self, udid: QString) -> bool),
     set_has_seen_device: qt_method!(fn(&self, udid: QString, seen: bool)),
     seen_device_udids: qt_method!(fn(&self) -> QStringList),
@@ -627,6 +629,7 @@ impl SettingsManager {
         self.set_show_v4l2(false);
         self.set_is_sleepy_device_warning_dismissed(false);
         self.set_backup_experimental_warning_acknowledged(false);
+        self.set_local_network_onboarding_shown(false);
     }
 
     fn current_version(&self) -> QString {
@@ -726,6 +729,14 @@ impl SettingsManager {
 
     fn set_backup_experimental_warning_acknowledged(&self, acknowledged: bool) {
         write_bool("backupExperimentalWarningAcknowledged", acknowledged);
+    }
+
+    fn local_network_onboarding_shown(&self) -> bool {
+        read_bool("localNetworkOnboardingShown", false)
+    }
+
+    fn set_local_network_onboarding_shown(&self, shown: bool) {
+        write_bool("localNetworkOnboardingShown", shown);
     }
 
     fn has_seen_device(&self, udid: QString) -> bool {
