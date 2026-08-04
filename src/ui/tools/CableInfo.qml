@@ -24,7 +24,7 @@ ToolWindow {
 
     ListModel { id: infoModel }
 
-    function normalizeString(s) { return (s && s.length) ? s : "Error" }
+    function normalizeString(s) { return (s && s.length) ? s : qsTr("Error") }
     function normalizeInt(i) { return i ? i : 0}
 
     function initCableInfo() {
