@@ -14,7 +14,8 @@ AnimatedDialog {
     focus: true
     standardButtons: Dialog.NoButton
     closePolicy: connecting ? Popup.NoAutoClose : (Popup.CloseOnEscape | Popup.CloseOnPressOutside)
-    width: Math.min(520, parent ? parent.width - 48 : 520)
+    anchors.centerIn: Overlay.overlay
+    width: Math.min(520, Overlay.overlay.width - 48)
     padding: 24
 
     property string pairingFilePath: ""
