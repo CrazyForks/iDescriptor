@@ -9,7 +9,7 @@ AnimatedDialog {
     modal: true
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-    anchors.centerIn: parent
+    anchors.centerIn: Overlay.overlay
 
     width: 560
     height: 560
@@ -39,13 +39,6 @@ AnimatedDialog {
 
     onCurrentIndexChanged: updateNav()
     Component.onCompleted: updateNav()
-
-    background: Rectangle {
-        radius: 10
-        color: palette.window
-        border.color: Qt.rgba(0, 0, 0, 0.12)
-        border.width: 1
-    }
 
     contentItem: ColumnLayout {
         anchors.fill: parent
@@ -452,7 +445,7 @@ AnimatedDialog {
 
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("Choose Custom when you already have a pairing record and know the device IP address.")
+                        text: qsTr("You can use the 'Connect with pairing file' button to connect to a device. You have to have a valid pairing file and know the device IP address.")
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
                         lineHeight: 1.4
@@ -460,88 +453,47 @@ AnimatedDialog {
                         font.pixelSize: 13
                     }
 
-                    //TODO: we need an image here
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("Pairing files are usually stored here:")
+                        color: App.Theme.textMuted
+                        font.pixelSize: 12
+                        wrapMode: Text.WordWrap
+                        lineHeight: 1.4
+                    }
+
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.maximumWidth: 440
-                        Layout.alignment: Qt.AlignHCenter
-                        radius: App.Theme.sidebarCornerRadius
-                        color: App.Theme.softBg
+                        implicitHeight: Math.max(36, pathText.implicitHeight + 18)
+                        radius: 9
+                        color: App.Theme.controlFill
                         border.color: App.Theme.softBgBorder
                         border.width: 1
-                        implicitHeight: customCardLayout.implicitHeight + 32
 
-                        ColumnLayout {
-                            id: customCardLayout
+                        Text {
+                            id: pathText
                             anchors.fill: parent
-                            anchors.margins: 16
-                            spacing: 12
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: qsTr("Pairing files are usually stored here:")
-                                color: App.Theme.textMuted
-                                font.pixelSize: 12
-                                wrapMode: Text.WordWrap
-                                lineHeight: 1.4
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                implicitHeight: Math.max(36, pathText.implicitHeight + 18)
-                                radius: 9
-                                color: App.Theme.controlFill
-                                border.color: App.Theme.softBgBorder
-                                border.width: 1
-
-                                Text {
-                                    id: pathText
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 12
-                                    anchors.rightMargin: 12
-                                    text: dlg.lockdownPath
-                                    color: App.Theme.text
-                                    elide: Text.ElideMiddle
-                                    verticalAlignment: Text.AlignVCenter
-                                    font.pixelSize: 12
-                                    font.family: "monospace"
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: dlg.copyLockdownPath()
-                                }
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: qsTr("Then enter the device IP address from its Wi-Fi network details.")
-                                color: App.Theme.textMuted
-                                font.pixelSize: 12
-                                wrapMode: Text.WordWrap
-                                lineHeight: 1.4
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                implicitHeight: 36
-                                radius: 9
-                                color: App.Theme.controlFill
-                                border.color: App.Theme.controlStroke
-                                border.width: 1
-
-                                Text {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 12
-                                    anchors.rightMargin: 12
-                                    text: qsTr("Device IP address")
-                                    color: App.Theme.textMuted
-                                    verticalAlignment: Text.AlignVCenter
-                                    font.pixelSize: 13
-                                }
-                            }
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            text: dlg.lockdownPath
+                            color: App.Theme.text
+                            elide: Text.ElideMiddle
+                            verticalAlignment: Text.AlignVCenter
+                            font.pixelSize: 12
+                            font.family: "monospace"
                         }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Qt.openUrlExternally(dlg.lockdownPath)
+                        }
+                    }
+
+                    Label {
+                        visible: Qt.platform.os === "osx"
+                        text: qsTr("You can run `sudo ls /var/db/lockdown` to see the pairing files you have on your Mac.")
                     }
 
                     Item { Layout.fillHeight: true }
