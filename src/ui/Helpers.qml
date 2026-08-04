@@ -24,7 +24,7 @@ QtObject {
 
     function fetch_app(bundleId, cb) {
         if (!bundleId) {
-            cb(null, "Missing bundle id");
+            cb(null, qsTr("Missing bundle ID."));
             return;
         }
 
@@ -34,7 +34,7 @@ QtObject {
             if (xhr.readyState !== XMLHttpRequest.DONE) return;
 
             if (xhr.status !== 200) {
-                cb(null, "Failed to fetch app details.");
+                cb(null, qsTr("Failed to fetch app details."));
                 return;
             }
 
@@ -42,12 +42,12 @@ QtObject {
                 var obj = JSON.parse(xhr.responseText);
                 var results = obj && obj.results ? obj.results : [];
                 if (!results.length) {
-                    cb(null, "No App Store details found for this bundle id.");
+                    cb(null, qsTr("No App Store details found for this bundle ID."));
                     return;
                 }
                 cb(results[0], "");
             } catch (e) {
-                cb(null, "Failed to parse App Store details.");
+                cb(null, qsTr("Failed to parse App Store details."));
             }
         };
         xhr.send();
