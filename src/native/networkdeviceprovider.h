@@ -75,7 +75,13 @@ public:
 #endif
     }
 
-    Q_INVOKABLE void startBrowsing() { startBrowsingInternal(true); }
+    Q_INVOKABLE void startBrowsing()
+    {
+        if (m_state == Started)
+            return;
+
+        startBrowsingInternal(true);
+    }
 
     Q_INVOKABLE void restartBrowsing()
     {
@@ -108,14 +114,14 @@ private:
 #endif
     BrowsingState m_state = Loading;
     int m_retryBudget = 1;
-    int m_policyRetryBudget = 30;
+    int m_policyRetryBudget = 2;
     quint64 m_browseGeneration = 0;
 
     void startBrowsingInternal(bool resetRetryBudget)
     {
         if (resetRetryBudget) {
             m_retryBudget = 1;
-            m_policyRetryBudget = 30;
+            m_policyRetryBudget = 2;
             ++m_browseGeneration;
         }
 
@@ -136,7 +142,7 @@ private:
     {
         setState(Started);
         m_retryBudget = 1;
-        m_policyRetryBudget = 30;
+        m_policyRetryBudget = 2;
         emit started();
     }
 
