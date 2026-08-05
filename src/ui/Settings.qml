@@ -683,7 +683,7 @@ DefaultWindow {
                         Layout.fillWidth: true
                         Layout.topMargin: 10
                         horizontalAlignment: Text.AlignHCenter
-                        text: qsTr("A free, open-source, cross-platform iDevice management tool.\n\n© 2026 iDescriptor Authors and Contributors")
+                        text: qsTr("A free, open-source, cross-platform iDevice management tool.\n\n© 2026 Uncore <https://github.com/uncor3> and iDescriptor contributors")
                         color: "#8a8a8e"
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
