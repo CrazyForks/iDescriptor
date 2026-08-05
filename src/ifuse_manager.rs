@@ -142,7 +142,7 @@ fn merge_mount_points(mount_points: Vec<String>, mount_info: &str) -> Vec<String
 // if we don't do this we may endup with duplicate mount points
 // like the below
 // -------------
-// /home/uncore/.var/app/com.idescriptor.idescriptor/data/iDescriptor/iDescriptor/mounts/iPhone 11
+// /home/uncore/.var/app/io.github.idescriptor.iDescriptor/data/iDescriptor/iDescriptor/mounts/iPhone 11
 // var/data/iDescriptor/iDescriptor/mounts/iPhone 11
 // -------------
 //
@@ -270,9 +270,9 @@ mod tests {
         assert_eq!(
             super::map_flatpak_data_path(
                 "/var/data/iDescriptor/iDescriptor/mounts/iPhone 7",
-                std::path::Path::new("/home/user/.var/app/com.idescriptor.idescriptor/data")
+                std::path::Path::new("/home/user/.var/app/io.github.idescriptor.iDescriptor/data")
             ),
-            "/home/user/.var/app/com.idescriptor.idescriptor/data/iDescriptor/iDescriptor/mounts/iPhone 7"
+            "/home/user/.var/app/io.github.idescriptor.iDescriptor/data/iDescriptor/iDescriptor/mounts/iPhone 7"
         );
     }
 }
