@@ -148,6 +148,9 @@ ToolWindow {
             } else {
                 App.Helpers.showInfo(root.contentItem, qsTr("No developer disk image is mounted on the selected device."));
             }
+
+            if (success && !isLocked)
+                DevImgsManager.fetch_image_list(root.currentDeviceUdid, settingsManager.dev_disk_img_path());
         }
     }
 
@@ -214,17 +217,6 @@ ToolWindow {
                                 wrapMode: Text.WordWrap
                                 font.pixelSize: 10
                                 font.weight: Font.Normal
-                                lineHeightMode: Text.ProportionalHeight
-                            }
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: root.hasDevice ? qsTr("Select a device, download a matching image, then mount it when needed.") : qsTr("Connect a device to check for developer disk images.")
-                                color: root.hasDevice ? App.Theme.textMuted : App.Theme.systemRed
-                                wrapMode: Text.WordWrap
-                                font.pixelSize: 13
-                                font.weight: Font.Normal
-                                lineHeight: 1.32
                                 lineHeightMode: Text.ProportionalHeight
                             }
 
