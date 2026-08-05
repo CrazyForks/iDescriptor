@@ -263,14 +263,28 @@ ToolWindow {
 
             WheelHandler {
                 id: wheel
-                // workaround for QTBUG-87646 / QTBUG-112394 / QTBUG-112432:
-                // Magic Mouse pretends to be a trackpad but doesn't work with PinchHandler
-                // and we don't yet distinguish mice and trackpads on Wayland either
-                acceptedDevices: Qt.platform.pluginName === "cocoa" || Qt.platform.pluginName === "wayland"
-                                ? PointerDevice.Mouse | PointerDevice.TouchPad
-                                : PointerDevice.Mouse
-                rotationScale: 1/120
-                property: "zoomLevel"
+                target: null
+                // QTBUG-112432 remains open in Qt 6.9: Wayland cannot reliably
+                // distinguish mouse and touchpad wheel events.
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+
+                onWheel: function(event) {
+                    const steps = event.angleDelta.y !== 0
+                                ? event.angleDelta.y / 120
+                                : event.pixelDelta.y / 40
+                    if (steps === 0) {
+                        event.accepted = false
+                        return
+                    }
+
+                    const wheelPosition = Qt.point(event.x, event.y)
+                    const anchorCoordinate = map.toCoordinate(wheelPosition, false)
+                    map.zoomLevel = Math.max(map.minimumZoomLevel,
+                                             Math.min(map.maximumZoomLevel,
+                                                      map.zoomLevel + (steps * 0.55)))
+                    map.alignCoordinateToPoint(anchorCoordinate, wheelPosition)
+                    event.accepted = true
+                }
             }
 
             DragHandler {
