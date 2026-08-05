@@ -16,7 +16,7 @@ AnimatedDialog {
         ? Popup.NoAutoClose
         : Popup.CloseOnEscape | Popup.CloseOnPressOutside
     anchors.centerIn: parent
-    width: Math.min(parent ? parent.width - 32 : 760, 760)
+    width: Math.min(parent ? parent.width - 32 : 500, 500)
     height: root.contentIndex === 1
         ? Math.min(parent ? parent.height - 32 : 680, 680)
         : 220
