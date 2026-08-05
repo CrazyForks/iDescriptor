@@ -6,8 +6,6 @@ import "./base"
 Item {
     id: root
 
-    implicitHeight: card.implicitHeight
-
     property var diagnoseState: DiagnoseImpl.state
 
     function openDiagnostics() {
