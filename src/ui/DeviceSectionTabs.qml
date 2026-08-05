@@ -66,7 +66,15 @@ Item {
             implicitHeight: 26
 
             readonly property Item selectedButton:
-                sectionRepeater.itemAt(root.currentSection)
+                root.currentSection >= 0
+                && root.currentSection < sectionRepeater.count
+                    ? sectionRepeater.itemAt(root.currentSection) : null
+
+            onSelectedButtonChanged: {
+                Qt.callLater(function() {
+                    selectionIndicator.syncToCurrentButton(true)
+                })
+            }
 
             Rectangle {
                 id: selectionIndicator
@@ -103,16 +111,6 @@ Item {
                     Qt.callLater(function() {
                         selectionIndicator.syncToCurrentButton(false)
                     })
-                }
-
-                Connections {
-                    target: root
-
-                    function onCurrentSectionChanged() {
-                        Qt.callLater(function() {
-                            selectionIndicator.syncToCurrentButton(true)
-                        })
-                    }
                 }
 
                 ParallelAnimation {
