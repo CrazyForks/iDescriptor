@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 Uncore <https://github.com/uncor3>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use crate::{POSSIBLE_ROOT, run_sync};
 use ::log::{debug, error, info, warn};
 use anyhow::Context;

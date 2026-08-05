@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 Uncore <https://github.com/uncor3>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use crate::constants::{
     ALBUM_CONTENTS_QUERY_TEMPLATE, FAVS_ALBUM_ID, FAVS_ALBUM_QUERY, FAVS_QUERY,
     GALLERY_TOTAL_SIZE_QUERY, IOS_15_ALBUM_QUERY_STATEMENT, IOS_26_ALBUM_QUERY_STATEMENT,

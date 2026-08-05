@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 Uncore <https://github.com/uncor3>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use crate::constants::{DCIM_REMOTE_PATH, FS_GALLERY_PROVIDER_NAME};
 use crate::gallery::{
     GalleryAlbum, GalleryFuture, GalleryMediaFilter, GalleryProvider, apple_dcim_folder_id,

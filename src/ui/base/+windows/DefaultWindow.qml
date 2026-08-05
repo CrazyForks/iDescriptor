@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 Uncore <https://github.com/uncor3>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15

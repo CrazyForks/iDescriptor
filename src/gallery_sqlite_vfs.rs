@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 Uncore <https://github.com/uncor3>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use crate::constants::{PHOTOS_SQLITE_REMOTE_PATH, PHOTOS_SQLITE_WAL_REMOTE_PATH};
 use crate::run_sync;
 use anyhow::{Context, anyhow};
