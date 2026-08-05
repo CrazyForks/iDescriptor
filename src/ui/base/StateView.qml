@@ -22,7 +22,7 @@ Item {
     property bool  autoSwitchContent: true
     property int  autoSwitchDelay: 500
     property alias  contentItem:    contentSlot.data
-    
+
     signal retryRequested()
     signal cancelRequested()
 
@@ -41,7 +41,7 @@ Item {
         if (root.requestedViewState === StateView.State.Content) {
             root.viewState = StateView.State.Loading
             return autoSwitchTimer.start()
-        }  
+        }
         root.viewState = root.requestedViewState
     }
 
@@ -63,7 +63,8 @@ Item {
                 anchors.centerIn: parent
                 spacing: 12
 
-                Text {
+                TextEdit {
+                    readOnly: true
                     Layout.alignment:  Qt.AlignHCenter
                     Layout.maximumWidth: 300
                     text: root.errorText
