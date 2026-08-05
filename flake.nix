@@ -1,6 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    self.submodules = true;
   };
 
   outputs = { self, nixpkgs }:
@@ -9,7 +10,9 @@
     in
       {
       packages = forAllSystems (system: {
-        default = nixpkgs.legacyPackages.${system}.callPackage ./nix/package.nix { };
+        default = nixpkgs.legacyPackages.${system}.callPackage ./packaging/linux/nix/package.nix {
+          src = self;
+        };
       });
 
       apps = forAllSystems (system: {
@@ -19,49 +22,17 @@
         };
       });
 
-      devShells = forAllSystems (system: 
-        let pkgs = nixpkgs.legacyPackages.${system};
+      devShells = forAllSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
         in {
           default = pkgs.mkShell {
-            nativeBuildInputs = with pkgs; [
-              cmake
-              pkg-config
-              go
-              qt6.wrapQtAppsHook
-              copyDesktopItems
-            ];
+            inputsFrom = [ self.packages.${system}.default ];
 
-            buildInputs = with pkgs; [
-              qt6.qtbase
-              qt6.qtdeclarative
-              qt6.qtmultimedia
-              qt6.qtserialport
-              qt6.qtpositioning
-              qt6.qtlocation
-              lxqt.qtermwidget
-              qrencode
-              libheif
-              libde265
-              x265
-              libirecovery
-              libssh
-              ffmpeg
-              pugixml
-              avahi
-              avahi-compat
-              libimobiledevice
-              libirecovery
-              libplist
-              usbmuxd
-              libzip
-              openssl
-            ];
-
-            cmakeFlags = [
-              "-DCMAKE_BUILD_TYPE=Release"
-              "-DCMAKE_INSTALL_PREFIX=${placeholder "out"}"
-              "-DPACKAGE_MANAGER_MANAGED=ON"
-              "-DPACKAGE_MANAGER_HINT=nix"
+            packages = with pkgs; [
+              cargo
+              rustc
+              rustfmt
             ];
           };
         });
@@ -72,7 +43,7 @@
           idescriptorPkg = self.packages.${pkgs.system}.default;
         in
           {
-          imports = [ ./nix/nixos-module.nix ];
+          imports = [ ./packaging/linux/nix/nixos-module.nix ];
 
           config = lib.mkIf cfg.enable {
             programs.idescriptor.package = lib.mkDefault idescriptorPkg;
@@ -85,7 +56,7 @@
           idescriptorPkg = self.packages.${pkgs.system}.default;
         in
           {
-          imports = [ ./nix/hm-module.nix ];
+          imports = [ ./packaging/linux/nix/hm-module.nix ];
 
           config = lib.mkIf cfg.enable {
             programs.idescriptor.package = lib.mkDefault idescriptorPkg;
