@@ -11,7 +11,7 @@
     <key>CFBundleIconFile</key>
     <string>iDescriptor.icns</string>
     <key>CFBundleIdentifier</key>
-    <string>com.idescriptor.idescriptor</string>
+    <string>io.github.idescriptor.iDescriptor</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

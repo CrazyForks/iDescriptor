@@ -73,10 +73,10 @@ done
 
 # Copy executable and icon
 cp target/release/idescriptor "$APPDIR/usr/bin/iDescriptor"
-cp packaging/shared/resources/app-icon/icon-16.png "$APPDIR/usr/share/icons/hicolor/16x16/apps/iDescriptor.png"
-cp packaging/shared/resources/app-icon/icon-32.png "$APPDIR/usr/share/icons/hicolor/32x32/apps/iDescriptor.png"
-cp packaging/shared/resources/app-icon/icon-256.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/iDescriptor.png"
-cp packaging/shared/resources/app-icon/icon-512.png "$APPDIR/usr/share/icons/hicolor/512x512/apps/iDescriptor.png"
+cp packaging/shared/resources/app-icon/icon-16.png "$APPDIR/usr/share/icons/hicolor/16x16/apps/io.github.idescriptor.iDescriptor.png"
+cp packaging/shared/resources/app-icon/icon-32.png "$APPDIR/usr/share/icons/hicolor/32x32/apps/io.github.idescriptor.iDescriptor.png"
+cp packaging/shared/resources/app-icon/icon-256.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/io.github.idescriptor.iDescriptor.png"
+cp packaging/shared/resources/app-icon/icon-512.png "$APPDIR/usr/share/icons/hicolor/512x512/apps/io.github.idescriptor.iDescriptor.png"
 
 
 # Bundle GStreamer plugins and helpers
@@ -184,7 +184,7 @@ EOF
 chmod +x "$APPDIR/apprun-hooks/linuxdeploy-plugin-env.sh"
 
 # .desktop file
-cp iDescriptor.desktop "$APPDIR/usr/share/applications/"
+cp io.github.idescriptor.iDescriptor.desktop "$APPDIR/usr/share/applications/"
 
 # Manually deploy geoservices plugins (workaround for linuxdeploy-plugin-qt not finding them)
 if [ -n "${Qt6_DIR:-}" ] && [ -d "$Qt6_DIR/plugins/geoservices" ]; then
@@ -213,7 +213,7 @@ export EXTRA_QT_MODULES="geoservices;position;multimedia"
 
  "./${LINUXDEPLOY}" \
             --appdir ./AppDir \
-            --desktop-file AppDir/usr/share/applications/iDescriptor.desktop \
+            --desktop-file AppDir/usr/share/applications/io.github.idescriptor.iDescriptor.desktop \
             --executable "$APPDIR/usr/lib/gstreamer-1.0/gst-plugin-scanner" \
             --executable "$APPDIR/usr/lib/gstreamer-1.0/gst-ptp-helper" \
             --plugin qt \

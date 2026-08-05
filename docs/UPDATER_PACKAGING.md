@@ -94,13 +94,13 @@ button.
 The expected Flatpak application ID is:
 
 ```text
-com.idescriptor.idescriptor
+io.github.idescriptor.iDescriptor
 ```
 
 The current updater page is:
 
 ```text
-https://flathub.org/apps/com.idescriptor.idescriptor
+https://flathub.org/apps/io.github.idescriptor.iDescriptor
 ```
 
 TODO: Verify that this is the final published Flatpak/Flathub URL when the

@@ -30,7 +30,7 @@ compile_error!("The windows_store feature is only supported on Windows");
 ))]
 compile_error!("The appimage, flatpak, and package_manager features are only supported on Linux");
 
-const FLATPAK_PAGE_URL: &str = "https://flathub.org/apps/com.idescriptor.idescriptor";
+const FLATPAK_PAGE_URL: &str = "https://flathub.org/apps/io.github.idescriptor.iDescriptor";
 // TODO: Verify that this is the final published Flatpak/Flathub URL.
 
 const WINDOWS_STORE_URI: &str = "ms-windows-store://search/?query=iDescriptor";
