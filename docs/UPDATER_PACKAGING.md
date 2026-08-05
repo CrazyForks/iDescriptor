@@ -115,6 +115,13 @@ repositories, and other downstream packages:
 cargo build --release --features package_manager
 ```
 
+Snap recipe is still experimental and lives in
+`packaging/linux/snap/snapcraft.yaml`. Build it from the repository root with:
+
+```bash
+snapcraft --project-dir packaging/linux/snap
+```
+
 The older CMake definitions `PACKAGE_MANAGER_MANAGED` and
 `PACKAGE_MANAGER_HINT` do not configure the Rust updater. Maintainers must use
 the Cargo feature and environment variable documented here.
@@ -134,13 +141,6 @@ A maintainer may embed a custom message at build time with
 
 ```bash
 IDESCRIPTOR_PACKAGE_MANAGER_MESSAGE="Please update iDescriptor using yay or paru." \
-    cargo build --release --features package_manager
-```
-
-Another example:
-
-```bash
-IDESCRIPTOR_PACKAGE_MANAGER_MESSAGE="Open your software center to update iDescriptor." \
     cargo build --release --features package_manager
 ```
 

@@ -1,0 +1,140 @@
+# FIXME: Device detection does not work because the required Snap interfaces
+# have not been finalized. Do not publish this snap until USB events work.
+name: idescriptor
+base: core24
+version: "0.6.0"
+summary: Manage and interact with Apple mobile devices
+title: iDescriptor
+license: AGPL-3.0-or-later
+contact: https://github.com/iDescriptor/iDescriptor/issues
+website: https://github.com/iDescriptor/iDescriptor
+source-code: https://github.com/iDescriptor/iDescriptor
+issues: https://github.com/iDescriptor/iDescriptor/issues
+donation: https://opencollective.com/idescriptor
+description: |
+  iDescriptor is a free and open-source, cross-platform tool for managing
+  iPhone, iPad, and iPod devices over USB or Wi-Fi. It is written in Rust and
+  uses Qt 6 for its user interface.
+
+confinement: strict
+grade: devel
+
+platforms:
+  amd64:
+  arm64:
+
+apps:
+  idescriptor:
+    command: usr/bin/iDescriptor
+    desktop: usr/share/applications/io.github.idescriptor.iDescriptor.desktop
+    common-id: io.github.idescriptor.iDescriptor
+    extensions:
+      - kde-neon-6
+    environment:
+      AVAHI_COMPAT_NOWARN: "1"
+    plugs:
+      - home
+      - raw-usb
+      - fuse-support
+      - hardware-observe
+      - system-observe
+      - usbmuxd-socket
+      - lockdown-files
+
+plugs:
+  usbmuxd-socket:
+    interface: system-files
+    read:
+      - /var/run/usbmuxd
+    write:
+      - /var/run/usbmuxd
+  lockdown-files:
+    interface: system-files
+    read:
+      - /var/lib/lockdown
+
+parts:
+  # Match the libplist version built by the Linux release workflow.
+  libplist:
+    plugin: autotools
+    source: https://github.com/libimobiledevice/libplist/releases/download/2.7.0/libplist-2.7.0.tar.bz2
+    autotools-configure-parameters:
+      - --prefix=/usr
+    build-packages:
+      - build-essential
+      - libtool
+      - libxml2-dev
+      - pkg-config
+
+  idescriptor:
+    after:
+      - libplist
+    plugin: rust
+    # This recipe lives three directories below the repository root.
+    source: ../../..
+    source-type: local
+    rust-channel: stable
+    build-environment:
+      - IDESCRIPTOR_PACKAGE_MANAGER_MESSAGE: Please update iDescriptor through the Snap Store.
+    build-packages:
+      - build-essential
+      - cmake
+      - git
+      - libavahi-client-dev
+      - libavahi-compat-libdnssd-dev
+      - libavcodec-dev
+      - libavformat-dev
+      - libavutil-dev
+      - libcurl4-openssl-dev
+      - libfuse3-dev
+      - libglib2.0-dev
+      - libgstreamer-plugins-base1.0-dev
+      - libgstreamer1.0-dev
+      - libheif-dev
+      - libpugixml-dev
+      - libqrencode-dev
+      - libreadline-dev
+      - libssh-dev
+      - libssl-dev
+      - libswscale-dev
+      - libusb-1.0-0-dev
+      - libzip-dev
+      - ninja-build
+      - pkg-config
+    stage-packages:
+      - gstreamer1.0-alsa
+      - gstreamer1.0-gl
+      - gstreamer1.0-libav
+      - gstreamer1.0-pipewire
+      - gstreamer1.0-plugins-bad
+      - gstreamer1.0-plugins-good
+      - gstreamer1.0-plugins-ugly
+      - gstreamer1.0-pulseaudio
+      - gstreamer1.0-qt6
+      - gstreamer1.0-tools
+      - libavahi-client3
+      - libavahi-compat-libdnssd1
+      - libfuse3-3
+      - libheif1
+      - libpugixml1v5
+      - libpulse0
+      - libssh-4
+    override-build: |
+      set -euo pipefail
+      RUSTFLAGS="" cargo build --release --features package_manager
+
+      install -Dm0755 \
+        target/release/idescriptor \
+        "$CRAFT_PART_INSTALL/usr/bin/iDescriptor"
+      install -Dm0644 \
+        io.github.idescriptor.iDescriptor.desktop \
+        "$CRAFT_PART_INSTALL/usr/share/applications/io.github.idescriptor.iDescriptor.desktop"
+      install -Dm0644 \
+        io.github.idescriptor.iDescriptor.metainfo.xml \
+        "$CRAFT_PART_INSTALL/usr/share/metainfo/io.github.idescriptor.iDescriptor.metainfo.xml"
+
+      for size in 16 32 256 512; do
+        install -Dm0644 \
+          "packaging/shared/resources/app-icon/icon-${size}.png" \
+          "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/${size}x${size}/apps/io.github.idescriptor.iDescriptor.png"
+      done
