@@ -1106,13 +1106,17 @@ pub fn qvariant_to_ptr(item: QVariant) -> usize {
 }
 
 pub fn compare_signatures(version: &str, mounted_sig: &[u8], dir: String) -> bool {
-    let local_sig = match std::fs::read(format!(
-        "{}{}/DeveloperDiskImage.dmg.signature",
-        dir, version
-    )) {
+    let signature_path = Path::new(&dir)
+        .join(version)
+        .join("DeveloperDiskImage.dmg.signature");
+    let local_sig = match std::fs::read(&signature_path) {
         Ok(data) => data,
         Err(e) => {
-            error!("Failed to read signature file {}: {}", version, e);
+            error!(
+                "Failed to read signature file {}: {}",
+                signature_path.display(),
+                e
+            );
             return false;
         }
     };
