@@ -13,7 +13,7 @@ ToolWindow {
     minimumHeight: 520
     title: qsTr("Live Screen - iDescriptor")
 
-    // readonly property int iosVersion: device.info.ios_version_major
+    readonly property int iosVersion: device.info.ios_version_major
     property int rotationDegrees: 0
     property bool mirrorHorizontal: false
     property string statusText: qsTr("Connecting to screenshot service...")
