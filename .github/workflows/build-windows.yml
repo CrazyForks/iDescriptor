@@ -382,13 +382,18 @@ jobs:
             -MsiPath "${{ steps.msi.outputs.msi_path }}" `
             -OutputDirectory "target/chocolatey"
 
-      - name: Upload updater artifacts
+      - name: Upload Windows MSI artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-windows-x86_64
-          path: |
-            ${{ steps.portable_zip.outputs.zip_path }}
-            ${{ steps.msi.outputs.msi_path }}
+          path: ${{ steps.msi.outputs.msi_path }}
+          if-no-files-found: error
+
+      - name: Upload Windows portable ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-x86_64-portable
+          path: ${{ steps.portable_zip.outputs.zip_path }}
           if-no-files-found: error
 
       - name: Upload Microsoft Store artifact
