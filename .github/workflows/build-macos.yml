@@ -4,29 +4,34 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Build version (e.g., v1.2.3)"
+        description: "Build version (for example, v1.2.3)"
         required: true
-        default: "dev"
+        default: "v0.0.0"
+        type: string
   workflow_call:
     inputs:
       version:
-        description: "Build version (e.g., v1.2.3)"
+        description: "Build version (for example, v1.2.3)"
         required: true
         type: string
-        default: "dev"
+
 env:
-  QT_VERSION: "6.7.2"
-  GO_VERSION: "1.23.4"
+  QT_VERSION: "6.9.2"
   LIBPLIST_VER: "2.7.0"
   LIBTATSU_VER: "1.0.5"
   LIBIMOBILEDEVICE_GLUE_VER: "1.3.2"
   LIBIMOBILEDEVICE_VER: "1.4.0"
-  LIBIRECOVERY_VER: "1.3.1"
   LIBUSBMUXD_VER: "2.1.1"
 
 jobs:
   build-macos:
+    name: macOS ${{ matrix.arch }}
+    environment: release
+    env:
+      HAS_MACOS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_BASE64 != '' }}
+      HAS_MACOS_NOTARIZATION: ${{ secrets.APPLE_ID != '' && secrets.APPLE_APP_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner: macos-15-intel
@@ -39,128 +44,151 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: "recursive"
+          submodules: recursive
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          modules: "qtmultimedia qtlocation qtpositioning qtserialport"
+          modules: "qtmultimedia qtlocation qtpositioning qtserialport qt5compat qtshadertools"
 
-      - name: Update pkgconfig path
+      - name: Update build paths
         run: |
           echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
           echo "CMAKE_PREFIX_PATH=${QT_ROOT_DIR}/lib/cmake:${CMAKE_PREFIX_PATH:-}" >> "$GITHUB_ENV"
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "^${{ env.GO_VERSION }}"
 
       - name: Install macOS dependencies
         run: |
           brew install \
             autoconf \
             automake \
-            libtool \
             pkg-config \
-            pugixml \
-            libusb \
-            qrencode \
+            create-dmg \
             curl \
-            openssl \
-            libzip \
-            libheif \
-            libssh \
-            gstreamer \
+            ffmpeg \
+            gst-libav \
+            gst-plugins-bad \
             gst-plugins-base \
             gst-plugins-good \
-            gst-plugins-bad \
             gst-plugins-ugly \
-            gst-libav \
-            create-dmg \
+            gstreamer \
             jpeg-xl \
+            libheif \
+            meson \
+            ninja \
+            openssl \
             sqlite
+
+      - name: Build qml6glsink
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(pkg-config --modversion gstreamer-1.0)"
+          archive="gst-plugins-good-${version}.tar.xz"
+          source_url="https://gstreamer.freedesktop.org/src/gst-plugins-good"
+
+          cd "$RUNNER_TEMP"
+          curl --fail --location --retry 3 --output "$archive" \
+            "${source_url}/${archive}"
+          curl --fail --location --retry 3 --output "${archive}.sha256sum" \
+            "${source_url}/${archive}.sha256sum"
+          shasum -a 256 --check "${archive}.sha256sum"
+          tar -xf "$archive"
+          cd "gst-plugins-good-${version}"
+
+          meson setup build-qml6 . \
+            --auto-features=disabled \
+            -Dqt-method=qmake \
+            -Dqt6=enabled \
+            -Dqt5=disabled \
+            -Dtests=disabled \
+            -Dexamples=disabled \
+            -Dnls=disabled
+          ninja -C build-qml6
+
+          plugin_dir="$(brew --prefix)/lib/gstreamer-1.0"
+          cp build-qml6/ext/qt6/libgstqml6.dylib "$plugin_dir/"
+          gst-inspect-1.0 qml6glsink >/dev/null
 
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: Compile additional dependencies
-        run: |
-          git clone https://github.com/lxqt/lxqt-build-tools.git
-          pushd lxqt-build-tools
-          mkdir build && cd build
-          cmake ..
-          sudo make install
-          popd
-
-          git clone https://github.com/lxqt/qtermwidget.git
-          pushd qtermwidget
-          mkdir build && cd build
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr/local \
-            -DLXQT_BUILD_QT6=ON \
-            -DBUILD_TESTS=OFF
-          sudo make -j"$(sysctl -n hw.ncpu)" install
-          popd
-
-      - name: Build libimobiledevice suite (versioned tarballs)
+      - name: Build libimobiledevice suite
+        shell: bash
         run: |
           set -euo pipefail
-          workspace="$PWD"
-          tmp="$PWD/_tmp_libs"
+          tmp="$RUNNER_TEMP/idescriptor-libs"
           mkdir -p "$tmp"
           cd "$tmp"
-
           base_url="https://github.com/libimobiledevice"
-
-          libs=( "libplist" "libtatsu" "libimobiledevice-glue" "libusbmuxd" "libimobiledevice" "libirecovery")
+          libs=(libplist)
 
           for name in "${libs[@]}"; do
-            # Use tr for POSIX-compliant uppercase conversion instead of bash 4+ ^^ syntax
             ver_var=$(echo "$name" | tr '[:lower:]' '[:upper:]' | sed 's/-/_/g')_VER
             ver="${!ver_var:-}"
             if [ -z "$ver" ]; then
-              echo "Version for $name not set (env var $ver_var)"
+              echo "Version for $name not set (environment variable $ver_var)"
               exit 1
             fi
-
             archive="${name}-${ver}.tar.bz2"
-            url="${base_url}/${name}/releases/download/${ver}/${archive}"
-            echo "=== Processing $name $ver ==="
-            echo "URL: $url"
-            curl --retry 3 --retry-delay 5 -L -o "$archive" "$url"
-
-            echo "Extracting $archive"
+            curl --retry 3 --retry-delay 5 -L -o "$archive" \
+              "${base_url}/${name}/releases/download/${ver}/${archive}"
             tar xjf "$archive"
-
-            srcdir="${name}-${ver}"
-            pushd "$srcdir"
-
+            pushd "${name}-${ver}"
             ./configure
-
-            make -j"$(sysctl -n hw.ncpu)" && sudo make install
+            make -j"$(sysctl -n hw.ncpu)"
+            sudo make install
             popd
-            echo "Installed $name $ver"
           done
 
-          # cleanup
-          cd "$workspace"
-          rm -rf "$tmp"
-
-      - name: Configure CMake
+      - name: Import signing certificate
+        if: ${{ env.HAS_MACOS_SIGNING == 'true' }}
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DRUN_CLANG_TIDY=OFF
+          certificate="$RUNNER_TEMP/idescriptor-signing.p12"
+          keychain="$RUNNER_TEMP/idescriptor-signing.keychain-db"
+          echo "$MACOS_CERTIFICATE_BASE64" | base64 --decode > "$certificate"
+          security create-keychain -p actions "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p actions "$keychain"
+          security import "$certificate" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security list-keychains -d user -s "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions "$keychain"
 
-      - name: Build with CMake
-        run: cmake --build build --config Release
+      - name: Build with Cargo
+        run: RUSTFLAGS="" cargo build --release
 
       - name: Deploy and create DMG
-        run: ./scripts/deploy-dmg.sh ${{ matrix.arch }} ${{ inputs.version }}
+        env:
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: bash packaging/macos/dmg/deploy.sh "${{ matrix.arch }}" "${{ inputs.version }}"
 
-      - name: Upload Artifact
+      - name: Notarize DMG
+        if: ${{ env.HAS_MACOS_NOTARIZATION == 'true' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          dmg="build/iDescriptor-${{ inputs.version }}-${{ matrix.arch == 'x86_64' && 'Apple_Intel' || 'Apple_Silicon' }}.dmg"
+          xcrun notarytool submit "$dmg" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$dmg"
+
+      - name: Validate DMG
+        run: |
+          file build/iDescriptor.app/Contents/MacOS/iDescriptor | grep -q "${{ matrix.arch }}"
+          plutil -lint build/iDescriptor.app/Contents/Info.plist
+          test -f build/iDescriptor-${{ inputs.version }}-${{ matrix.arch == 'x86_64' && 'Apple_Intel' || 'Apple_Silicon' }}.dmg
+
+      - name: Upload updater artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iDescriptor-macOS-${{ matrix.arch }}
-          path: build/*.dmg
+          name: release-macos-${{ matrix.arch }}
+          path: build/iDescriptor-${{ inputs.version }}-${{ matrix.arch == 'x86_64' && 'Apple_Intel' || 'Apple_Silicon' }}.dmg
+          if-no-files-found: error

@@ -1,0 +1,155 @@
+diff --git a/meson.build b/meson.build
+index 1817f804a..c40bbf5cc 100644
+--- a/meson.build
++++ b/meson.build
+@@ -29,7 +29,10 @@ glib_req = '>= 2.62.0'
+ orc_req = '>= 0.4.17'
+ 
+ if gst_version_is_stable
+-  gst_req = '>= @0@.@1@.0'.format(gst_version_major, gst_version_minor)
++  # qml6glsink was added in 1.22, but the rendering code is compatible with
++  # 1.20 after adapting the navigation API below. Ubuntu 22.04 ships 1.20.
++  # TODO: remove this backport when Ubuntu 22.04 support is dropped.
++  gst_req = '>= 1.20.0'
+ else
+   gst_req = '>= ' + gst_version
+ endif
+diff --git a/ext/qt6/gstqml6glsink.cc b/ext/qt6/gstqml6glsink.cc
+index 68d4b7982..f8e0adf0f 100644
+--- a/ext/qt6/gstqml6glsink.cc
++++ b/ext/qt6/gstqml6glsink.cc
+@@ -548,6 +548,7 @@ config_failed:
+ }
+ 
+ static void
++#if GST_CHECK_VERSION(1, 22, 0)
+ gst_qml6_gl_sink_navigation_send_event (GstNavigation * navigation,
+                                    GstEvent * event)
+ {
+@@ -575,8 +576,37 @@ gst_qml6_gl_sink_navigation_send_event (GstNavigation * navigation,
+     gst_object_unref (pad);
+   }
+ }
++#else
++gst_qml6_gl_sink_navigation_send_event (GstNavigation * navigation,
++                                   GstStructure * structure)
++{
++  GstQml6GLSink *qt_sink = GST_QML6_GL_SINK (navigation);
++  GstEvent *event;
++  GstPad *pad;
++
++  event = gst_event_new_navigation (structure);
++  pad = gst_pad_get_peer (GST_VIDEO_SINK_PAD (qt_sink));
++
++  GST_TRACE_OBJECT (qt_sink, "navigation event %" GST_PTR_FORMAT, structure);
++
++  if (GST_IS_PAD (pad) && GST_IS_EVENT (event)) {
++    if (!gst_pad_send_event (pad, gst_event_ref (event))) {
++      /* If upstream didn't handle the event we'll post a message with it
++       * for the application in case it wants to do something with it */
++      gst_element_post_message (GST_ELEMENT_CAST (qt_sink),
++                                gst_navigation_message_new_event (GST_OBJECT_CAST (qt_sink), event));
++    }
++    gst_event_unref (event);
++    gst_object_unref (pad);
++  }
++}
++#endif
+ 
+ static void gst_qml6_gl_sink_navigation_interface_init (GstNavigationInterface * iface)
+ {
++#if GST_CHECK_VERSION(1, 22, 0)
+   iface->send_event_simple = gst_qml6_gl_sink_navigation_send_event;
++#else
++  iface->send_event = gst_qml6_gl_sink_navigation_send_event;
++#endif
+ }
+diff --git a/ext/qt6/qt6glitem.cc b/ext/qt6/qt6glitem.cc
+index 445366116..9a9f3ef8c 100644
+--- a/ext/qt6/qt6glitem.cc
++++ b/ext/qt6/qt6glitem.cc
+@@ -418,6 +418,7 @@ Qt6GLVideoItem::mapPointToStreamSize(QPointF pos)
+   return QPointF(stream_x, stream_y);
+ }
+ 
++#if GST_CHECK_VERSION(1, 22, 0)
+ static GstNavigationModifierType
+ translateModifiers(Qt::KeyboardModifiers modifiers)
+ {
+@@ -437,5 +438,6 @@ translateMouseButtons(Qt::MouseButtons buttons)
+     ((buttons & Qt::ForwardButton) ? GST_NAVIGATION_MODIFIER_BUTTON5_MASK : 0));
+ }
++#endif
+ 
+ void
+ Qt6GLVideoItem::wheelEvent(QWheelEvent * event)
+@@ -446,11 +448,16 @@ Qt6GLVideoItem::wheelEvent(QWheelEvent * event)
+ 
+   if (element != NULL) {
+     auto position = event->position();
++#if GST_CHECK_VERSION(1, 22, 0)
+     gst_navigation_send_event_simple (GST_NAVIGATION (element),
+         gst_navigation_event_new_mouse_scroll (position.x(), position.y(),
+                                                delta.x(), delta.y(),
+                                                (GstNavigationModifierType) (
+                                                  translateModifiers(event->modifiers()) | translateMouseButtons(event->buttons()))));
++#else
++    gst_navigation_send_mouse_scroll_event (GST_NAVIGATION (element),
++        position.x(), position.y(), delta.x(), delta.y());
++#endif
+     g_object_unref (element);
+   }
+   g_mutex_unlock (&this->priv->lock);
+@@ -487,9 +495,14 @@ Qt6GLVideoItem::hoverMoveEvent(QHoverEvent * event)
+     GstElement *element = GST_ELEMENT_CAST (g_weak_ref_get (&this->priv->sink));
+ 
+     if (element != NULL) {
++#if GST_CHECK_VERSION(1, 22, 0)
+       gst_navigation_send_event_simple (GST_NAVIGATION (element),
+           gst_navigation_event_new_mouse_move (pos.x(), pos.y(),
+                                                translateModifiers(event->modifiers())));
++#else
++      gst_navigation_send_mouse_event (GST_NAVIGATION (element),
++          "mouse-move", 0, pos.x(), pos.y());
++#endif
+       g_object_unref (element);
+     }
+   }
+@@ -499,6 +512,10 @@ Qt6GLVideoItem::hoverMoveEvent(QHoverEvent * event)
+ void
+ Qt6GLVideoItem::touchEvent(QTouchEvent * event)
+ {
++#if !GST_CHECK_VERSION(1, 22, 0)
++  event->ignore();
++  return;
++#else
+   g_mutex_lock (&this->priv->lock);
+ 
+   /* can't do anything when we don't have input format */
+@@ -556,5 +573,6 @@ Qt6GLVideoItem::touchEvent(QTouchEvent * event)
+   g_object_unref (element);
+   g_mutex_unlock (&this->priv->lock);
++#endif
+ }
+ 
+ void
+@@ -588,6 +606,7 @@ Qt6GLVideoItem::sendMouseEvent(QMouseEvent * event, gboolean is_press)
+   GstElement *element = GST_ELEMENT_CAST (g_weak_ref_get (&this->priv->sink));
+ 
+   if (element != NULL) {
++#if GST_CHECK_VERSION(1, 22, 0)
+     gst_navigation_send_event_simple (GST_NAVIGATION (element),
+         (is_press) ? gst_navigation_event_new_mouse_button_press (button,
+                 pos.x(), pos.y(),
+@@ -596,6 +615,11 @@ Qt6GLVideoItem::sendMouseEvent(QMouseEvent * event, gboolean is_press)
+                 pos.y(),
+                 (GstNavigationModifierType) (
+                   translateModifiers(event->modifiers()) | translateMouseButtons(event->buttons()))));
++#else
++    gst_navigation_send_mouse_event (GST_NAVIGATION (element),
++        is_press ? "mouse-button-press" : "mouse-button-release",
++        button, pos.x(), pos.y());
++#endif
+     g_object_unref (element);
+   }
+ 

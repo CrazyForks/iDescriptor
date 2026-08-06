@@ -208,5 +208,5 @@
     "qregularexpression": "cpp",
     "qnetworkaccessmanager": "cpp"
   },
-  "rust-analyzer.linkedProjects": ["src/rust/Cargo.toml"]
+  "rust-analyzer.linkedProjects": ["Cargo.toml"]
 }

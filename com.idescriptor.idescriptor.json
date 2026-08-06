@@ -4,7 +4,7 @@
   "runtime-version": "6.8",
   "sdk": "org.kde.Sdk",
   "add-extensions": {
-    "org.kde.Platform.ffmpeg-full": {
+    "org.freedesktop.Platform.ffmpeg-full": {
       "version": "24.08",
       "directory": "lib/ffmpeg",
       "add-ld-path": "."
@@ -22,63 +22,12 @@
     "--socket=pulseaudio",
     "--share=network",
     "--device=all",
-    "--socket=system-bus",
     "--filesystem=/run/usbmuxd",
     "--system-talk-name=org.freedesktop.Avahi",
-    "--talk-name=org.freedesktop.Platform.ffmpeg-full",
     "--env=QT_MEDIA_BACKEND=ffmpeg",
     "--env=AVAHI_COMPAT_NOWARN=1"
   ],
   "modules": [
-    {
-      "name": "lxqt-build-tools",
-      "buildsystem": "cmake-ninja",
-      "builddir": true,
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/lxqt/lxqt-build-tools.git"
-        }
-      ]
-    },
-    {
-      "name": "golang",
-      "buildsystem": "simple",
-      "build-options": {
-        "append-path": "/app/sdk/golang/bin",
-        "env": {
-          "GOROOT": "/app/sdk/golang"
-        }
-      },
-      "sources": [
-        {
-          "type": "archive",
-          "only-arches": ["x86_64"],
-          "url": "https://go.dev/dl/go1.25.3.linux-amd64.tar.gz",
-          "sha256": "0335f314b6e7bfe08c3d0cfaa7c19db961b7b99fb20be62b0a826c992ad14e0f",
-          "strip-components": 0
-        },
-        {
-          "type": "archive",
-          "only-arches": ["aarch64"],
-          "url": "https://go.dev/dl/go1.25.3.linux-arm64.tar.gz",
-          "sha256": "1d42ebc84999b5e2069f5e31b67d6fc5d67308adad3e178d5a2ee2c9ff2001f5",
-          "strip-components": 0
-        }
-      ],
-      "build-commands": ["mkdir -p /app/sdk", "mv go /app/sdk/golang"]
-    },
-    {
-      "name": "qtermwidget",
-      "buildsystem": "cmake-ninja",
-      "builddir": true,
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/lxqt/qtermwidget"
-        }
-      ]
-    },
     {
       "name": "libplist",
       "buildsystem": "autotools",
@@ -105,35 +54,6 @@
       ]
     },
     {
-      "name": "libdaemon",
-      "buildsystem": "autotools",
-      "sources": [
-        {
-          "type": "archive",
-          "url": "http://0pointer.de/lennart/projects/libdaemon/libdaemon-0.14.tar.gz",
-          "sha256": "fd23eb5f6f986dcc7e708307355ba3289abe03cc381fc47a80bca4a50aa6b834"
-        }
-      ]
-    },
-    {
-      "name": "libevent",
-      "buildsystem": "autotools",
-      "config-opts": [
-        "--disable-samples",
-        "--disable-openssl",
-        "--disable-debug-mode",
-        "--disable-regress",
-        "--disable-libevent-regress",
-        "--disable-test-programs"
-      ],
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/libevent/libevent.git"
-        }
-      ]
-    },
-    {
       "name": "avahi",
       "buildsystem": "autotools",
       "config-opts": [
@@ -146,7 +66,9 @@
         "--with-distro=none",
         "--disable-manpages",
         "--disable-dbus-bus-activation",
-        "--enable-compat-libdns_sd"
+        "--enable-compat-libdns_sd",
+        "--disable-libdaemon",
+        "--disable-libevent"
       ],
       "sources": [
         {
@@ -157,8 +79,7 @@
     },
     {
       "name": "libde265",
-      "buildsystem": "autotools",
-      "config-opts": ["--disable-dec265", "--disable-sherlock265"],
+      "buildsystem": "cmake-ninja",
       "sources": [
         {
           "type": "git",
@@ -201,12 +122,22 @@
       ]
     },
     {
-      "name": "pugixml",
-      "buildsystem": "cmake-ninja",
+      "name": "qml6glsink",
+      "buildsystem": "meson",
+      "config-opts": [
+        "--auto-features=disabled",
+        "-Dqt6=enabled",
+        "-Dqt5=disabled",
+        "-Dqt-x11=enabled",
+        "-Dtests=disabled",
+        "-Dexamples=disabled",
+        "-Dnls=disabled"
+      ],
       "sources": [
         {
-          "type": "git",
-          "url": "https://github.com/zeux/pugixml.git"
+          "type": "archive",
+          "url": "https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.24.13.tar.xz",
+          "sha256": "574ac6f9fd84b32eb04e80572391d6762df6f9802a47bc0386cd6cc48c14d08b"
         }
       ]
     },
@@ -217,31 +148,19 @@
         "append-path": "/usr/lib/sdk/rust-stable/bin",
         "env": {
           "CARGO_HOME": "/run/build/iDescriptor/cargo",
-          "CARGO_NET_OFFLINE": "true",
-          "RUST_BACKTRACE": "1",
-          "CUSTOM_LIB_PATH": "/app/lib",
-          "CUSTOM_INCLUDE_PATH": "/app/include",
-          "CUSTOM_PKGCONFIG_PATH": "/app/lib/pkgconfig",
-          "GO_EXECUTABLE": "/app/sdk/golang/bin/go",
-          "FLATPAK_BUILD": "ON"
+          "RUST_BACKTRACE": "1"
         },
         "build-args": ["--share=network"]
       },
       "build-commands": [
-        "cargo --offline fetch --manifest-path lib/idevice-rs/Cargo.toml --verbose",
-        "cargo build --offline --release --all-features --manifest-path lib/idevice-rs/Cargo.toml",
-        "cmake -B build -DGO_EXECUTABLE=$GO_EXECUTABLE .",
-        "cmake --build build --config Release",
-        "install -Dm0755 build/iDescriptor ${FLATPAK_DEST}/bin/iDescriptor"
+        "cargo build --release --features flatpak",
+        "install -Dm0755 target/release/idescriptor ${FLATPAK_DEST}/bin/iDescriptor"
       ],
       "sources": [
         {
           "type": "dir",
           "path": "."
-        },
-        "cargo-sources.idevice-rs.json",
-        "cargo-sources.idevice-rs.idevice.json",
-        "cargo-sources.idevice-rs.cpp.plist_ffi.json"
+        }
       ]
     }
   ]

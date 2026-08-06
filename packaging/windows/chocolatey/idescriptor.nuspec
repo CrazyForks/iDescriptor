@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+    <metadata>
+        <id>idescriptor</id>
+        <version>__VERSION__</version>
+        <title>iDescriptor</title>
+        <authors>The iDescriptor Project contributors</authors>
+        <owners>iDescriptor</owners>
+        <licenseUrl>https://github.com/iDescriptor/iDescriptor/blob/main/LICENSE</licenseUrl>
+        <projectUrl>https://github.com/iDescriptor/iDescriptor</projectUrl>
+        <iconUrl>https://raw.githubusercontent.com/iDescriptor/iDescriptor/main/packaging/shared/resources/app-icon/icon.png</iconUrl>
+        <requireLicenseAcceptance>true</requireLicenseAcceptance>
+        <description>A free, open-source, and cross-platform iDevice management tool written in Rust and Qt.</description>
+        <summary>Cross-platform, open-source and free iDevice management tool written in Rust and Qt.</summary>
+        <releaseNotes>https://github.com/iDescriptor/iDescriptor/releases/tag/v__VERSION__</releaseNotes>
+        <tags>idescriptor idevice apple ios ipad iphone foss cross-platform</tags>
+        <packageSourceUrl>https://github.com/iDescriptor/iDescriptor</packageSourceUrl>
+        <projectSourceUrl>https://github.com/iDescriptor/iDescriptor</projectSourceUrl>
+        <docsUrl>https://github.com/iDescriptor/iDescriptor/blob/main/README.md</docsUrl>
+        <bugTrackerUrl>https://github.com/iDescriptor/iDescriptor/issues</bugTrackerUrl>
+    </metadata>
+    <files>
+        <file src="tools\**" target="tools" />
+    </files>
+</package>

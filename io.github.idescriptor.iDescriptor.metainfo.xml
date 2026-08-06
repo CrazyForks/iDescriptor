@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 Uncore <https://github.com/uncor3> and iDescriptor contributors -->
+<component type="desktop-application">
+  <id>io.github.idescriptor.iDescriptor</id>
+  <name>iDescriptor</name>
+  <summary>Manage and interact with Apple mobile devices (iPhone, iPad, iPod...)</summary>
+  <developer id="io.github.idescriptor">
+    <name>iDescriptor Team</name>
+  </developer>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      iDescriptor is a cross-platform tool for managing iDevices (iPhone, iPad, iPod...)
+      from a desktop computer over USB or Wi-Fi.
+    </p>
+    <p>Use iDescriptor to:</p>
+    <ul>
+      <li>Explore files and photos</li>
+      <li>Inspect device, cable, and diagnostic information</li>
+      <li>Create and inspect device backups</li>
+      <li>View the device screen with AirPlay</li>
+      <li>Manage apps and developer disk images</li>
+      <li>Check for battery health</li>
+      <li>Restart, erase, shut down your device</li>
+    </ul>
+    <p>iDescriptor is an independent project and is not affiliated with Apple Inc.</p>
+  </description>
+  <launchable type="desktop-id">io.github.idescriptor.iDescriptor.desktop</launchable>
+  <url type="homepage">https://idescriptor.github.io</url>
+  <url type="bugtracker">https://github.com/iDescriptor/iDescriptor/issues</url>
+  <url type="vcs-browser">https://github.com/iDescriptor/iDescriptor</url>
+  <url type="donation">https://opencollective.com/idescriptor</url>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/iDescriptor/iDescriptor/v0.6.0/resources/repo/crossplatform.png</image>
+      <caption>Manage an Apple mobile device from the desktop</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/iDescriptor/iDescriptor/v0.6.0/resources/repo/file-explorer.png</image>
+      <caption>Explore files stored on a connected device</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/iDescriptor/iDescriptor/v0.6.0/resources/repo/network-devices.png</image>
+      <caption>Discover devices available over the local network</caption>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1" />
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <releases>
+    <release version="0.6.0" date="2026-08-04">
+      <url type="details">https://github.com/iDescriptor/iDescriptor/releases/tag/v0.6.0</url>
+    </release>
+  </releases>
+</component>

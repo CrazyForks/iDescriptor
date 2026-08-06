@@ -15,4 +15,5 @@ devdiskimgs
 .qt
 .qtcreator
 CMakeFiles
-src/rust/target
+target
+.qmlls.ini

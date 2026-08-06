@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 permissions:
   contents: write
 
@@ -35,9 +34,10 @@ jobs:
       - name: Prepare output folder
         run: mkdir target
 
-      - name: Download all artifacts
+      - name: Download release artifacts
         uses: actions/download-artifact@v6
         with:
+          pattern: release-*
           path: target
 
       - name: Create GitHub Release
@@ -46,3 +46,40 @@ jobs:
           files: target/*/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-chocolatey:
+    needs: release
+    if: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
+    environment: release
+    runs-on: windows-latest
+
+    steps:
+      - name: Download Chocolatey package
+        uses: actions/download-artifact@v6
+        with:
+          name: chocolatey-windows-x86_64
+          path: target/chocolatey
+
+      - name: Verify Chocolatey is available
+        uses: crazy-max/ghaction-chocolatey@v4
+        with:
+          args: -v
+
+      - name: Publish Chocolatey package
+        shell: pwsh
+        env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+        run: |
+          if (-not $env:CHOCOLATEY_API_KEY) {
+            throw "CHOCOLATEY_API_KEY is required to publish the Chocolatey package"
+          }
+          $package = Get-ChildItem -Path "target/chocolatey" -Filter "*.nupkg" | Select-Object -First 1
+          if (-not $package) {
+            throw "Chocolatey package artifact not found"
+          }
+          choco push $package.FullName --source https://push.chocolatey.org/ --api-key $env:CHOCOLATEY_API_KEY
+          if ($LASTEXITCODE -ne 0) {
+            throw "choco push failed with exit code $LASTEXITCODE"
+          }
+  # TODO
+  # publish-windows-store:

@@ -1,0 +1,733 @@
+// SPDX-FileCopyrightText: 2025-2026 Uncore <https://github.com/uncor3>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+pragma Singleton
+
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Dialogs
+import QtQuick.Layouts
+import QtQuick.Window
+import "." as App
+import "./base"
+
+DefaultWindow {
+    id: root
+    width: 400
+    height: 500
+    minimumWidth: 400
+    minimumHeight: 500
+    title: qsTr("Settings - iDescriptor")
+    visible: false
+    modality: Qt.ApplicationModal
+    autoDestroy: false
+    autoVisible: false
+
+    /* Windows only*/
+    showMaximize: false
+    showMinimize: false
+    /*----------*/
+    property bool dirty: false
+    property bool restartRequired: false
+    readonly property var backend: typeof settingsManager !== "undefined" ? settingsManager : null
+
+    property string downloadPath: ""
+    property string ipaDownloadPath: ""
+    property string backupRootPath: ""
+    property int wireless_file_server_port: 8080
+    property bool unmount_ifuse_on_exit: false
+    property bool auto_check_updates: true
+    property bool z_linux_window: false
+    property bool auto_enable_wifi_connections: true
+    property string theme: "System Default"
+    property string language: "en"
+    property bool auto_raise_window: true
+    property bool switch_to_new_device: true
+    property bool auto_connect_wireless_devices: true
+    property bool upgrade_to_wireless_on_disconnect: true
+    property int connection_timeout: 30
+    property int gallery_backend: 1
+    property string window_effect: "normal"
+    property string default_jailbroken_root_password: "alpine"
+    property int airplay_fps: 60
+    property bool airplay_no_hold: true
+    property bool airplay_use_legacy_ports: true
+    property bool show_v4l2: false
+
+    Connections {
+        target: App.Theme
+        function onWindowEffectChanged() {
+            root.applyEffect(App.Theme.windowEffect)
+        }
+    }
+
+    function open() {
+        loadSettings()
+        show()
+        raise()
+        requestActivate()
+    }
+
+    function markDirty(restart) {
+        dirty = true
+        if (restart)
+            restartRequired = true
+    }
+
+    function backendValue(name, fallback) {
+        if (!backend || typeof backend[name] !== "function")
+            return fallback
+        return backend[name]()
+    }
+
+    function callBackend(name) {
+        if (!backend || typeof backend[name] !== "function")
+            return
+
+        const args = Array.prototype.slice.call(arguments, 1)
+        backend[name].apply(backend, args)
+    }
+
+    function normalizeLanguage(value) {
+        const normalized = String(value || "en").trim().toLowerCase()
+        if (normalized === "german" || normalized.indexOf("de") === 0)
+            return "de"
+        return "en"
+    }
+
+    function normalizeGalleryBackend(value) {
+        const parsedBackend = Number(value)
+        if (parsedBackend === 0 || parsedBackend === 2)
+            return parsedBackend
+        return 1
+    }
+
+    function applyLanguage() {
+        if (typeof QmlUtils !== "undefined" && QmlUtils && typeof QmlUtils.set_language === "function")
+            QmlUtils.set_language(language)
+    }
+
+    function loadSettings() {
+        downloadPath = backendValue("dev_disk_img_path", "")
+        ipaDownloadPath = backendValue("ipa_download_path", "")
+        backupRootPath = backendValue("backup_root_path", "")
+        wireless_file_server_port = backendValue("wireless_file_server_port", 8080)
+        unmount_ifuse_on_exit = backendValue("unmount_ifuse_on_exit", false)
+        auto_check_updates = backendValue("auto_check_updates", true)
+        z_linux_window = backendValue("z_linux_window", false)
+        auto_enable_wifi_connections = backendValue("auto_enable_wifi_connections", true)
+        theme = backendValue("theme", "System Default")
+        language = normalizeLanguage(backendValue("language", "en"))
+        auto_raise_window = backendValue("auto_raise_window", true)
+        switch_to_new_device = backendValue("switch_to_new_device", true)
+        auto_connect_wireless_devices = backendValue("auto_connect_wireless_devices", true)
+        upgrade_to_wireless_on_disconnect = backendValue("upgrade_to_wireless_on_disconnect", true)
+        connection_timeout = backendValue("connection_timeout", 30)
+        gallery_backend = normalizeGalleryBackend(backendValue("gallery_backend", 1))
+        window_effect = backendValue("window_effect", "normal")
+        default_jailbroken_root_password = backendValue("default_jailbroken_root_password", "alpine")
+        airplay_fps = backendValue("airplay_fps", 60)
+        airplay_no_hold = backendValue("airplay_no_hold", true)
+        airplay_use_legacy_ports = backendValue("airplay_use_legacy_ports", true)
+        show_v4l2 = backendValue("show_v4l2", false)
+        dirty = false
+        restartRequired = false
+        applyLanguage()
+    }
+
+    function applySettings() {
+        callBackend("set_dev_disk_img_path", downloadPath)
+        callBackend("set_ipa_download_path", ipaDownloadPath)
+        callBackend("set_backup_root_path", backupRootPath)
+        callBackend("set_wireless_file_server_port", wireless_file_server_port)
+        callBackend("set_unmount_ifuse_on_exit", unmount_ifuse_on_exit)
+        callBackend("set_auto_check_updates", auto_check_updates)
+        callBackend("set_z_linux_window", z_linux_window)
+        callBackend("set_auto_enable_wifi_connections", auto_enable_wifi_connections)
+        callBackend("set_theme", theme)
+        callBackend("set_language", language)
+        applyLanguage()
+        callBackend("set_auto_raise_window", auto_raise_window)
+        callBackend("set_switch_to_new_device", switch_to_new_device)
+        callBackend("set_auto_connect_wireless_devices", auto_connect_wireless_devices)
+        callBackend("set_upgrade_to_wireless_on_disconnect", upgrade_to_wireless_on_disconnect)
+        callBackend("set_connection_timeout", connection_timeout)
+        callBackend("set_gallery_backend", gallery_backend)
+        callBackend("set_window_effect", window_effect)
+        callBackend("set_default_jailbroken_root_password", default_jailbroken_root_password)
+        callBackend("set_airplay_fps", airplay_fps)
+        callBackend("set_airplay_no_hold", airplay_no_hold)
+        callBackend("set_airplay_use_legacy_ports", airplay_use_legacy_ports)
+        callBackend("set_show_v4l2", show_v4l2)
+
+        dirty = false
+        appliedDialog.text = restartRequired
+                ? qsTr("Settings applied. Please restart the application for changes to take effect.")
+                : qsTr("Settings applied.")
+        restartRequired = false
+        appliedDialog.open()
+    }
+
+    function reset_to_defaults() {
+        callBackend("reset_to_defaults")
+        loadSettings()
+        dirty = true
+    }
+
+    Component.onCompleted: loadSettings()
+
+    onVisibleChanged: {
+        //restore the window effect when the settings window is closed, in case it was changed
+        if (Qt.platform.os === "windows") {
+            const effect = settingsManager.window_effect()
+            root.window_effect = effect
+            App.Theme.windowEffect = effect
+        }
+    }
+
+    FolderDialog {
+        id: downloadPathDialog
+        title: qsTr("Select Download Directory")
+        onAccepted: {
+            root.downloadPath = QmlUtils.url_to_path(selectedFolder)
+            root.markDirty(false)
+        }
+    }
+
+    FolderDialog {
+        id: backupRootPathDialog
+        title: qsTr("Select Backup Directory")
+        onAccepted: {
+            root.backupRootPath = QmlUtils.url_to_path(selectedFolder)
+            root.markDirty(false)
+        }
+    }
+
+    FolderDialog {
+        id: ipaDownloadPathDialog
+        title: qsTr("Select IPA Download Directory")
+        onAccepted: {
+            root.ipaDownloadPath = QmlUtils.url_to_path(selectedFolder)
+            root.markDirty(false)
+        }
+    }
+
+    MessageDialog {
+        id: appliedDialog
+        title: qsTr("Settings")
+    }
+
+    MessageDialog {
+        id: resetDialog
+        title: qsTr("Reset Settings")
+        text: qsTr("Are you sure you want to reset all settings to their default values?")
+        buttons: MessageDialog.Yes | MessageDialog.No
+        onButtonClicked: function(button, role) {
+            if (button === MessageDialog.Yes)
+                root.reset_to_defaults()
+        }
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
+
+        ScrollView {
+            id: settingsScroll
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+            ColumnLayout {
+                width: Math.min(560, Math.max(0, settingsScroll.availableWidth - 32))
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 22
+
+                Item { Layout.preferredHeight: 16 }
+
+                SettingsSection {
+                    title: qsTr("General")
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Developer Disk Image Path")
+                            Layout.preferredWidth: 175
+                        }
+
+                        TextField {
+                            Layout.fillWidth: true
+                            text: root.downloadPath
+                            readOnly: true
+                            selectByMouse: true
+                        }
+
+                        Button {
+                            text: qsTr("Browse")
+                            onClicked: downloadPathDialog.open()
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("IPA Download Path")
+                            Layout.preferredWidth: 175
+                        }
+
+                        TextField {
+                            Layout.fillWidth: true
+                            text: root.ipaDownloadPath
+                            readOnly: true
+                            selectByMouse: true
+                        }
+
+                        Button {
+                            text: qsTr("Browse")
+                            onClicked: ipaDownloadPathDialog.open()
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Backup Path")
+                            Layout.preferredWidth: 175
+                        }
+
+                        TextField {
+                            Layout.fillWidth: true
+                            text: root.backupRootPath
+                            readOnly: true
+                            selectByMouse: true
+                        }
+
+                        Button {
+                            text: qsTr("Browse")
+                            onClicked: backupRootPathDialog.open()
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Wireless File Server Port")
+                            Layout.preferredWidth: 175
+                        }
+
+                        TextField {
+                            Layout.preferredWidth: 110
+                            text: String(root.wireless_file_server_port)
+                            selectByMouse: true
+                            inputMethodHints: Qt.ImhDigitsOnly
+                            validator: IntValidator {
+                                bottom: 1024
+                                top: 65535
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("The starting port for the wireless file server. If this port is unavailable, it will try the next 10 ports.")
+                            onEditingFinished: {
+                                const port = Number(text)
+                                if (acceptableInput && Number.isInteger(port)) {
+                                    if (root.wireless_file_server_port !== port) {
+                                        root.wireless_file_server_port = port
+                                        root.markDirty(false)
+                                    }
+                                } else {
+                                    text = String(root.wireless_file_server_port)
+                                }
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        visible: Qt.platform.os !== "osx" && Qt.platform.os !== "darwin"
+                        text: qsTr("Unmount iFuse drives on exit")
+                        checked: root.unmount_ifuse_on_exit
+                        onToggled: {
+                            root.unmount_ifuse_on_exit = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        text: qsTr("Automatically check for updates")
+                        checked: root.auto_check_updates
+                        onToggled: {
+                            root.auto_check_updates = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Gallery backend")
+                            Layout.preferredWidth: 175
+                        }
+
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: [
+                                qsTr("Filesystem (AFC)"),
+                                qsTr("SQLite"),
+                                qsTr("SQLite through VFS")
+                            ]
+                            currentIndex: root.normalizeGalleryBackend(root.gallery_backend)
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Choose how gallery albums are loaded from the device.")
+                            onActivated: function(index) {
+                                root.gallery_backend = root.normalizeGalleryBackend(index)
+                                root.markDirty(false)
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Language")
+                            Layout.preferredWidth: 175
+                        }
+
+                        ComboBox {
+                            textRole: "label"
+                            valueRole: "value"
+                            model: [
+                                { value: "en", label: qsTr("English") },
+                                { value: "de", label: qsTr("German") }
+                            ]
+                            currentIndex: Math.max(0, indexOfValue(root.language))
+                            onActivated: {
+                                root.language = currentValue
+                                root.markDirty(true)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+                }
+
+                SettingsSection {
+                    title: qsTr("Appearance")
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Theme")
+                            Layout.preferredWidth: 175
+                        }
+
+                        ComboBox {
+                            model: [qsTr("System Default")]
+                            currentIndex: 0
+                            onActivated: {
+                                root.theme = currentText
+                                root.markDirty(false)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        visible: Qt.platform.os === "linux"
+                        text: qsTr("Use custom window frame")
+                        checked: root.z_linux_window
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Use a custom Linux window frame instead of default.")
+                        onToggled: {
+                            root.z_linux_window = checked
+                            root.markDirty(true)
+                        }
+                    }
+
+                    RowLayout {
+                        visible: Qt.platform.os === "windows"
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Window Effect")
+                            Layout.preferredWidth: 175
+                        }
+
+                        ComboBox {
+                            textRole: "label"
+                            valueRole: "value"
+                            model: [
+                                { value: "normal", label: qsTr("Normal") },
+                                { value: "acrylic", label: qsTr("Acrylic") }
+                            ]
+                            currentIndex: Math.max(0, indexOfValue(root.window_effect))
+                            onActivated: {
+                                root.window_effect = currentValue
+                                root.markDirty(false)
+                                App.Theme.windowEffect = root.window_effect
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+                }
+
+                SettingsSection {
+                    title: qsTr("Device Connection")
+
+                    Switch {
+                        Layout.fillWidth: true
+                        text: qsTr("Auto-raise main window on device connection")
+                        checked: root.auto_raise_window
+                        onToggled: {
+                            root.auto_raise_window = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        text: qsTr("Switch to newly connected device")
+                        checked: root.switch_to_new_device
+                        onToggled: {
+                            root.switch_to_new_device = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        text: qsTr("Automatically enable Wi-Fi connections")
+                        checked: root.auto_enable_wifi_connections
+                        onToggled: {
+                            root.auto_enable_wifi_connections = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        text: qsTr("Automatically connect to wireless devices")
+                        checked: root.auto_connect_wireless_devices
+                        onToggled: {
+                            root.auto_connect_wireless_devices = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        text: qsTr("Upgrade to wireless on disconnect")
+                        checked: root.upgrade_to_wireless_on_disconnect
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("When a USB-connected device disconnects, reconnect to it over Wi-Fi when it is available.")
+                        onToggled: {
+                            root.upgrade_to_wireless_on_disconnect = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Connection Timeout")
+                            Layout.preferredWidth: 175
+                        }
+
+                        SpinBox {
+                            from: 5
+                            to: 60
+                            value: root.connection_timeout
+                            textFromValue: function(value, locale) { return value + qsTr(" seconds") }
+                            valueFromText: function(text, locale) { return parseInt(text) || 5 }
+                            onValueModified: {
+                                root.connection_timeout = value
+                                root.markDirty(false)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+                }
+
+                SettingsSection {
+                    title: qsTr("Jailbroken")
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Default Root Password")
+                            Layout.preferredWidth: 175
+                        }
+
+                        TextField {
+                            Layout.preferredWidth: 100
+                            text: root.default_jailbroken_root_password
+                            echoMode: TextInput.PasswordEchoOnEdit
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Default password used for SSH root authentication on jailbroken devices. Default is 'alpine'.")
+                            onTextEdited: {
+                                root.default_jailbroken_root_password = text
+                                root.markDirty(false)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+                }
+
+                SettingsSection {
+                    title: qsTr("AirPlay")
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Label {
+                            text: qsTr("Fps")
+                            Layout.preferredWidth: 175
+                        }
+
+                        ComboBox {
+                            model: ["24", "30", "60", "120"]
+                            currentIndex: Math.max(0, model.indexOf(String(root.airplay_fps)))
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Set the fps for AirPlay. Go with 30 fps if you have an older device.")
+                            onActivated: {
+                                root.airplay_fps = Number(currentText)
+                                root.markDirty(false)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        text: qsTr("Allow New Connections to Take Over")
+                        checked: root.airplay_no_hold
+                        onToggled: {
+                            root.airplay_no_hold = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        visible: Qt.platform.os === "linux"
+                        text: qsTr("Use legacy ports")
+                        checked: root.airplay_use_legacy_ports
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Use legacy ports, refer to AIRPLAY.md for more information.")
+                        onToggled: {
+                            root.airplay_use_legacy_ports = checked
+                            root.markDirty(false)
+                        }
+                    }
+
+                    Switch {
+                        Layout.fillWidth: true
+                        visible: Qt.platform.os === "linux"
+                        text: qsTr("Show V4L2 Button on AirPlay Widget")
+                        checked: root.show_v4l2
+                        onToggled: {
+                            root.show_v4l2 = checked
+                            root.markDirty(false)
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        text: qsTr("iDescriptor")
+                        color: "#8a8a8e"
+                        font.pixelSize: 11
+                    }
+
+                    CopyableText {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: qsTr("Version %1 · %2")
+                                .arg(settingsManager.current_version())
+                                .arg(settingsManager.build_description())
+                        color: "#8a8a8e"
+                        font.pixelSize: 11
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 10
+                        horizontalAlignment: Text.AlignHCenter
+                        text: qsTr("A free, open-source, cross-platform iDevice management tool.\n\n© 2026 Uncore <https://github.com/uncor3> and iDescriptor contributors")
+                        color: "#8a8a8e"
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                    }
+                }
+
+                Item { Layout.preferredHeight: 18 }
+            }
+        }
+
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 58
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 10
+
+                Button {
+                    text: qsTr("Check for Updates")
+                    onClicked: App.Updater.checkForUpdates(true)
+                }
+
+                Button {
+                    text: qsTr("Reset Settings")
+                    onClicked: resetDialog.open()
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Button {
+                    text: qsTr("Apply")
+                    enabled: root.dirty
+                    onClicked: root.applySettings()
+                }
+            }
+        }
+    }
+
+    component SettingsSection: SectionBox {
+        Layout.fillWidth: true
+    }
+}
