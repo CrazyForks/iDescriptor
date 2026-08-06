@@ -168,9 +168,7 @@ ToolWindow {
 
         background: Rectangle {
             radius: 16
-            color: App.Theme.elevatedSurface
-            border.color: App.Theme.softBgBorder
-            border.width: 1
+            color: App.Theme.windowBackground
         }
 
         contentItem: ColumnLayout {
