@@ -11,6 +11,5 @@ QtObject {
     readonly property string openCollectiveUrl: "https://opencollective.com/idescriptor"
     readonly property string githubSponsorsUrl: "https://github.com/sponsors/iDescriptor"
 
-    // FIXME: change when the sponsors file is merged into the main branch.
-    readonly property string sponsorsUrl: "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/dev/sponsors.json"
+    readonly property string sponsorsUrl: "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/main/sponsors.json"
 }

@@ -559,16 +559,15 @@ fn windows_dependency_action(
 ) -> (&'static str, &'static str, &'static str) {
     #[cfg(feature = "windows_store")]
     {
-        // FIXME: Change these Windows dependency guide URLs from dev to main after this work is merged.
         let documentation_url = match _dependency_id {
             "bonjour" => {
-                "https://github.com/iDescriptor/iDescriptor/blob/dev/docs/WINDOWS_DEPENDENCIES.md#bonjour"
+                "https://github.com/iDescriptor/iDescriptor/blob/main/docs/WINDOWS_DEPENDENCIES.md#bonjour"
             }
             "apple_mobile_device_support" => {
-                "https://github.com/iDescriptor/iDescriptor/blob/dev/docs/WINDOWS_DEPENDENCIES.md#apple-mobile-device-support"
+                "https://github.com/iDescriptor/iDescriptor/blob/main/docs/WINDOWS_DEPENDENCIES.md#apple-mobile-device-support"
             }
             "winfsp" => {
-                "https://github.com/iDescriptor/iDescriptor/blob/dev/docs/WINDOWS_DEPENDENCIES.md#winfsp"
+                "https://github.com/iDescriptor/iDescriptor/blob/main/docs/WINDOWS_DEPENDENCIES.md#winfsp"
             }
             _ => "",
         };

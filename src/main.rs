@@ -59,8 +59,7 @@ pub mod updater;
 pub mod utils;
 pub mod web_wireless_gallery_import;
 
-// FIXME: branch
-pub const IMAGE_LIST_URL: &str = "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/qmeta-qml/DeveloperDiskImages.json";
+pub const IMAGE_LIST_URL: &str = "https://raw.githubusercontent.com/iDescriptor/iDescriptor/refs/heads/main/DeveloperDiskImages.json";
 pub const POSSIBLE_ROOT: &str = "../../../../";
 pub const APP_LABEL: &str = "iDescriptor";
 pub const EV_CONNECTED: u32 = 1;
