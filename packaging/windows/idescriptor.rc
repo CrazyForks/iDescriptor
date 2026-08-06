@@ -1,7 +1,7 @@
 #include "winver.h"
 
-IDI_ICON1               ICON    "resources/icons/app-icon/icon.ico"
-    
+IDI_ICON1               ICON    "packaging/shared/resources/app-icon/icon.ico"
+
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION 1,0,0,0
  PRODUCTVERSION 1,0,0,0
@@ -18,7 +18,7 @@ BEGIN
             VALUE "CompanyName", "iDescriptor"
             VALUE "FileDescription", "iDescriptor - iDevice Management Tool"
             VALUE "FileVersion", "1.0.0.0"
-            VALUE "LegalCopyright", "Copyright (C) 2025 iDescriptor"
+            VALUE "LegalCopyright", "Copyright (C) 2026 iDescriptor"
             VALUE "InternalName", "idescriptor"
             VALUE "OriginalFilename", "idescriptor.exe"
             VALUE "ProductName", "iDescriptor"

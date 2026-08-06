@@ -23,6 +23,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/native/systemappearance.h");
     println!("cargo:rerun-if-changed=src/native/CMakeLists.txt");
     println!("cargo:rerun-if-changed=packaging/shared/resources/app-icon/icon.ico");
+    println!("cargo:rerun-if-changed=packaging/windows/idescriptor.rc");
 
     if target_os == "macos" {
         println!("cargo:rerun-if-changed=src/native/platform/macos/macos.h");
@@ -192,16 +193,8 @@ fn main() {
     }
 
     if target_os == "windows" {
-        winres::WindowsResource::new()
-            .set_icon("packaging/shared/resources/app-icon/icon.ico")
-            .set("ProductName", "iDescriptor")
-            .set("FileDescription", "iDescriptor")
-            .set("CompanyName", "iDescriptor")
-            .set(
-                "LegalCopyright",
-                "Copyright (C) 2026 iDescriptor contributors",
-            )
-            .compile()
+        embed_resource::compile("packaging/windows/idescriptor.rc", embed_resource::NONE)
+            .manifest_optional()
             .expect("failed to compile Windows executable resources");
 
         // need to include Bonjour SDK headers for dnssd.h
