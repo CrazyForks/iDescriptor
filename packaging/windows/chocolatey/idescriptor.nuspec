@@ -9,11 +9,11 @@
         <licenseUrl>https://github.com/iDescriptor/iDescriptor/blob/main/LICENSE</licenseUrl>
         <projectUrl>https://github.com/iDescriptor/iDescriptor</projectUrl>
         <iconUrl>https://raw.githubusercontent.com/iDescriptor/iDescriptor/main/packaging/shared/resources/app-icon/icon.png</iconUrl>
-        <requireLicenseAcceptance>false</requireLicenseAcceptance>
-        <description>A free, open-source, and cross-platform iDevice management tool written in Rust.</description>
-        <summary>Cross-platform, open-source and free iDevice management tool written in Rust.</summary>
+        <requireLicenseAcceptance>true</requireLicenseAcceptance>
+        <description>A free, open-source, and cross-platform iDevice management tool written in Rust and Qt.</description>
+        <summary>Cross-platform, open-source and free iDevice management tool written in Rust and Qt.</summary>
         <releaseNotes>https://github.com/iDescriptor/iDescriptor/releases/tag/v__VERSION__</releaseNotes>
-        <tags>idescriptor idevice apple ios ipad iphone admin foss cross-platform</tags>
+        <tags>idescriptor idevice apple ios ipad iphone foss cross-platform</tags>
         <packageSourceUrl>https://github.com/iDescriptor/iDescriptor</packageSourceUrl>
         <projectSourceUrl>https://github.com/iDescriptor/iDescriptor</projectSourceUrl>
         <docsUrl>https://github.com/iDescriptor/iDescriptor/blob/main/README.md</docsUrl>

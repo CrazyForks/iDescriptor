@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [Parameter(Mandatory = $true)][string]$MsiPath,
-    [switch]$Push
+    [Parameter(Mandatory = $true)][string]$OutputDirectory
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +13,8 @@ if ($normalizedVersion -notmatch '^\d+\.\d+\.\d+$') {
 }
 
 $resolvedMsi = (Resolve-Path $MsiPath).Path
+New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
+$resolvedOutputDirectory = (Resolve-Path $OutputDirectory).Path
 $checksum = (Get-FileHash -LiteralPath $resolvedMsi -Algorithm SHA256).Hash.ToLowerInvariant()
 $releaseTag = "v$normalizedVersion"
 $msiName = "iDescriptor-$releaseTag-Windows_x86_64.msi"
@@ -32,14 +34,8 @@ $install = (Get-Content -LiteralPath $installPath -Raw).Replace('__URL__', $url)
 
 Push-Location $stagingDir
 try {
-    choco pack $nuspecPath --output-directory $stagingDir
+    choco pack $nuspecPath --output-directory $resolvedOutputDirectory
     if ($LASTEXITCODE -ne 0) { throw "choco pack failed with exit code $LASTEXITCODE" }
-    if ($Push) {
-        if (-not $env:CHOCOLATEY_API_KEY) { throw "CHOCOLATEY_API_KEY is required to push" }
-        $package = Join-Path $stagingDir "idescriptor.$normalizedVersion.nupkg"
-        choco push $package --source https://push.chocolatey.org/ --api-key $env:CHOCOLATEY_API_KEY
-        if ($LASTEXITCODE -ne 0) { throw "choco push failed with exit code $LASTEXITCODE" }
-    }
 } finally {
     Pop-Location
 }
