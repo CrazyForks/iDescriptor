@@ -34,9 +34,10 @@ jobs:
       - name: Prepare output folder
         run: mkdir target
 
-      - name: Download all artifacts
+      - name: Download release artifacts
         uses: actions/download-artifact@v6
         with:
+          pattern: release-*
           path: target
 
       - name: Create GitHub Release
@@ -80,3 +81,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "choco push failed with exit code $LASTEXITCODE"
           }
+  # TODO
+  # publish-windows-store:
