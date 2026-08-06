@@ -116,6 +116,8 @@ fn main() {
     let qml_from_fs =
         cfg!(debug_assertions) || ui_live_reload || utils::env_flag("IDESCRIPTOR_QML_FROM_FS");
 
+    // TODO: report crashs logs
+    // however we currently log sensitive info, we need to handle that first
     // let _ = util::install_crash_handler();
     qmetaobject::log::init_qt_to_rust();
 
