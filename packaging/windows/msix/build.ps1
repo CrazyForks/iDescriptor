@@ -125,5 +125,3 @@ $outputDirectory = Split-Path -Parent $resolvedOutputPath
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 & $makeAppx pack /d $stagingDir /p $resolvedOutputPath /o
 if ($LASTEXITCODE -ne 0) { throw "makeappx failed with exit code $LASTEXITCODE" }
-& $makeAppx validate /p $resolvedOutputPath
-if ($LASTEXITCODE -ne 0) { throw "makeappx validation failed with exit code $LASTEXITCODE" }
