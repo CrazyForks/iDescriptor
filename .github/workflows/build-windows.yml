@@ -207,7 +207,7 @@ jobs:
           "BONJOUR_SDK_HOME=C:/Program Files/Bonjour SDK" | Out-File -FilePath $env:GITHUB_ENV -Append
 
 
-      - name: Build libimobiledevice suite (versioned tarballs)
+      - name: Build libplist
         run: |
           workspace="$PWD"
           tmp="$PWD/_tmp_libs"
@@ -367,6 +367,21 @@ jobs:
             -Publisher $publisher
           "msix_path=$((Resolve-Path $output).Path)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
+      - name: Verify Chocolatey is available
+        if: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
+        uses: crazy-max/ghaction-chocolatey@v4
+        with:
+          args: -v
+
+      - name: Build Chocolatey package
+        if: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
+        shell: pwsh
+        run: |
+          ./packaging/windows/chocolatey/build.ps1 `
+            -Version "${{ inputs.version }}" `
+            -MsiPath "${{ steps.msi.outputs.msi_path }}" `
+            -OutputDirectory "target/chocolatey"
+
       - name: Upload updater artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -381,4 +396,12 @@ jobs:
         with:
           name: store-windows-x86_64
           path: ${{ steps.msix.outputs.msix_path }}
+          if-no-files-found: error
+
+      - name: Upload Chocolatey package
+        if: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: chocolatey-windows-x86_64
+          path: target/chocolatey/*.nupkg
           if-no-files-found: error
