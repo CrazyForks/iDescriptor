@@ -122,6 +122,7 @@ pub fn initialize_engine(engine: &mut QmlEngine) {
             s_systemAppearance = new SystemAppearance(QCoreApplication::instance());
         }
         engine_ptr->rootContext()->setContextProperty("SystemAppearance", s_systemAppearance);
+        QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/packaging/shared/resources/app-icon/icon.png")));
     });
 }
 
