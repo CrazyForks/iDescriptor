@@ -20,7 +20,7 @@ AnimatedDialog {
     modal: true
     focus: true
     standardButtons: Dialog.NoButton
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    closePolicy: Popup.NoAutoClose
     width: Math.min(560, parent ? parent.width - 32 : 560)
     height: Math.min(540, parent ? parent.height - 32 : 540)
 
@@ -28,8 +28,8 @@ AnimatedDialog {
         if (settingsManager.app_version() === root.currentVersion)
             return
 
-        // Match the original MainWindow behavior: remember the running version
-        // before requesting its release notes so they are only shown once.
+        // remember the running version before requesting
+        // its release notes so they are only shown once.
         settingsManager.set_app_version(root.currentVersion)
         root.awaitingReleaseNotes = true
         root.releaseProfile = ({})
@@ -139,7 +139,7 @@ AnimatedDialog {
                 highlighted: true
                 font.bold: true
                 onClicked: {
-                    Qt.openUrlExternally(App.Constants.openCollectiveUrl)
+                    App.DeviceContext.selectDonatePage()
                     root.close()
                 }
             }
