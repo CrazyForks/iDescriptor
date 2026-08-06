@@ -1,5 +1,5 @@
 <p align="center" style="text-align: center">
-  <img src="./resources/icons/app-icon/icon.png" width="25%"><br/>
+  <img src="./packaging/shared/resources/app-icon/icon.png" width="25%"><br/>
 </p>
 
 <p align="center">
