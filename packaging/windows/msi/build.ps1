@@ -8,20 +8,41 @@ $ErrorActionPreference = "Stop"
 $packageDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $packageDir "..\..\..")).Path
 $deployRoot = (Resolve-Path $DeployDir).Path
-$generatedPath = Join-Path $env:RUNNER_TEMP "iDescriptor-Files.wxs"
+$temporaryRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
+$generatedPath = Join-Path $temporaryRoot "iDescriptor-Files.wxs"
+
+function Get-Sha256Bytes([string]$Value) {
+    $bytes = [Text.Encoding]::UTF8.GetBytes($Value.ToLowerInvariant())
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        return $sha256.ComputeHash($bytes)
+    }
+    finally {
+        $sha256.Dispose()
+    }
+}
+
+function ConvertTo-Hex([byte[]]$Bytes) {
+    return [BitConverter]::ToString($Bytes).Replace('-', '')
+}
+
+function Get-RelativePath([string]$BasePath, [string]$Path) {
+    $baseFullPath = [IO.Path]::GetFullPath($BasePath).TrimEnd('\', '/')
+    $baseUri = [Uri]($baseFullPath + [IO.Path]::DirectorySeparatorChar)
+    $pathUri = [Uri]([IO.Path]::GetFullPath($Path))
+    return [Uri]::UnescapeDataString($baseUri.MakeRelativeUri($pathUri).ToString()).Replace('/', '\')
+}
 
 function Get-StableId([string]$Prefix, [string]$Value) {
-    $bytes = [Text.Encoding]::UTF8.GetBytes($Value.ToLowerInvariant())
-    $hash = [Security.Cryptography.SHA256]::HashData($bytes)
-    return $Prefix + ([Convert]::ToHexString($hash).Substring(0, 24))
+    $hash = Get-Sha256Bytes $Value
+    return $Prefix + ((ConvertTo-Hex $hash).Substring(0, 24))
 }
 
 function ConvertTo-Guid([string]$Value) {
-    $bytes = [Text.Encoding]::UTF8.GetBytes($Value.ToLowerInvariant())
-    $hash = [Security.Cryptography.SHA256]::HashData($bytes)
+    $hash = Get-Sha256Bytes $Value
     $guidBytes = New-Object byte[] 16
     [Array]::Copy($hash, $guidBytes, 16)
-    return ([Guid]::new($guidBytes)).ToString().ToUpperInvariant()
+    return (New-Object Guid (,$guidBytes)).ToString().ToUpperInvariant()
 }
 
 function Escape-Xml([string]$Value) {
@@ -35,7 +56,7 @@ if (-not $files) {
 
 $directories = @{}
 foreach ($file in $files) {
-    $relative = [IO.Path]::GetRelativePath($deployRoot, $file.FullName)
+    $relative = Get-RelativePath $deployRoot $file.FullName
     $relativeDirectory = [IO.Path]::GetDirectoryName($relative)
     while ($relativeDirectory) {
         $directories[$relativeDirectory] = $true
@@ -71,7 +92,7 @@ $lines.Add('  <Fragment>')
 $lines.Add('    <ComponentGroup Id="ApplicationFiles">')
 
 foreach ($file in $files) {
-    $relative = [IO.Path]::GetRelativePath($deployRoot, $file.FullName)
+    $relative = Get-RelativePath $deployRoot $file.FullName
     $relativeDirectory = [IO.Path]::GetDirectoryName($relative)
     $directoryId = if ($relativeDirectory) { Get-StableId "Dir" $relativeDirectory } else { "INSTALLFOLDER" }
     $componentId = Get-StableId "Cmp" $relative
@@ -81,8 +102,8 @@ foreach ($file in $files) {
     $lines.Add("      <Component Id=`"$componentId`" Directory=`"$directoryId`" Guid=`"$guid`">")
     $lines.Add("        <File Id=`"$fileId`" Source=`"$source`" KeyPath=`"yes`" Checksum=`"yes`" />")
     if ($fileId -eq "MainExecutable") {
-        $lines.Add('        <Shortcut Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Name="iDescriptor" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />')
-        $lines.Add('        <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="iDescriptor" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />')
+        $lines.Add('        <Shortcut Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Name="iDescriptor" Target="[#MainExecutable]" WorkingDirectory="INSTALLFOLDER" Advertise="no" />')
+        $lines.Add('        <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="iDescriptor" Target="[#MainExecutable]" WorkingDirectory="INSTALLFOLDER" Advertise="no" />')
     }
     $lines.Add('      </Component>')
 }
@@ -101,7 +122,23 @@ $resolvedOutputPath = [IO.Path]::GetFullPath($OutputPath)
 $outputDirectory = Split-Path -Parent $resolvedOutputPath
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 
-& wix build `
+$globalToolWix = if ($env:USERPROFILE) { Join-Path $env:USERPROFILE ".dotnet\tools\wix.exe" } else { $null }
+if ($globalToolWix -and (Test-Path -LiteralPath $globalToolWix -PathType Leaf)) {
+    $wixExecutable = $globalToolWix
+}
+else {
+    $wixCommand = Get-Command "wix.exe" -CommandType Application -ErrorAction SilentlyContinue |
+        Where-Object { $_.Source -notlike "*\Microsoft\WindowsApps\wix.exe" } |
+        Select-Object -First 1
+    $wixExecutable = if ($wixCommand) { $wixCommand.Source } else { $null }
+}
+
+if (-not $wixExecutable) {
+    throw "WiX 4 was not found. Install it with 'dotnet tool install --global wix --version 4.0.6' and add the required UI and Util extensions."
+}
+
+Write-Host "Using WiX: $wixExecutable"
+& $wixExecutable build `
     (Join-Path $packageDir "Product.wxs") `
     $generatedPath `
     -arch x64 `
@@ -111,8 +148,12 @@ New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
     -d "MsiResources=$(Join-Path $packageDir 'resources')" `
     -d "SharedResources=$(Join-Path $repoRoot 'packaging\shared\resources\app-icon')" `
     -o $resolvedOutputPath
-if ($LASTEXITCODE -ne 0) {
-    throw "WiX failed with exit code $LASTEXITCODE"
+$wixExitCode = $LASTEXITCODE
+if ($null -eq $wixExitCode) {
+    throw "WiX did not run as a native executable: $wixExecutable"
+}
+if ($wixExitCode -ne 0) {
+    throw "WiX failed with exit code $wixExitCode"
 }
 
 if (-not (Test-Path -LiteralPath $resolvedOutputPath)) {
