@@ -2,43 +2,71 @@ name: iDescriptor CI (Linux)
 
 on:
   workflow_dispatch:
-  # push:
-  #   paths:
-  #     - "**.cpp"
-  #     - "**.h"
-  #     - "**.hpp"
-  #     - "**.cxx"
-  #     - "**.cc"
-  #     - "**.rs"
-  #     - "CMakeLists.txt"
-  #     - "**.cmake"
-  #     - ".github/workflows/ci.yml"
-
+    inputs:
+      version:
+        description: "Build version (for example, v1.2.3)"
+        required: false
+        default: "dev"
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: "Build version (for example, v1.2.3)"
+        required: false
+        type: string
+  push:
+    paths:
+      - "**.cpp"
+      - "**.h"
+      - "**.hpp"
+      - "**.cxx"
+      - "**.cc"
+      - "**.rs"
+      - "**.qml"
+      - "**.cmake"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "**.cpp"
+      - "**.h"
+      - "**.hpp"
+      - "**.cxx"
+      - "**.cc"
+      - "**.rs"
+      - "**.qml"
+      - "**.cmake"
+      - ".github/workflows/ci.yml"
 env:
-  QT_VERSION: "6.7.2"
-  GO_VERSION: "1.23.0"
+  QT_VERSION: "6.9.2"
   LIBPLIST_VER: "2.7.0"
-  LIBTATSU_VER: "1.0.5"
-  LIBIMOBILEDEVICE_GLUE_VER: "1.3.2"
-  LIBIMOBILEDEVICE_VER: "1.4.0"
-  LIBIRECOVERY_VER: "1.3.1"
-  IFUSE_VER: "1.2.0"
-  LIBUSBMUXD_VER: "2.1.1"
 
 jobs:
   build-linux:
-    runs-on: ubuntu-22.04
+    name: Linux ${{ matrix.asset_arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            asset_arch: x86_64
+            qt_host: linux
+            gst_good_version: 1.22.12
+            gst_good_sha256: 9c1913f981900bd8867182639b20907b28ed78ef7a222cfbf2d8ba9dab992fa7
+            patch_gstreamer: true
+            # Qt for Linux Arm is only available on Ubuntu 24.04 and later
+          - runner: ubuntu-24.04-arm
+            asset_arch: arm64
+            qt_host: linux_arm64
+            gst_good_version: 1.24.13
+            gst_good_sha256: 574ac6f9fd84b32eb04e80572391d6762df6f9802a47bc0386cd6cc48c14d08b
+            patch_gstreamer: false
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: "recursive"
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "^${{ env.GO_VERSION }}"
+          submodules: recursive
 
       - name: Install Linux dependencies
         run: |
@@ -49,6 +77,7 @@ jobs:
             automake \
             checkinstall \
             git \
+            ninja-build \
             pkg-config \
             libpugixml-dev \
             libusb-1.0-0-dev \
@@ -63,6 +92,8 @@ jobs:
             libswscale-dev \
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-gl \
+            gstreamer1.0-tools \
             gstreamer1.0-plugins-good \
             gstreamer1.0-plugins-bad \
             gstreamer1.0-plugins-ugly \
@@ -81,155 +112,117 @@ jobs:
             libavformat-dev \
             libavcodec-dev \
             libavutil-dev \
-            libswscale-dev
+            libswscale-dev \
+            python3-pip
+
+      - name: Install Meson
+        run: |
+          python3 -m pip install --user "meson==1.11.2"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+        uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          modules: "qtmultimedia qtlocation qtpositioning qtserialport"
+          host: ${{ matrix.qt_host }}
+          modules: "qtmultimedia qtlocation qtpositioning qtserialport qt5compat qtshadertools"
           dir: ${{ github.workspace }}
 
-      - name: Compile additional dependencies
+      - name: Build qml6glsink
+        shell: bash
         run: |
-          git clone https://github.com/lxqt/lxqt-build-tools.git
-          pushd lxqt-build-tools
-          mkdir build && cd build
-          cmake ..
-          sudo make install
-          popd
+          set -euo pipefail
+          version="${{ matrix.gst_good_version }}"
+          archive="gst-plugins-good-${version}.tar.xz"
+          wget "https://gstreamer.freedesktop.org/src/gst-plugins-good/${archive}"
+          echo "${{ matrix.gst_good_sha256 }}  ${archive}" | sha256sum --check
+          tar -xf "${archive}"
+          cd "gst-plugins-good-${version}"
 
-          git clone https://github.com/lxqt/qtermwidget.git
-          pushd qtermwidget
-          mkdir build && cd build
-          cmake ..
-          sudo make install
-          popd
+          if [[ "${{ matrix.patch_gstreamer }}" == "true" ]]; then
+            patch -p1 < "${GITHUB_WORKSPACE}/.github/patches/gst-plugins-good-1.22-gstreamer-1.20.patch"
+          fi
 
-      - name: Build libimobiledevice suite (versioned tarballs)
+          meson setup build-qml6 . \
+            --prefix=/usr \
+            --libdir="lib/$(uname -m)-linux-gnu" \
+            --auto-features=disabled \
+            -Dqt-method=qmake \
+            -Dqt6=enabled \
+            -Dqt5=disabled \
+            -Dqt-x11=enabled \
+            -Dqt-wayland=disabled \
+            -Dqt-egl=disabled \
+            -Dtests=disabled \
+            -Dexamples=disabled \
+            -Dnls=disabled
+
+          ninja -C build-qml6
+          GST_PLUGIN_PATH_1_0="${PWD}/build-qml6/ext/qt6" gst-inspect-1.0 qml6glsink >/dev/null
+          sudo install -Dm755 build-qml6/ext/qt6/libgstqml6.so \
+            "/usr/lib/$(uname -m)-linux-gnu/gstreamer-1.0/libgstqml6.so"
+
+      # building from source is intentional, we want to match the version of libplist everywhere
+      - name: Build libplist
+        shell: bash
         run: |
           set -euo pipefail
           workspace="$PWD"
-          tmp="$PWD/_tmp_libs"
+          tmp="$RUNNER_TEMP/idescriptor-libs"
           mkdir -p "$tmp"
           cd "$tmp"
-
           base_url="https://github.com/libimobiledevice"
-
-          libs=( "libplist" "libtatsu" "libimobiledevice-glue" "libusbmuxd" "libimobiledevice" "ifuse" )
+          libs=(libplist)
 
           for name in "${libs[@]}"; do
-            ver_var=$(echo "${name^^}_VER" | sed 's/-/_/g')   # e.g. LIBPLIST_VER
+            ver_var=$(echo "${name^^}_VER" | sed 's/-/_/g')
             ver="${!ver_var:-}"
             if [ -z "$ver" ]; then
-              echo "Version for $name not set (env var $ver_var)"
+              echo "Version for $name not set (environment variable $ver_var)"
               exit 1
             fi
-
             archive="${name}-${ver}.tar.bz2"
-            url="${base_url}/${name}/releases/download/${ver}/${archive}"
-            echo "=== Processing $name $ver ==="
-            echo "URL: $url"
-            curl -L -o "$archive" "$url"
-
-            echo "Extracting $archive"
+            curl --retry 3 --retry-delay 5 -L -o "$archive" \
+              "${base_url}/${name}/releases/download/${ver}/${archive}"
             tar xjf "$archive"
-
-            srcdir="${name}-${ver}"
-            pushd "$srcdir"
-
+            pushd "${name}-${ver}"
             ./configure
-
-
-            make -j"$(nproc)" && sudo make install
+            make -j"$(nproc)"
+            sudo make install
             popd
-            echo "Installed $name $ver"
           done
-
-          # cleanup
           cd "$workspace"
-          rm -rf "$tmp"
 
       - name: Update linker cache
         run: sudo ldconfig
 
-      - name: Configure RECOVERY_DEVICE_SUPPORT=OFF
+      - name: Build iDescriptor
+        run: RUSTFLAGS="" cargo build --release --features appimage
+
+      - name: Resolve build version
+        id: vars
+        shell: bash
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release \
-          -DRUN_CLANG_TIDY=OFF \
-          -DCMAKE_INSTALL_PREFIX=/usr \
-          -DENABLE_RECOVERY_DEVICE_SUPPORT=OFF \
-          -DPACKAGE_MANAGER_MANAGED=ON \
-          -DPACKAGE_MANAGER_HINT=yay/paru
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "version=pr-${{ github.event.pull_request.number }}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Build with CMake (RECOVERY_DEVICE_SUPPORT=OFF)
-        run: cmake --build build --config Release
-
-      - name: Build libirecovery only
+      - name: Build and validate AppImage
+        shell: bash
         run: |
-          set -euo pipefail
-          workspace="$PWD"
-          tmp="$PWD/_tmp_libs"
-          mkdir -p "$tmp"
-          cd "$tmp"
+          bash packaging/linux/appimage/deploy.sh "${{ steps.vars.outputs.version }}" "${{ matrix.asset_arch }}"
+          test -x "iDescriptor-${{ steps.vars.outputs.version }}-Linux_${{ matrix.asset_arch }}.AppImage"
 
-          base_url="https://github.com/libimobiledevice"
-
-          libs=( "libirecovery" )
-
-          for name in "${libs[@]}"; do
-            ver_var=$(echo "${name^^}_VER" | sed 's/-/_/g')   # e.g. LIBPLIST_VER
-            ver="${!ver_var:-}"
-            if [ -z "$ver" ]; then
-              echo "Version for $name not set (env var $ver_var)"
-              exit 1
-            fi
-
-            archive="${name}-${ver}.tar.bz2"
-            url="${base_url}/${name}/releases/download/${ver}/${archive}"
-            echo "=== Processing $name $ver ==="
-            echo "URL: $url"
-            curl -L -o "$archive" "$url"
-
-            echo "Extracting $archive"
-            tar xjf "$archive"
-
-            srcdir="${name}-${ver}"
-            pushd "$srcdir"
-
-            ./configure
-
-
-            make -j"$(nproc)" && sudo make install
-            popd
-            echo "Installed $name $ver"
-          done
-
-          # cleanup
-          cd "$workspace"
-          rm -rf "$tmp"
-
-      - name: Configure CMake
-        run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DRUN_CLANG_TIDY=OFF
-
-      - name: Build with CMake
-        run: cmake --build build --config Release
-
-      - name: Build AppImage
-        run: |
-          #FIXME
-          export VERSION=1.0.0
-          # linuxdeployqt tries to bundle SQL drivers which we don't need
-          rm -rf ${{ github.workspace }}/Qt/{${{ env.QT_VERSION }}/gcc_64/plugins/sqldrivers/**
-          ./scripts/deploy-appimage.sh $VERSION
-
-      - name: Upload Artifact (Linux)
-        if: runner.os == 'Linux'
+      - name: Upload updater artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iDescriptor-AppImage
-          path: iDescriptor-*.AppImage
+          name: release-linux-${{ matrix.asset_arch }}
+          path: iDescriptor-${{ steps.vars.outputs.version }}-Linux_${{ matrix.asset_arch }}.AppImage
+          if-no-files-found: error
