@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025-2026 Uncore <https://github.com/uncor3>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use futures::StreamExt;
 use idevice::{
     IdeviceError, IdeviceService,
@@ -16,7 +16,7 @@ use idevice::{
 use qmetaobject::{qt_base_class, qt_method};
 use qttypes::QVariantMap;
 
-use ::log::{debug, info, trace, warn};
+use ::log::{debug, error, info, trace, warn};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
@@ -59,6 +59,32 @@ struct InitializedDevice {
     info: QVariantMap,
     heartbeat_start: Option<oneshot::Sender<()>>,
 }
+
+#[derive(Debug)]
+enum WirelessInitError {
+    InvalidMac { mac: String },
+    NoPairingRecords,
+    NoMatchingPairingRecord,
+    Transport(anyhow::Error),
+}
+
+impl std::fmt::Display for WirelessInitError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidMac { mac } => write!(f, "invalid wireless device MAC address: {mac}"),
+            Self::NoPairingRecords => write!(f, "no pairing records found"),
+            Self::NoMatchingPairingRecord => {
+                write!(
+                    f,
+                    "no pairing record authenticated the requested wireless device"
+                )
+            }
+            Self::Transport(err) => write!(f, "{err}"),
+        }
+    }
+}
+
+impl std::error::Error for WirelessInitError {}
 
 fn emit_initialized_device(qt_thread: QtThread<Core>, initialized: InitializedDevice) {
     let InitializedDevice {
@@ -324,8 +350,14 @@ impl Core {
                         mac_address_owned, ip_owned, error
                     );
 
-                    qt_thread.queue(move |core_qobj| {
-                        core_qobj.initFailed(QString::from(mac_address_owned));
+                    qt_thread.queue(move |core_qobj| match error {
+                        WirelessInitError::NoPairingRecords
+                        | WirelessInitError::NoMatchingPairingRecord => {
+                            core_qobj.noPairingFile(QString::from(mac_address_owned));
+                        }
+                        WirelessInitError::InvalidMac { .. } | WirelessInitError::Transport(_) => {
+                            core_qobj.initFailed(QString::from(mac_address_owned));
+                        }
                     });
                 }
                 Err(_) => {
@@ -343,7 +375,7 @@ impl Core {
     }
 
     fn init_wireless_device_custom(&mut self, ip: QString, pairing_file: QString) {
-        eprintln!(
+        info!(
             "init_wireless_device_custom: IP: {} Pairing File: {}",
             ip, pairing_file
         );
@@ -354,7 +386,7 @@ impl Core {
             let pairing_file = match PairingFile::read_from_file(&pairing_path) {
                 Ok(pf) => pf,
                 Err(e) => {
-                    eprintln!("Failed to read pairing file: {e}");
+                    error!("Failed to read pairing file: {e}");
                     qt_thread.queue(move |core_qobj| {
                         core_qobj.customInitFailed(
                             QString::from(ip_owned),
@@ -395,7 +427,7 @@ impl Core {
                 res = init_idescriptor_device(t, qt_t_clone, connection_id) => res,
                 /* timeout */
                 _ = tokio::time::sleep(tokio::time::Duration::from_secs(20)) => {
-                    eprintln!("Timeout collecting device info for wireless device ip: {ip_owned}");
+                    error!("Timeout collecting device info for wireless device ip: {ip_owned}");
                     Err(IdeviceError::Timeout)
                 }
             };
@@ -407,7 +439,7 @@ impl Core {
                 }
                 //pairing file doesn't belong to the device
                 Err(IdeviceError::InvalidHostID) => {
-                    eprintln!("Invalid pairing file for wireless device ip: {ip_owned}");
+                    error!("Invalid pairing file for wireless device ip: {ip_owned}");
 
                     qt_thread.queue(move |core_qobj| {
                         core_qobj.customInitFailed(
@@ -418,7 +450,7 @@ impl Core {
                     });
                 }
                 Err(e) => {
-                    eprintln!("Failed to initialize wireless device ip: {ip_owned} {e:?}");
+                    error!("Failed to initialize wireless device ip: {ip_owned} {e:?}");
 
                     qt_thread.queue(move |core_qobj| {
                         core_qobj.customInitFailed(
@@ -626,7 +658,7 @@ async fn handle_pairing(qt_thread: QtThread<Core>, udid: String) -> Result<(), I
     let mut pf = loop {
         match lc.pair(host_id.clone(), buid.clone(), None).await {
             Ok(p) => {
-                println!(
+                info!(
                     "Pairing successful with device {}, host_id: {}, buid: {}",
                     udid, host_id, buid
                 );
@@ -695,7 +727,7 @@ async fn emit_connected(qt_thread: QtThread<Core>, udid: String, connection_id: 
 
         match init_idescriptor_device(provider, qt_t_clone, connection_id).await {
             Ok(initialized) => {
-                println!("Emitting connected");
+                info!("Emitting connected");
                 emit_initialized_device(qt_thread, initialized);
                 return;
             }
@@ -704,14 +736,14 @@ async fn emit_connected(qt_thread: QtThread<Core>, udid: String, connection_id: 
                     Ok(_) => {
                         // retry init once
                         retried_after_pair = true;
-                        println!(
+                        info!(
                             "Pairing succeeded for device {}, retrying initialization.",
                             udid
                         );
                         continue;
                     }
                     Err(e) => {
-                        eprintln!("Pairing failed for device {}: {e:?}", udid);
+                        error!("Pairing failed for device {}: {e:?}", udid);
                         emit_pairing_failed(
                             qt_thread.clone(),
                             udid.clone(),
@@ -722,7 +754,7 @@ async fn emit_connected(qt_thread: QtThread<Core>, udid: String, connection_id: 
                 }
             }
             Err(e) => {
-                eprintln!(
+                error!(
                     "Unhandled error while initializing device for udid {}: {e:?}",
                     udid
                 );
@@ -898,17 +930,19 @@ async fn init_wireless_device_from_candidates(
     addr: IpAddr,
     requested_mac: &str,
     qt_thread: QtThread<Core>,
-) -> anyhow::Result<InitializedDevice> {
+) -> Result<InitializedDevice, WirelessInitError> {
     let normalized_requested_mac = normalize_mac_address(requested_mac);
     if normalized_requested_mac.len() != 12 {
-        return Err(anyhow!(
-            "invalid wireless device MAC address: {requested_mac}"
-        ));
+        return Err(WirelessInitError::InvalidMac {
+            mac: requested_mac.to_string(),
+        });
     }
 
-    let mut candidates = discover_pairing_candidates(requested_mac).await?;
+    let mut candidates = discover_pairing_candidates(requested_mac)
+        .await
+        .map_err(WirelessInitError::Transport)?;
     if candidates.is_empty() {
-        return Err(anyhow!("no pairing records found"));
+        return Err(WirelessInitError::NoPairingRecords);
     }
     prioritize_pairing_candidates(&mut candidates, requested_mac);
 
@@ -964,9 +998,7 @@ async fn init_wireless_device_from_candidates(
         "Exhausted {} pairing records for wireless device target_ip={} requested_mac={}",
         candidate_count, addr, requested_mac
     );
-    Err(anyhow!(
-        "no pairing record authenticated the requested wireless device"
-    ))
+    Err(WirelessInitError::NoMatchingPairingRecord)
 }
 
 async fn init_idescriptor_device<
