@@ -5,6 +5,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use crate::qquickimageprovider_imp::AddImageProvider;
+use ::log::info;
 use once_cell::sync::Lazy;
 use qmetaobject::*;
 use std::future::Future;
@@ -322,19 +323,19 @@ fn main() {
         let ui_path = QString::from(utils::source_qml_path("src/ui"));
         let entry_path = QString::from(utils::source_qml_path(entry));
 
-        eprintln!("QML live reload enabled: {}", entry_path.to_string());
+        info!("QML live reload enabled: {}", entry_path.to_string());
         engine.load_file(entry_path.clone().into());
 
         native::initialize_live_reload(&mut engine, ui_path, entry_path);
     } else if qml_from_fs {
         let path = utils::deployed_qml_path(entry).unwrap_or_else(|| utils::source_qml_path(entry));
-        eprintln!("Loading QML from filesystem: {path}");
+        info!("Loading QML from filesystem: {path}");
         engine.load_file(path.into());
     } else if let Some(path) = utils::deployed_qml_path(entry) {
-        eprintln!("Loading deployed QML from filesystem: {path}");
+        info!("Loading deployed QML from filesystem: {path}");
         engine.load_file(path.into());
     } else {
-        eprintln!("Loading QML from resources: qrc:/{entry}");
+        info!("Loading QML from resources: qrc:/{entry}");
         engine.load_url(QString::from(format!("qrc:/{}", entry)).into());
     }
 
